@@ -30,6 +30,22 @@
 | `invalidInput: invalid escape`（JSONL） | JSON 行里写了 Windows 反斜杠路径 `E:\x\y.raw`，`\x` 被当非法转义 | 改成正斜杠 `E:/x/y.raw`（或双反斜杠）。该行失败不影响后续行，但依赖它的 `$ref` 会连锁报"无效结果引用" |
 | `invalidInput: 无效结果引用` | `$ref` 指向的请求失败了，或指针路径不存在 | 先看那一行的 `error`；`$ref` 只指向上一步的 `result` |
 
+## 2.5 · 实测与文档不符 / 错误信息会骗人（都会把人带进沟里）
+
+| 现象 | 实测真相（v1.3.0） | 正确做法 |
+| --- | --- | --- |
+| 文档说 `--with-source` 是"普通 JSON 命令可加" | 它是**命令选项**：写在命令前报 `usage: 未知选项` | 写在命令之后；返回 `{result, source}`，`result.path` 是显示名（`/分区0/…`） |
+| 文档说路径可"相对当前目录" | 绝对路径**首段必须是卷/分区**；`/WINDOWS/...` 直接 `notFound` | 用 `/part:0/WINDOWS/...`；LVM 用 `/part:N/<LV名>/...` |
+| 文档说 `timezones` 会自动读 Linux `/etc/localtime` | Windows 检材必然 fallback UTC；**LVM 上的 CentOS 7 也 fallback**（`/etc/localtime → Asia/Shanghai` 存在仍不采用） | `files get /etc/localtime` 读 `linkTarget`，再 `--timezone` 手动指定（`source` 变 `command`） |
+| 文档把 `plugins systems list` 当常规步骤 | LVM+XFS 的 Linux 检材实测返回 `[]`，`images os detect` 的 `detections` 也为空 ⇒ **插件跑不起来** | 回落普通文件取证（`/etc/passwd`、`/var/lib/dpkg/status`、`crontab`、`/var/log`），报告里写"插件未覆盖" |
+| `SQLITE_LOCKED: 数据库已加密，请提供密钥` | 对普通 `IconCache.db`（未加密）也会这样报——**这是误报文案** | 换一个已知可解析的库验证；不要把该错误写进报告当结论 |
+| `files usn-journal` 返回空数组 | XP 根本没有 USN 日志；命令不报错，返回 `{"total":0,"items":[]}` | "空数组"先问"该系统有没有这个机制"，再谈"有没有活动" |
+| `carve scans export` 顶层 `recovered:0` | 顶层是**雕刻**计数；文件系统记录在 `files.recovered`（实测 3/34 MB） | 判恢复成功看 `files.*` 与 `recovery-report.jsonl` |
+| 恢复结果 `/$Parent-15746/xxx.sys` | 父目录已删除/不可定位的**孤儿文件** | 引原路径用报告 `candidate.path`，并注明"父目录丢失" |
+| 时间线事件 `content` 出现 `æ–‡` 之类 | 非 ASCII 文件名在事件文本里会 mojibake | 用 `oid`/`nodeId` 定位；字符串比对改用索引 `name`/`fullPath` |
+| Git Bash 里 `--destination /e/out/x` "导出成功"却找不到文件 | Windows 程序把 `/e/out/x` 解析成 `<当前盘>:\e\out\x`（实测创建了 `E:\e\SeeU\…`），**无任何报错** | 主机路径一律 `E:/out/x` 或 `E:\out\x`；用 `find` 复核落地位置 |
+| `cases evidence delete` 报 `notFound: image ID not loaded` / `未知参数：force` | 该命令要求同一进程内先 `images open`；`force` 属**请求顶层**，`args` 只收 `imageId` | `{"command":"cases evidence delete","args":{"imageId":{"$ref":"o#/id"}},"force":true}` |
+
 ## 3 · "结果不完整"的具体字段（退出码 2 的来源）
 
 | 场景 | 字段 | 含义 |
@@ -50,7 +66,9 @@
 5. 卷加密未解锁、文件系统不支持、卷被跳过；
 6. `files text get` 找不到字符串（只代表该段解码后没有，**不代表**二进制/压缩流里没有）；
 7. 雕刻未命中（受 512 字节对齐、碎片化、格式覆盖范围限制）；
-8. `indexOnly` 检材（源缺失）：能浏览索引，读字节必失败。
+8. `indexOnly` 检材（源缺失）：能浏览索引，读字节必失败；
+9. `plugins systems list` 为空（实测 LVM/XFS Linux）⇒ 插件没跑，不代表没有可取的工件；
+10. `files usn-journal` / `timeline` 返回空或条数少，而该系统版本本来不产生该类记录（XP 无 USN；FAT 无 USN；无时区时间不入时间线）。
 
 ## 5 · 平台/格式能力边界（v1.3.0）
 
