@@ -10,6 +10,7 @@
  * 用法：node scripts/e2e/hero-check.mjs [--exe <打包后的 exe>]
  */
 import { spawn, execFileSync } from 'node:child_process'
+import http from 'node:http'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -20,6 +21,7 @@ const argExe = process.argv.indexOf('--exe')
 const EXE = argExe > -1 ? resolve(process.argv[argExe + 1]) : join(REPO, 'node_modules', 'electron', 'dist', 'electron.exe')
 const EXE_ARGS = argExe > -1 ? [] : [REPO]
 const CDP_PORT = 9353
+const MOCK_PORT = 18084
 const UD = join(REPO, '.dev', 'hero-ud')
 const HOME = join(REPO, '.dev', 'hero-home')
 const OUT = join(REPO, '.probe', 'shots', 'hero-actions.png')
@@ -88,15 +90,36 @@ async function evaluate(client, expression) {
 }
 
 let child
+let mockGateway
 try {
   rmSync(UD, { recursive: true, force: true })
   mkdirSync(UD, { recursive: true })
   rmSync(HOME, { recursive: true, force: true })
   mkdirSync(HOME, { recursive: true })
 
+  // 本地模型 mock 网关：给欢迎页 chip 提供「网关可用」的状态
+  mockGateway = http.createServer((req, res) => {
+    if (String(req.url ?? '').endsWith('/v1/models')) {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ object: 'list', data: [{ id: 'mock-14b', name: 'Mock 14B', max_model_len: 131072 }] }))
+      return
+    }
+    res.writeHead(404, { 'content-type': 'application/json' })
+    res.end('{}')
+  })
+  await new Promise((done) => mockGateway.listen(MOCK_PORT, '127.0.0.1', done))
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE
-  delete env.SEEU_LOCAL_MODEL_JSON
+  env.SEEU_LOCAL_MODEL_JSON = JSON.stringify({
+    enabled: true,
+    baseURL: 'http://127.0.0.1:' + MOCK_PORT + '/v1',
+    apiKey: 'local',
+    models: [{ id: 'mock-14b', name: 'Mock 14B' }],
+    contextWindow: 131072,
+    maxTokens: 8192,
+    useAsDefault: true,
+    litePreset: true,
+  })
   env.SEEU_DEV_MULTI = '1'
   env.SEEU_DSH_HOME = HOME
   env.SEEU_USER_DATA = UD
@@ -140,6 +163,22 @@ try {
     if (!actions.includes(key)) throw new Error(`缺少快捷入口 ${key}`)
   }
 
+  // 欢迎页「默认本地模型」chip：外壳配置 + 启动探测
+  const lmChip = await evaluate(client, `(async () => {
+    const t0 = Date.now()
+    while (Date.now() - t0 < 20000) {
+      const el = document.querySelector('[data-seeu-local-model]')
+      if (el !== null && /网关/.test(el.innerText)) return { text: el.innerText, model: el.getAttribute("data-seeu-local-model") }
+      await new Promise((r) => setTimeout(r, 300))
+    }
+    const el = document.querySelector('[data-seeu-local-model]')
+    return el === null ? null : { text: el.innerText, model: el.getAttribute("data-seeu-local-model") }
+  })()`)
+  report.localModelText = lmChip ? lmChip.text : ''
+  report.localModelChip = lmChip ? lmChip.model : ''
+  report.localModelOk = lmChip !== null && /Mock 14B/.test(report.localModelText) && /网关可用/.test(report.localModelText)
+  log('默认本地模型 chip', report.localModelOk ? report.localModelText : '没出现')
+  if (!report.localModelOk) throw new Error('欢迎页没有显示默认本地模型 chip')
   // 欢迎页「最近案件」chip：需要真实案件库在场
   if (existsSync(CASE_DB)) {
     const recentText = await evaluate(client, `(async () => {
@@ -199,6 +238,9 @@ try {
       // 已退出
     }
     await sleep(500)
+  }
+  if (mockGateway !== undefined) {
+    try { mockGateway.close() } catch { /* ignore */ }
   }
 }
 

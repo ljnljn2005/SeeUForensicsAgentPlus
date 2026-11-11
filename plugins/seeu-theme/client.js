@@ -189,6 +189,36 @@ window.__ModuleLoader__.load({
         void load()
         return () => { alive = false }
       }, [])
+      // 默认本地模型：外壳注入的配置 + 启动探测结果，只有配置了才显示
+      const [lm, setLm] = React.useState(null)
+      React.useEffect(() => {
+        let alive = true
+        const load = async () => {
+          try {
+            if (!shell || !shell.localModel || typeof shell.localModel.get !== 'function') return
+            const view = await shell.localModel.get()
+            if (!alive || !view) return
+            const cfg = view.config
+            if (!cfg || cfg.enabled === false) return
+            const list = Array.isArray(cfg.models) ? cfg.models : []
+            const first = list[0] || {}
+            const name = String(cfg.model || first.name || first.id || '未命名模型')
+            setLm({ name, contextWindow: Number(cfg.contextWindow) || 0, probe: view.probe || null })
+          } catch {
+            // 读不到配置就隐藏，不影响欢迎页其余内容
+          }
+        }
+        void load()
+        return () => { alive = false }
+      }, [])
+
+      const openLocalModel = () => {
+        try {
+          if (shell && typeof shell.openLocalModelSettings === 'function') void shell.openLocalModelSettings()
+        } catch {
+          // 忽略
+        }
+      }
       const openIndex = () => {
         try {
           const layout = ctxRef.current && ctxRef.current.layout
@@ -260,6 +290,48 @@ window.__ModuleLoader__.load({
             h('span', { style: { color: 'var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE)' } }, '打开 ›'),
           )
         : null
+      const lmChip = lm
+        ? h(
+            'div',
+            {
+              key: 'lm',
+              'data-seeu-local-model': lm.name,
+              title: '默认本地模型：' + lm.name + (lm.probe && lm.probe.baseURL ? ' · ' + lm.probe.baseURL : '') + '（点击打开设置）',
+              onClick: openLocalModel,
+              style: {
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '3px 12px',
+                borderRadius: '999px',
+                fontSize: '11.5px',
+                lineHeight: 1.7,
+                cursor: 'pointer',
+                color: 'var(--dsw-alias-label-secondary, #A9BBD1)',
+                background: 'var(--dsw-alias-bg-layer-2, #131E33)',
+                border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,0.12))',
+              },
+            },
+            h('span', {
+              style: {
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: lm.probe ? (lm.probe.ok ? '#34D399' : '#FBBF24') : 'var(--dsw-alias-label-caption, #6F839C)',
+              },
+            }),
+            h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #8397B0)' } }, '本地模型：'),
+            h('span', { style: { color: 'var(--dsw-alias-label-primary, #E6EDF7)', fontWeight: 600 } }, lm.name),
+            h(
+              'span',
+              { style: { color: 'var(--dsw-alias-label-tertiary, #8397B0)' } },
+              [
+                lm.contextWindow ? Math.round(lm.contextWindow / 1024) + 'k' : '',
+                lm.probe ? (lm.probe.ok ? '网关可用' : '网关不可用') : '未探测',
+              ].filter(Boolean).join(' · '),
+            ),
+          )
+        : null
       return h(
         'div',
         { className: 'seeu-hero-wrap', style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' } },
@@ -300,6 +372,7 @@ window.__ModuleLoader__.load({
         ),
         ),
         recentChip,
+        lmChip,
       )
     }
 

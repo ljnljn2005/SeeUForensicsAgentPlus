@@ -1479,3 +1479,21 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 不设该变量（暗色）复跑 → `{"m2ok":true,"searchOk":true,"errors":[]}`（不受影响）。
 
 结论：面板颜色全部来自 `--dsw-alias-*` / `--dsw-static-*` token，没有硬编码暗色，浅色下无需改样式；唯一需要留意的是 `.seeu-btn.is-primary` 用 `bg-base` 作文字色（浅色下是近白配深青，对比度正常）。
+
+### 20.33 第 31 轮：欢迎页「默认本地模型」chip
+
+问题：本地模型配置藏在菜单/托盘里，欢迎页看不出「现在到底跑哪个模型、网关通不通」；`v0.2.3` 的模型信息只能进设置窗口才看得到。
+
+实现（只改 `plugins/seeu-theme/client.js` 的 `HeroActions`）：
+
+- `shell.localModel.get()` 读 `{ config, probe }`；`config.enabled === false` 或没有配置时整枚 chip 隐藏（不影响纯 web 预览）；
+- 文案「本地模型：<模型名> · <窗口>k · 网关可用/网关不可用」，模型名取 `config.model` 或 `models[0].name`/`id`；
+- 左侧 6px 圆点：绿 `#34D399`（探测 ok）、黄 `#FBBF24`（探测失败）、灰（尚未探测）；
+- 点击调用 `shell.openLocalModelSettings()` 打开设置窗口；`title` 带网关 `baseURL`；
+- `src/main.ts` 的 `seeu:local-model:get` 顺带修了一个真实缺口：过去只回 `describeLocalModelConfig()`（只读文件），用 `SEEU_LOCAL_MODEL_JSON` 注入生效配置时 `config` 为空，chip 看不到；现在文件不存在时回落到 `readLocalModelConfig()`。
+
+验证（`node scripts/e2e/hero-check.mjs`）：脚本内起 mock 网关 `:18084`（`/v1/models` 回 `mock-14b` + `max_model_len:131072`）并注入 `SEEU_LOCAL_MODEL_JSON`，断言 chip 文本含 `Mock 14B` 与「网关可用」→ `REPORT {"ok":true,…,`localModelText":"本地模型：\nMock 14B\n128k · 网关可用","localModelChip":"Mock 14B","localModelOk":true,"recentOk":true,"settingsOpened":true,"panelOpened":true,"errors":[]}`。
+
+回归：`npm test` 43/43；`node scripts/e2e/settings-check.mjs` `ok:true`（`get` 仍回 `exists:false` + `probe:null`，未破坏设置页首屏）；`node scripts/build.mjs` 通过。
+
+遗留：chip 展示的是「配置文件里的默认模型」，会话内用模型选择器临时切换不会同步；未配置本地模型时不显示任何提示（有意避免噪声）。

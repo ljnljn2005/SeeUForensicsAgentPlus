@@ -27,6 +27,7 @@ import {
   localModelConfigFile,
   previewLocalModelPatch,
   probeableLocalModel,
+  readLocalModelConfig,
   testLocalGateway,
   contextWindowMismatch,
   writeLocalModelConfig,
@@ -566,8 +567,20 @@ function registerIpc(): void {
   ipcMain.on('seeu:quit', () => { void requestQuit() })
   ipcMain.on('seeu:open-settings', () => { openLocalModelSettings() })
 
-  // 本地模型设置窗口
-  ipcMain.handle('seeu:local-model:get', () => ({ ...describeLocalModelConfig(), probe: localModelProbeState ?? null }))
+  // 本地模型设置窗口。配置文件存在时以文件为准（生产路径）；
+  // 只在 SEEU_LOCAL_MODEL_JSON 注入、没有文件时（开发/联调）也返回生效配置，
+  // 否则欢迎页的「本地模型」chip 会看不到当前正在跑的路由。
+  ipcMain.handle('seeu:local-model:get', () => {
+    const view = describeLocalModelConfig()
+    const probe = localModelProbeState ?? null
+    if (view.exists) return { ...view, probe }
+    try {
+      const inline = readLocalModelConfig()
+      return inline === undefined ? { ...view, probe } : { ...view, config: inline, probe }
+    } catch {
+      return { ...view, probe }
+    }
+  })
   ipcMain.handle('seeu:local-model:probe', async () => (await probeLocalModelGateway('manual')) ?? null)
   ipcMain.handle('seeu:local-model:save', (_event, input: unknown) => writeLocalModelConfig(input))
   ipcMain.handle('seeu:local-model:preview', (_event, input: unknown) => previewLocalModelPatch(input))
