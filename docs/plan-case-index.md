@@ -1497,3 +1497,20 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 回归：`npm test` 43/43；`node scripts/e2e/settings-check.mjs` `ok:true`（`get` 仍回 `exists:false` + `probe:null`，未破坏设置页首屏）；`node scripts/build.mjs` 通过。
 
 遗留：chip 展示的是「配置文件里的默认模型」，会话内用模型选择器临时切换不会同步；未配置本地模型时不显示任何提示（有意避免噪声）。
+
+### 20.34 第 32 轮：网关预热（把模型冷启动时间提前付掉）
+
+问题：vLLM / llama.cpp / LM Studio 在第一次 chat 请求时才加载权重，14B~32B 冷启动几十秒到几分钟；用户开新会话问第一句时只能看着界面不动，容易以为程序卡死。
+
+实现：
+
+- `src/local-model.ts` 新增 `warmupLocalGateway({ baseURL, apiKey, model, timeoutMs })`：复用内部 `postCompletion()`，发 `POST <baseURL>/chat/completions`，body `{ model, messages:[{role:user,content:ping}], stream:false, max_tokens:1 }`，默认超时 **300000ms**；返回 `{ ok, elapsedMs, reply?, error?, hint? }`（失败走 `explainGatewayError()` 中文提示）；
+- `src/main.ts` IPC `seeu:local-model:warmup`：传了 `baseURL` 就按表单试；没传就用 `probeableLocalModel()` 的已保存配置（`models[0]`）；
+- `src/preload.ts` 暴露 `localModel.warmup(probe)` + `LocalModelWarmupResult` 类型；
+- `renderer/local-model.html` 新增【预热模型（加载进显存）】：读表单 → 取第一个模型 id → 按钮置灰、状态行「正在预热 …（冷启动可能要几十秒到几分钟，窗口别关）」→ 成功「预热完成：<模型> 已加载（首次响应 N ms/s）」/ 失败带 `hint`。
+
+验证：`scripts/e2e/settings-check.mjs` 的 mock 网关新增 `POST /v1/chat/completions`（回 `pong`），断言 API 直调与真实按钮点击两条路径：
+
+`REPORT` 关键字段：`"warmupApiOk":true,"warmupElapsedMs":4,"warmupOk":true,"warmupText":"预热完成：qwen2.5-32b-instruct 已加载（首次响应 4 ms），回复「pong」；现在开新会话就不用等加载了。"`；`npm test` 43/43；`node scripts/build.mjs` 通过。
+
+遗留：预热只发一次，网关若按最短空闲时间卸载模型（部分 vLLM 配置）会重新变冷；超时固定 5 分钟，超大模型（70B+ 磁盘冷读）可能不够，后续可做成可配置。

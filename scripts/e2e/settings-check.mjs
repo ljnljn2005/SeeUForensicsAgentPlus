@@ -52,6 +52,19 @@ async function startMockGateway() {
       )
       return
     }
+    if (req.method === 'POST' && req.url === '/v1/chat/completions') {
+      // 预热用的最小非流式补全：返回一句 pong
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          id: 'mock-chat-' + Date.now(),
+          object: 'chat.completion',
+          choices: [{ index: 0, message: { role: 'assistant', content: 'pong' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        }),
+      )
+      return
+    }
     res.writeHead(404)
     res.end('nope')
   })
@@ -307,6 +320,25 @@ try {
   if (report.pulledContextWindow !== '32768') throw new Error(`网关自报窗口没填进表单：${report.pulledContextWindow}`)
   log('网关自报窗口', `已填入 ${report.pulledContextWindow}`)
 
+  // 预热：API 直调 + 真实点按钮，确认「模型冷启动」这笔时间可以被用户主动付掉
+  const warmApi = await evaluate(client, `window.seeu.localModel.warmup({ baseURL: 'http://127.0.0.1:${MOCK_PORT}/v1', apiKey: 'local', model: 'mock-14b' })`)
+  report.warmupApiOk = warmApi?.ok === true
+  report.warmupElapsedMs = warmApi?.elapsedMs
+  if (!report.warmupApiOk) throw new Error('warmup API 失败：' + JSON.stringify(warmApi))
+  if (typeof report.warmupElapsedMs !== 'number') throw new Error('warmup 没返回 elapsedMs')
+  await evaluate(client, `document.getElementById('btn-warmup').click(), true`)
+  report.warmupText = await evaluate(client, `(async () => {
+    const t0 = Date.now()
+    while (Date.now() - t0 < 20000) {
+      const s = document.getElementById('status').textContent
+      if (/预热完成|预热失败/.test(s)) return s
+      await new Promise((r) => setTimeout(r, 150))
+    }
+    return document.getElementById('status').textContent
+  })()`)
+  report.warmupOk = /预热完成/.test(String(report.warmupText)) && /首次响应/.test(String(report.warmupText))
+  log('预热模型', String(report.warmupText).trim())
+  if (!report.warmupOk) throw new Error('预热按钮没成功：' + report.warmupText)
   // 配置里写一个网关没有的模型：探测应返回 missing（提醒模型改名/抄错）
   const ghostSaved = await evaluate(client, `window.seeu.localModel.save({
     enabled: true,

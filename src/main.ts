@@ -29,6 +29,7 @@ import {
   probeableLocalModel,
   readLocalModelConfig,
   testLocalGateway,
+  warmupLocalGateway,
   contextWindowMismatch,
   writeLocalModelConfig,
 } from './local-model.js'
@@ -586,6 +587,15 @@ function registerIpc(): void {
   ipcMain.handle('seeu:local-model:preview', (_event, input: unknown) => previewLocalModelPatch(input))
   ipcMain.handle('seeu:local-model:test', (_event, probe: { baseURL?: string; apiKey?: string }) =>
     testLocalGateway(probe ?? {}))
+  ipcMain.handle('seeu:local-model:warmup', async (_event, probe: { baseURL?: string; apiKey?: string; model?: string } | undefined) => {
+    const input = probe ?? {}
+    if (input.baseURL !== undefined && input.baseURL !== '') return warmupLocalGateway(input)
+    const target = probeableLocalModel()
+    if (target === undefined) {
+      return { ok: false, elapsedMs: 0, error: '未配置本地模型', hint: '先在设置页填网关地址与模型，保存后再预热。' }
+    }
+    return warmupLocalGateway({ baseURL: target.baseURL, apiKey: target.apiKey, model: target.models[0] })
+  })
   ipcMain.handle('seeu:local-model:diagnose', (_event, probe: { baseURL?: string; apiKey?: string; model?: string }) =>
     diagnoseLocalGateway(probe ?? {}))
   ipcMain.handle('seeu:local-model:disable', () => {

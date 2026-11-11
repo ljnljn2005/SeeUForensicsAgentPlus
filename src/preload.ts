@@ -51,6 +51,15 @@ export interface LocalModelView {
   readonly probe?: LocalModelProbeState | null
 }
 
+export interface LocalModelWarmupResult {
+  readonly ok: boolean
+  /** 非流式最小请求的往返毫秒数（模型冷启动时可能几十秒）。 */
+  readonly elapsedMs: number
+  readonly reply?: string
+  readonly error?: string
+  readonly hint?: string
+}
+
 export interface LocalModelSaveResult {
   readonly ok: boolean
   readonly path?: string
@@ -137,6 +146,8 @@ const api = {
       }>,
     test: (probe: { baseURL?: string; apiKey?: string }): Promise<LocalModelProbeResult> =>
       ipcRenderer.invoke('seeu:local-model:test', probe) as Promise<LocalModelProbeResult>,
+    warmup: (probe: { baseURL?: string; apiKey?: string; model?: string }): Promise<LocalModelWarmupResult> =>
+      ipcRenderer.invoke('seeu:local-model:warmup', probe) as Promise<LocalModelWarmupResult>,
     diagnose: (probe: { baseURL?: string; apiKey?: string; model?: string }): Promise<LocalModelDiagnosis> =>
       ipcRenderer.invoke('seeu:local-model:diagnose', probe) as Promise<LocalModelDiagnosis>,
     disable: (): Promise<{ ok: boolean; path?: string; error?: string }> =>

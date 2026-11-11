@@ -298,6 +298,59 @@ export async function testLocalGateway(probe: GatewayProbe): Promise<
   }
 }
 
+// ── 网关预热 ────────────────────────────────────────────────────────────────
+
+export interface WarmupResult {
+  readonly ok: boolean
+  /** 从发请求到拿到第一个完整响应（非流式）的毫秒数；模型冷启动时可能是几十秒。 */
+  readonly elapsedMs: number
+  readonly reply?: string
+  readonly error?: string
+  readonly hint?: string
+}
+
+/**
+ * 预热：给网关发一次最小 chat 请求，把模型权重加载进显存/内存。
+ *
+ * vLLM、llama.cpp、LM Studio 这类网关在**第一次**请求时才加载模型，
+ * 冷启动可能几十秒到几分钟；先在这里付掉这笔时间，会话里第一句就不会突然卡住。
+ * 用 `max_tokens: 1` + `stream: false`，尽量少算。
+ */
+export async function warmupLocalGateway(input: {
+  baseURL?: string
+  apiKey?: string
+  model?: string
+  timeoutMs?: number
+}): Promise<WarmupResult> {
+  const base = (input.baseURL ?? '').trim().replace(/\/+$/, '')
+  if (base === '') {
+    return { ok: false, elapsedMs: 0, error: '缺少 baseURL', hint: explainGatewayError('缺少 baseURL') }
+  }
+  const model = (input.model ?? '').trim()
+  if (model === '') {
+    return {
+      ok: false,
+      elapsedMs: 0,
+      error: '缺少模型 id',
+      hint: '先在设置页填模型 id（不确定就点【从网关拉取模型列表】），再预热。',
+    }
+  }
+  const timeoutMs = input.timeoutMs ?? 300_000
+  const result = await postCompletion(
+    `${base}/chat/completions`,
+    input.apiKey,
+    { model, messages: [{ role: 'user', content: 'ping' }], stream: false, max_tokens: 1 },
+    timeoutMs,
+  )
+  if (!result.ok) {
+    const error = `HTTP ${result.status}：${result.text.slice(0, 200)}`
+    return { ok: false, elapsedMs: result.ms, error, hint: explainGatewayError(error) }
+  }
+  const json = parseCompletionText(result.text)
+  const reply = (json?.choices?.[0]?.message?.content ?? '').trim()
+  return { ok: true, elapsedMs: result.ms, ...(reply === '' ? {} : { reply: reply.slice(0, 80) }) }
+}
+
 // ── 网关能力自检 ────────────────────────────────────────────────────────────
 
 export interface GatewayProbeInput extends GatewayProbe {

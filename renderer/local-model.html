@@ -218,6 +218,7 @@
     <button class="primary" id="btn-save">保存</button>
     <button id="btn-models">从网关拉取模型列表</button>
     <button id="btn-test">测试连接与能力自检</button>
+    <button id="btn-warmup">预热模型（加载进显存）</button>
     <button id="btn-copy">复制诊断信息</button>
     <button id="btn-probe">重新探测网关</button>
     <button id="btn-save-restart">保存并重启</button>
@@ -581,6 +582,28 @@
       setStatus('自检失败：' + (error && error.message ? error.message : String(error)), 'err')
     } finally {
       $('btn-test').disabled = false
+    }
+  })
+  $('btn-warmup').addEventListener('click', async () => {
+    const form = readForm()
+    if (!form.baseURL) { setStatus('先填网关地址。', 'err'); return }
+    const model = (form.models && form.models[0] && form.models[0].id) || ''
+    if (!model) { setStatus('先填模型 id（不确定就点「从网关拉取模型列表」）。', 'err'); return }
+    $('btn-warmup').disabled = true
+    setStatus('正在预热 ' + model + '（冷启动可能要几十秒到几分钟，窗口别关）…')
+    try {
+      const res = await api.warmup({ baseURL: form.baseURL, apiKey: form.apiKey, model })
+      if (res && res.ok === true) {
+        const cost = res.elapsedMs < 1000 ? res.elapsedMs + ' ms' : (res.elapsedMs / 1000).toFixed(1) + ' s'
+        setStatus('预热完成：' + model + ' 已加载（首次响应 ' + cost + '）' + (res.reply ? '，回复「' + res.reply + '」' : '') + '；现在开新会话就不用等加载了。', 'ok')
+      } else {
+        const hint = res && res.hint ? '\n' + res.hint : ''
+        setStatus('预热失败：' + ((res && res.error) || '未知错误') + hint, 'err')
+      }
+    } catch (error) {
+      setStatus('预热失败：' + (error && error.message ? error.message : String(error)), 'err')
+    } finally {
+      $('btn-warmup').disabled = false
     }
   })
   $('btn-probe').addEventListener('click', async () => {
