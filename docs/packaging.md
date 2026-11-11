@@ -143,7 +143,7 @@ release/
 asar 内容实测（2026-11-11，Electron 44.7.0 轮，`@electron/asar listPackage`）：
 
 - 命中：`resources/forensics/cordis.patch.yml`、`resources/forensics/README.md`、
-  `resources/forensics/skills/{evidence-chain-report,read-only-evidence-analysis,windows-artifact-triage}/SKILL.md`、
+  `resources/forensics/skills/{evidence-chain-report,ges-case-index,lovelycarve-forensics,read-only-evidence-analysis,windows-artifact-triage}/SKILL.md`、
   `build/icon.ico`、`build/icon.png`、`build/tray.ico`；
 - 未命中（符合预期）：`.probe/`、顶层 `src/`、`scripts/`、`docs/`、
   `build/make-icons.py`。asar 里出现的 `src/|scripts/|docs/` 路径全部位于
@@ -536,7 +536,7 @@ portable：
 
 ```json
 {"ok": true, "port": 53313, "apiStatus": 200, "apiIndexes": 1,
- "shellSkillsLine": "skills: 4 个（evidence-chain-report, ges-case-index, read-only-evidence-analysis, windows-artifact-triage）→ …\\dsh-home\\skills",
+ "shellSkillsLine": "skills: 5 个（evidence-chain-report, ges-case-index, lovelycarve-forensics, read-only-evidence-analysis, windows-artifact-triage）→ …\\dsh-home\\skills",
  "marker": {"version": "0.1.5"}}
 ```
 

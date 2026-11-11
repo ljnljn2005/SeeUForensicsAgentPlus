@@ -6,7 +6,7 @@
 产物位置：
 
 - `resources/forensics/cordis.patch.yml` — overlay 本体（唯一必需）
-- `resources/forensics/skills/` — 3 个取证技能（默认未接入，见第 5 节）
+- `resources/forensics/skills/` — 5 个取证技能（默认未接入，见第 5 节）
 - `resources/forensics/README.md` — 逐行改动说明
 
 运行时基线：`@deepseek-ai/dsh@0.2.2-rc.1`，profile 由 `@deepseek-ai/dsh-base` +
@@ -247,8 +247,8 @@ dump 注释标注被 overlay 覆盖的行（4 个注释块，覆盖 6 行）：
 
 ## 5. 如何接入技能包
 
-`resources/forensics/skills/` 的 3 个技能（`evidence-chain-report`、
-`windows-artifact-triage`、`read-only-evidence-analysis`）是标准目录式技能：
+`resources/forensics/skills/` 的 5 个技能（`evidence-chain-report`、`ges-case-index`、
+`lovelycarve-forensics`、`windows-artifact-triage`、`read-only-evidence-analysis`）是标准目录式技能：
 `<root>/<name>/SKILL.md`，frontmatter 必填 `name`（kebab-case）+ `description`，可选
 `whenToUse`；`@deepseek-ai/dsh-skill-filesystem` 只扫描 root 下一层，嵌套目录不会自动发现。
 
