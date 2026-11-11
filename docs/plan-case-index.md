@@ -1644,4 +1644,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 问题：检索与记录视图的「应用」「类别」是手输框，用户得记住索引里的应用拼写（WhatsApp / 微信 / 苹果健康…），本地小模型也常拼错；而索引里 `record.app/category` 是现成的枚举。
 - 实现：`tools/ges-index/query.mjs` 新增 `facets(db, opts)` → `{eid, apps:[{app,n}], categories:[{category,n}], accounts:[{account,n}]}`（`group by` + 记录数倒序，各取 60/60/40 条，空值过滤；`eid` 可选缩小到单个检材）；插件新增 `GET /facets?db=&eid=`；面板 `Panel` 与 `RecordsView` 各自 `useEffect` 取 facets，检索「应用」、记录「应用」「类别」改成 `<select>`（选项文案 `应用（记录数）`，首个选项「全部应用/全部类别」）。
 - 验证：`m2-ui-check` 新增 `searchAppOptions`（检索视图应用下拉选项数，实测 **9**）、`searchAppSelect`、`recordsAppPick`/`recordsAppCount`/`recordsAppFilterOk`（记录视图选「苹果健康」→ 记录从 22,777 → **3,028**，仍 >0）→ `{"searchAppOptions":9,"searchAppSelect":true,"recordsAppPick":"苹果健康","recordsAppCount":3028,"recordsAppFilterOk":true,"m2ok":true,"errors":[]}`；`npm test` 48/48（新增 `tests/facets.test.mjs` 3 例：分组计数/首项最大/eid 过滤/空库）；`check:overlay` OK。
-- 遗留：facets 只列 top N（60/60/40），极少数低频应用不在下拉里；需要时仍可用 CLI/API 传精确值；时间线视图的应用筛选仍是手输。
+- 遗留：facets 只列 top N（60/60/40），极少数低频应用不在下拉里；需要时仍可用 CLI/API 传精确值。（时间线视图的筛选已在 §20.47 改为下拉。）
+
+## 20.47 时间线视图筛选也改下拉（v0.2.6 起）
+
+- 上一轮把检索/记录的应用、类别改成下拉后，时间线视图还留着「检材号 eid」「应用 app」两个手输框，同一件事两套交互。
+- 实现：`TimelineView` 自己拉 `/evidences` 与 `/facets`（`useEffect` 依赖 `db`，卸载标记 alive），两个 `narrowInput` 换成 `<select>`：检材选项「检材 N · 名称」、应用选项「应用（记录数）」，保留 Enter 触发、`disabled: !db`。**坑**：`TimelineView` 是独立组件（不在 `Panel` 作用域里），直接引用 `Panel` 的 `evList` / `facets` 会抛 `ReferenceError: evList is not defined`，运行时表现为「slot entry crashed in main」，必须组件内自取。
+- e2e：`m2-ui-check` 在切到时间线后采样 `timelineFilterOptions`（找含检材名选项的 select 与含「（数字）」选项的 select）→ 实测 `{"ev":6,"app":9}`、`timelineFiltersOk:true`，并纳入 `m2ok`。
+- 验证：`m2ok:true`、`errors:[]`；`npm test` 48/48；`check:overlay` OK；`node scripts/build.mjs` 通过。

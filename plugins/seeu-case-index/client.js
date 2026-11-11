@@ -642,6 +642,28 @@ window.__ModuleLoader__.load({
     // ---------- 视图：时间线（小时/天/月分桶，点柱条钻取记录） ----------
     function TimelineView({ db, onDrill }) {
       const [draft, setDraft] = useState({ eid: '', app: '', from: '', to: '', bucket: 'day' });
+      // 筛选下拉的数据源：检材名称（/evidences）+ 应用/类别（/facets），避免手输
+      const [evList, setEvList] = useState([]);
+      const [facets, setFacets] = useState(null);
+      useEffect(() => {
+        let alive = true;
+        if (!db) { setEvList([]); setFacets(null); return undefined; }
+        (async () => {
+          try {
+            const body = await api('/evidences', { db });
+            if (alive) setEvList(body?.evidences ?? []);
+          } catch {
+            if (alive) setEvList([]);
+          }
+          try {
+            const f = await api('/facets', { db });
+            if (alive) setFacets(f?.apps?.length ? f : null);
+          } catch {
+            if (alive) setFacets(null);
+          }
+        })();
+        return () => { alive = false; };
+      }, [db]);
       const [copying, setCopying] = useState(false);
       const [note, setNote] = useState('');
       const [applied, setApplied] = useState(draft);
@@ -696,8 +718,26 @@ window.__ModuleLoader__.load({
             style: applied.bucket === key ? S.segOn : S.segOff,
             onClick: () => pickBucket(key),
           }, label))),
-          narrowInput(draft.eid, (v) => setDraft((d) => ({ ...d, eid: v })), '检材号 eid', { width: 84, onEnter: apply }),
-          narrowInput(draft.app, (v) => setDraft((d) => ({ ...d, app: v })), '应用 app', { width: 96, onEnter: apply }),
+          h('select', {
+            style: { ...S.input, flex: 'none', width: 190 },
+            value: draft.eid ?? '',
+            disabled: !db,
+            title: '按检材筛选：下拉里就是火眼的检材名称',
+            onChange: (e) => setDraft((d) => ({ ...d, eid: e.target.value })),
+            onKeyDown: (e) => { if (e.key === 'Enter') apply(); },
+          },
+            h('option', { value: '' }, '全部检材'),
+            ...evList.map((ev) => h('option', { key: ev.eid, value: String(ev.eid) }, '检材 ' + ev.eid + (ev.name ? ' · ' + ev.name : '')))),
+          h('select', {
+            style: { ...S.input, flex: 'none', width: 150 },
+            value: draft.app ?? '',
+            disabled: !db,
+            title: '按应用筛选：下拉里是索引里出现过的应用（带记录数）',
+            onChange: (e) => setDraft((d) => ({ ...d, app: e.target.value })),
+            onKeyDown: (e) => { if (e.key === 'Enter') apply(); },
+          },
+            h('option', { value: '' }, '全部应用'),
+            ...((facets?.apps ?? []).map((a) => h('option', { key: a.app, value: a.app }, a.app + '（' + a.n + '）')))),
           narrowInput(draft.from, (v) => setDraft((d) => ({ ...d, from: v })), '起始 2025-04-01', { width: 112, onEnter: apply }),
           narrowInput(draft.to, (v) => setDraft((d) => ({ ...d, to: v })), '结束 2025-04-30', { width: 112, onEnter: apply }),
           actionButton('查询', apply, { primary: true }),

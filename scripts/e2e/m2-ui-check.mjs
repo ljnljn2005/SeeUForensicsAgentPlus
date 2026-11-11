@@ -247,10 +247,18 @@ report.entityText = text.slice(text.indexOf('实体'), text.indexOf('实体') + 
 report.tabTimelineClick = await openTab('时间线')
 text = await bodyText()
 report.timelineText = text.slice(text.indexOf('时间线'), text.indexOf('时间线') + 700)
+// 时间线筛选也应是下拉：检材（带名称）+ 应用（带记录数）
+report.timelineFilterOptions = await ev(`(() => {
+  const sels = [...document.querySelectorAll('select')]
+  const evSel = sels.find(s => [...s.options].some(o => /LEUNG_YL_mobile\.zip/.test(o.textContent)))
+  const appSel = sels.find(s => [...s.options].some(o => /（\\d+）$/.test(o.textContent)))
+  return { ev: evSel ? evSel.options.length : 0, app: appSel ? appSel.options.length : 0 }
+})()`)
+report.timelineFiltersOk = report.timelineFilterOptions.ev > 1 && report.timelineFilterOptions.app > 1
 report.tabTablesClick = await openTab('表')
 text = await bodyText()
 report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
-report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true
+report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true && report.timelineFiltersOk === true
 
 // ---------- 浅色主题回归（SEEU_E2E_THEME=light；暗色为默认） ----------
 if (process.env.SEEU_E2E_THEME === 'light') {
