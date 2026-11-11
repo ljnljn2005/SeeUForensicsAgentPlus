@@ -57,27 +57,28 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.2.3**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.2.4**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,583,838 B ≈ 766 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,751,123 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
-| `release/SeeUForensicsAgentPlus-0.2.3-x64.exe`（NSIS 安装包） | 211,926,785 B（blockmap 220,685 B） |
-| `release/SeeUForensicsAgentPlus-0.2.3-x64-portable.exe` | 189,518,082 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,621,299 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,768,410 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
+| `release/SeeUForensicsAgentPlus-0.2.4-x64.exe`（NSIS 安装包） | 211,929,804 B（blockmap 220,797 B） |
+| `release/SeeUForensicsAgentPlus-0.2.4-x64-portable.exe` | 189,498,621 B |
 
-实测冷启动到 dsh UI：目录版 5102 ms；portable 首次 37.6s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+实测冷启动到 dsh UI：目录版 4091 ms；portable 首次 52.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。更细的打包说明见 `docs/packaging.md`。
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
 
-### v0.2.4 待发布（v0.2.3 之后、尚未打包）
+### v0.2.4 改了什么
 
 - **案件概览一键导出**：面板 KPI 下方【复制案件概览】，输出案件名/编号/目录/索引库/生成时间 + 检材清单表（名称、持有人、平台、记录数、备注），交接材料第一页直接可用；
 - **检索分页**：结果显示「共 N 条 · 第 a–b 条」与【上一页】【下一页】；【导出全部 N 条】按页取满后逐条回查 Goldeneyes 句柄（上限 200 条）；
 - **窗口超限提示**：配置的上下文窗口大于网关 `/v1/models` 自报能力时，设置页启动探测行黄字提示「配置窗口 131.1k 超过网关自报的 32.8k，超出部分请求会被拒」；
 - **网关预热**：设置页【预热模型】，先付掉模型冷启动（几十秒到几分钟），会话第一句不再卡；
 - **欢迎页「默认本地模型」chip**：配置了本地模型时，欢迎页显示「本地模型：<模型名> · <窗口> · 网关可用/不可用」（绿点/黄点），点它打开本地模型设置；
-- **测试**：`npm test` 43 个纯函数单测（新增窗口超限判定）；`scripts/e2e/hero-check.mjs` 内建 mock 网关并断言模型 chip（`localModelOk:true`）。
+- **检材筛选/结果行用名称**：检索筛选的「检材」是下拉（选项直接是火眼里的检材名 + 平台），检索结果行也显示「LEUNG_YL_mobile.zip · WhatsApp」而不是只有 eid（悬停保留检材号）；
+- **测试**：`npm test` 43 个纯函数单测（新增窗口超限判定）；`scripts/e2e/` 15 个端到端脚本（`hero` 内建 mock 网关断言模型 chip、`search` 覆盖下拉筛选/分页/导出全部、`export` 覆盖案件概览与时间线清单、`settings` 覆盖预热与窗口超限提示）。
 
 ### v0.2.3 改了什么
 

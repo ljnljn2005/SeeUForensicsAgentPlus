@@ -1542,3 +1542,19 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 **验证**：search-filter-check → ok:true、baseRows:20、filteredRows:12、pageTotal:41、errors:[]；m2-ui-check（SEEU_DEV_MULTI=1）→ searchOk:true、searchEvNames:true、errors:[]；npm test 43/43。
 
 遗留：结果行标签只用于检索视图，记录/表/时间线视图仍按各自表格结构显示检材号或名称；检材名过长时靠标签的省略号截断，完整名要开引用详情。
+
+### 20.37 第 35 轮：v0.2.4 打包与打包态回归
+
+**版本**：0.2.3 → 0.2.4（`npm version 0.2.4 --no-git-tag-version`），`node scripts/build.mjs` 与 `npm run check:overlay` 通过。
+
+**打包**：`npx electron-builder --win --x64 -c.directories.output=release-024`（后台作业约 12 分钟；用户机上 0.1.7 portable 在运行，不能先删 `release/`），产物搬进 `release/` 并删掉 0.2.3 三件。
+
+**产物**：win-unpacked exe 246,329,856 B；app.asar 168,768,410 B（19,647 entries）；NSIS 211,929,804 B（blockmap 220,797）；portable 189,498,621 B；win-unpacked 总计 803,621,299 B（≈766 MiB）。
+
+**asar 校验**：14 个必需路径 `missing:[]`；case-index client.js 107,182 B（含 `evLabel`、案件概览）；theme client.js 含欢迎页模型 chip / 最近案件 chip；设置页含预热、固定开销估算、窗口档位。
+
+**验证**：目录版 4091 ms、portable 52,547 ms 启动 OK；打包态 `m2-ui-check`（`m2ok/searchOk/searchEvNames/evNames` 全 true）、`settings-check`（预热、窗口自报、缺模型、超限提示、禁用兜底全绿）、`export-check`（案件概览 685 字符、时间线 3,235 字符）均通过。
+
+**这一包相对 0.2.3 的累积改动**：案件概览导出、检索分页、导出全部命中、浅色主题回归、欢迎页最近案件 chip、窗口超限提示、网关预热、欢迎页默认本地模型 chip、检索筛选检材下拉、检索结果行显示检材名。
+
+遗留：打包过程中后台作业占用执行器，期间其它 bash 调用会报 `EXECUTOR_UNAVAILABLE`；下次打包尽量单独跑、不要在等待时并行起命令。

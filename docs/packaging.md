@@ -694,3 +694,29 @@ asar 自检（`@electron/asar.listPackage`）：19,647 entries，必需路径 14
 - 导出：`SEEU_EXPORT_E2E_PORT=9357 node scripts/e2e/export-check.mjs` → `ok:true`（记录 14,996 / 实体 1,888 / 表 7,025 / 时间线 3,235 字符）。
 
 **排障记录**：第一次跑打包态设置页 e2e 报 `preload 桥未暴露 window.seeu.localModel`，但同一 exe 用 CDP 手工探测时 `window.seeu` 的键齐全（`info/onStatus/retry/openLogs/openWorkspace/openLocalModelSettings/quit/writeClipboard/localModel`）。这是上一轮中断的 CDP 会话占着 9351 端口、脚本连到了旧页面导致的**偶发**问题；换干净进程重跑即通过。以后 e2e 失败先看 `/json/list` 里是否有多个 Chromium 残留，再确认不是代码问题。
+
+### v0.2.4 回归验证
+
+产物（`npx electron-builder --win --x64 -c.directories.output=release-024`，无证书跳过签名，产物再搬进 `release/`）：
+
+| 产物 | 大小 |
+| --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,621,299 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,768,410 B（19,647 entries） |
+| `release/SeeUForensicsAgentPlus-0.2.4-x64.exe` | 211,929,804 B（blockmap 220,797 B） |
+| `release/SeeUForensicsAgentPlus-0.2.4-x64-portable.exe` | 189,498,621 B |
+
+asar 自检（`@electron/asar.listPackage` + `extractFile`，entries 带前导反斜杠要先归一化）：`{"entries":19647,"missing":[]}`，14 个必需路径齐全；`plugins\seeu-case-index\client.js` 107,182 B，含 `evLabel`（检索结果行检材名）与「复制案件概览」；`plugins\seeu-theme\client.js` 含 `data-seeu-local-model`（欢迎页模型 chip）与 `data-seeu-recent`（最近案件 chip）；`dist\renderer\local-model.html` 含 `btn-warmup`（预热）、`renderBudget`（固定开销估算）、`data-preset`（窗口档位）。
+
+启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：
+
+- 目录版 `verify-launch --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9361` → `"ok": true, "elapsedMs": 4091`；
+- portable `--exe release/SeeUForensicsAgentPlus-0.2.4-x64-portable.exe --port 9362 --timeout 180000` → `"ok": true, "elapsedMs": 52547`（机器上同时有 0.1.7 实例在跑，解包更慢）。
+
+打包态功能回归（`SEEU_UI_EXE` + 独立 `SEEU_DSH_HOME` / `SEEU_USER_DATA`）：
+
+- 面板：`m2-ui-check` → `m2ok:true`、`searchOk:true`、`searchEvNames:true`、`evNames:true`、`errors:[]`；
+- 设置页：`settings-check.mjs --exe "<win-unpacked exe>"` → `ok:true`（页面来自 `app.asar/dist/renderer/local-model.html`；`presetApplied:true`、`copiedDiagnostics:true`、`pulledContextWindow:"32768"`、`warmupApiOk:true`/`warmupOk:true`、`probeMissing:["ghost-7b"]`、`probeMismatch{configured:131072,gateway:32768}`、`disableLocalModel.enabled:false`、`errors:[]`）；
+- 导出：`SEEU_EXPORT_E2E_PORT=9363 export-check.mjs` → `ok:true`（`overviewNote:"已复制案件概览（685 字符，含 5 个检材）"`、`timelineNote:"已复制 86 个时间段的清单（3235 字符）"`、`errors:[]`）。
+
+**注意**：`release/` 里仍保留用户在跑的 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`；打包时若 `release/win-unpacked` 被占用会报 `Device or resource busy`，用旁路输出目录（`-c.directories.output=release-024`）再搬。
