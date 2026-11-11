@@ -1407,3 +1407,22 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `m2-ui-check` → `m2ok:true, searchOk:true, errors:[]`；`npm test` 42/42；`check:overlay` OK。
 
 遗留：概览不带跨案信息（跨案视图有独立的重合实体清单）；检材表按 `/evidences` 顺序（eid 升序）。
+
+### 20.29 第 27 轮：配置窗口 vs 网关自报窗口的一致性检查
+
+问题：网关通常用 `max_model_len` 自报能力上限，但用户可能手填/套档位成更大的窗口（如 131072），超出部分的请求会被网关拒绝，表现为「聊几轮突然报错」，而界面上一切正常。
+
+实现：
+
+- `tools/local-model.mjs` 新增并导出 `contextWindowMismatch(contextWindow, modelIds, gatewayModels)`：只看配置里出现过、且网关自报 `contextWindow >= 2048` 的模型，取最小值；配置更大才返回 `{ configured, gateway }`，否则 `null`；
+- `src/local-model.ts`：`probeableLocalModel()` 返回里补 `contextWindow`（来自归一化配置），并再导出该 helper；
+- `src/main.ts`：`LocalModelProbeState` 加 `mismatch?: { configured, gateway }`；探测成功时计算并随状态广播，日志写「配置的上下文窗口 X 超过网关自报的 Y，超出部分请求会被拒」；
+- `src/preload.ts`：类型同步；
+- `renderer/local-model.html` 的 `renderProbe()`：把 missing 与 mismatch 合并成黄字提示（`配置的模型 … 不在网关列表；配置窗口 131.1k 超过网关自报的 32.8k，超出部分请求会被拒`）。
+
+验证：
+
+- `tests/local-model.test.mjs` 新增 1 例（超过才报 / 相等与更小不报 / 未知模型不报 / 网关没自报窗口不报）→ `npm test` **43/43**；
+- `node scripts/e2e/settings-check.mjs`（mock 网关两个模型都自报 `max_model_len: 32768`，随后写一份 `contextWindow: 131072` + 含 `ghost-7b` 的配置并调 `probe()`）→ `{"ok":true,"probeMismatch":{"configured":131072,"gateway":32768},"probeText":"启动探测：可用 · qwen2.5-32b-instruct, mock-14b · http://127.0.0.1:18081/v1 · …｜配置的模型 ghost-7b 不在网关列表；配置窗口 131.1k 超过网关自报的 32.8k，超出部分请求会被拒","errors":[]}`。
+
+遗留：只在启动探测/手动探测时检查，不拦截保存（用户可能故意配大窗口配代理层）；网关完全不报窗口时无法判断。
