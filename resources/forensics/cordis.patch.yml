@@ -182,14 +182,17 @@
           - id: compaction-basic
             name: '@deepseek-ai/dsh-compaction-basic'
             config:
-              # 触发阈值 = min(W×0.8, W − O − B)。官方 headroomTokens 默认 65536，
-              # 对 128k 窗口 + 8192 输出会把阈值压到 ~57344（只用掉一半窗口），
-              # 本地/官方 128k+ 模型都因此频繁压缩、每次重算 prefill。
-              # 32768 余量对 128k 窗口足够（阈值 ~90112），256k 窗口则达 0.8×W。
-              # 注意：若换用 <48k 窗口的模型，请把 headroomTokens 调回 65536 或更小，
-              # 否则 W−O−B ≤ 0 会让 compaction-basic 报错。
+              # 触发阈值 = min(W×0.8, W − O − B)，W=上下文窗口、O=系统/工具描述开销(实测 ~5k)、
+              # B=headroomTokens=给「本轮输出 + 压缩摘要」预留的空间。
+              # 官方默认 B=65536 对 128k 窗口会把阈值压到 ~57k（只用掉不到一半窗口），
+              # 本地模型每次压缩都要重算 prefill，非常慢，所以必须把阈值往后推。
+              # 这里用 8192：正好等于随包配置的输出上限（maxTokens 8192），
+              #   128k 窗口 → 阈值 ~102k（0.8×W 生效，不再受 B 限制）
+              #   256k 窗口 → 0.8×W
+              #   32k 窗口  → 阈值 ~19k（W−O−B 仍为正，小模型也能跑，不必再手工调）
+              # 若某天输出上限被调大（>8192），这里要跟着调大，否则长输出会触发溢出重试。
               thresholdRatio: 0.8
-              headroomTokens: 32768
+              headroomTokens: 8192
               retainRatio: 0.16
           - id: command-compact
             name: '@deepseek-ai/dsh-command-compact'

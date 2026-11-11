@@ -849,7 +849,7 @@ typed 表行数（实测）：`health_metric` 6,200、`exif` 4,518、`msg_csv` 4
 - 低并发/长上下文调优（v0.2.0 第二轮）：
   - provider 加 `retryPolicy: { mode: normal, maxRetries: 3 }`（dsh 默认 5 次；低并发网关排队时会把一次失败放大成 5 次长超时）；
   - 同一 patch 覆盖顶层 `- id: session-title-llm`：`maxOutputTokens: 512, timeoutMs: 20000`（每次新会话多一次标题请求）；
-  - 随包 preset 的 `compaction-basic` 从默认 `headroomTokens: 65536` 改为 `32768`（+ `thresholdRatio: 0.8`、`retainRatio: 0.16`）。触发阈值 `min(W×0.8, W−O−B)`：128k 窗口从 ~57k 提到 ~90k，256k 窗口按 0.8×W；⚠️ <48k 窗口模型需调回 65536 或更小（`W−O−B ≤ 0` 会报错）。**注意该行嵌在 preset-standard 内部，overlay 无法就地改**（实验：写顶层 `- id: compaction-basic` 只会在 dump 里新增一条 `disabled: true` 的行，preset 内的四份副本不变），只能随 preset 整块重写。
+  - 随包 preset 的 `compaction-basic` 从默认 `headroomTokens: 65536` 改为 **8192**（+ `thresholdRatio: 0.8`、`retainRatio: 0.16`）。触发阈值 `min(W×0.8, W−O−B)`，O≈5k：128k 窗口 ~102k（0.8×W 生效）、256k 按 0.8×W、32k 约 19k（`W−O−B>0`，小模型也能跑）。取 8192 = 随包输出上限；第一版曾用 32768，但 32k 模型会 `W−O−B≤0` 报错，故第 9 轮调回 8192。**注意该行嵌在 preset-standard 内部，overlay 无法就地改**（实验：写顶层 `- id: compaction-basic` 只会在 dump 里新增一条 `disabled: true` 的行，preset 内的四份副本不变），只能随 preset 整块重写。
 - 示例配置：`resources/forensics/local-model.example.json`；dev-web 支持 `--local-model`。
 
 **验证**：`--dump-config` 1336 行、exit 0、`provider: local-openai`/`model: mock-14b`/`baseURL: http://127.0.0.1:18080/v1` 均在；`.probe/local-model-e2e.mjs`（mock OpenAI 网关 + 真 Electron + CDP）通过：`REPORT {"ok":true,"chatCalls":2,"gotReply":true,"errors":[]}`，页面出现「MOCK-OK：本地网关已连通，模型是 mock-14b」，模型 chip 显示「Mock 14B (本地)」，预设显示「取证分析（Forensics）」。
@@ -863,8 +863,8 @@ typed 表行数（实测）：`health_metric` 6,200、`exif` 4,518、`msg_csv` 4
 - 面板视觉改造已完成（v0.2.0）：`plugins/seeu-case-index/client.js` 1186 行——主题 token 化 `<style id="seeu-case-index-style">`、顶部 KPI 概览条（案件/检材/记录/实体/库大小/生成时间）、pill 标签栏 + 数量 badge、树行「检材 N · 名称 · 平台/人员 · 备注」+ 竖线 guide、统一 `seeu-row`/`Skeleton`/`LoadingLine`/`EmptyState`、表视图吸顶表头。验收 `.probe/m2-ui-check.mjs`：`m2ok: true`、`errors: []`（六标签真实数据，KPI 与 badge 正确）；`.probe/shot.mjs` 暗/浅两态截图正常。
 - 真实本地网关未联调（用户自备端点）；mock 已证明协议层与 UI 链路可用。
 - 模型选择器「设为默认」在 overlay 场景下静默失败，默认模型只能靠 `useAsDefault`。
-- `compaction-basic` 的 `headroomTokens` 已随 preset 调到 32768（128k/256k 窗口实测阈值 ~90k / 0.8×W）；若换 <48k 窗口模型需手工调回，属于「知道了但没做成开关」的遗留。
-- 调优后的回归：`--dump-config` exit 0、1341 行，`retryPolicy.maxRetries: 3`、`session-title-llm` 顶层覆盖（`maxOutputTokens: 512`）、preset 内 `compaction-basic.headroomTokens: 32768` 均在；`.probe/local-model-e2e.mjs` 复跑通过 `REPORT {"ok":true,"chatCalls":2,"gotReply":true,"errors":[]}`（真 Electron + mock 网关 + CDP）。
+- `compaction-basic` 的 `headroomTokens` 已随 preset 调到 8192（128k → ~102k、256k → 0.8×W、32k → ~19k）；32k 小模型不再需要手工调 preset，该遗留关闭。
+- 调优后的回归：`--dump-config` exit 0、1317 行，`retryPolicy.maxRetries: 3`、`session-title-llm` 顶层覆盖（`maxOutputTokens: 512`）、preset 内 `compaction-basic.headroomTokens: 8192` 均在（dump 里 `headroomTokens` 只出现一次，就是 preset 内这一份）；`.probe/local-model-e2e.mjs` 复跑通过 `REPORT {"ok":true,"chatCalls":2,"gotReply":true,"errors":[]}`（真 Electron + mock 网关 + CDP）。
 
 ### 20.4 第 5 轮：欢迎页品牌块 + 模型状态可见性（2026-11-11）
 
@@ -952,3 +952,28 @@ retry: {"ok":true,"chatCalls":3,"failTimes":2,"retried":true,"gotReply":true,"er
 注意：`npm run test:e2e:diagnose` 需先 `npm run build`（改的是 `src/`/`renderer/`，esbuild 打 `dist/`）；e2e 里 `taskkill /F /IM electron.exe` 会清掉本机其它 Electron 开发实例，仅测试机使用。
 
 **遗留**：自检只测「非流式 + tool_choice 缺省」这一种形态；部分网关只在流式下支持工具调用（dsh 实际走流式），若真实网关出现「自检失败但会话可用」的情况，再加一项流式探测。
+
+### 20.7 第 9 轮：压缩余量定为 8192（同时支持 32k 小模型与 128k/256k）
+
+**问题**：v0.2.0 把 `compaction-basic.headroomTokens` 从官方 65536 调到 32768（128k 窗口阈值 ~90k），但该值对 **32k 窗口**模型会让 `W − O − B ≤ 0`（32768 − 5120 − 32768 < 0），compaction 插件直接报错——而实际比赛里 32k 的 7B/14B 很常见，文档里只能写「请手工改 preset」。
+
+**分析**（触发阈值 = `min(W×0.8, W−O−headroom)`，O = 系统提示 + 工具描述 ≈ 5k，由官方默认值反解得到：128k−5120−65536 = 57344，与 README 里官方「~57k 才压缩」一致）：
+
+| W | headroom 32768 | headroom 8192 |
+|---|---|---|
+| 32k | 32768−5120−32768 = **≤0，报错** | min(25600, 19456) = **19456** ✔ |
+| 128k | min(102400, 90112) = 90112 | min(102400, 114688) = **102400（0.8×W 生效）** ✔ |
+| 256k | min(209715, 217088) = 209715 | 209715 ✔ |
+
+**决定**：`headroomTokens: 8192`——正好等于随包配置的输出上限 `maxTokens: 8192`（再小会让长输出触发溢出重试；dsh 还有 `maxOverflowRetries: 1` 兜底）。这样**一份 preset 同时适配 32k / 128k / 256k**，换模型不需要改配置也不需要重打包。
+
+**改动**：`resources/forensics/cordis.patch.yml` 的 `preset-standard → compaction → compaction-basic.config.headroomTokens` 32768 → 8192，并把注释改成公式 + 三档窗口的实际阈值，同时注明「输出上限若调大需同步调大余量」；`renderer/local-model.html` 页脚删掉「<48k 需要调小余量」的告警，改为「32k 及以上都能直接用」；README §2/§9.2、`docs/forensics-profile.md`、本文件 §20.2/§20.3 同步口径。
+
+**验证**：
+
+- `npm run check:overlay` → OK；
+- `--dump-config`（隔离 DSH_HOME）→ exit 0、**1317 行**，`headroomTokens` 在 dump 里只出现一次且就是 preset 内那份：`thresholdRatio: 0.8 / headroomTokens: 8192 / retainRatio: 0.16`；
+- `node scripts/e2e/local-model-e2e.mjs`（mock OpenAI 网关 + 真 Electron + CDP）→ `REPORT {"ok":true,"chatCalls":2,"gotReply":true,"errors":[]}`，页面出现 `MOCK-OK`；
+- `node scripts/e2e/settings-check.mjs`（重建 dist 后）→ 设置页仍全绿：`{"ok":true,…,"previewHasRetryPolicy":true,"previewHasTitleRow":true,"badGatewayRejected":true,"errors":[]}`。同时修掉一个搬家遗留 bug：该脚本用 `new URL('..', import.meta.url)` 推仓库根，脚本从 `.probe/` 搬到 `scripts/e2e/` 后根目录少退一层，会去 spawn `scripts/node_modules/electron/...` 并 ENOENT；改为 `new URL('../..', import.meta.url)`。其它 e2e 脚本用 `process.cwd()`，需从仓库根运行（npm scripts 已保证）。
+
+**遗留**：余量是静态值，无法按「当前模型上下文」动态算（compaction-basic 嵌在 preset 内部，overlay 与 local-model patch 都改不到）；若将来引入 >8192 的输出上限，需同步改该值并重打包。

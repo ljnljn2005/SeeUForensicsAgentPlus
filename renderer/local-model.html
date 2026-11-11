@@ -170,7 +170,7 @@
   <footer>
     常见问题：<br />
     · 「测试连接与能力自检」由外壳依次请求 <code>/v1/models</code>、一次非流式对话、一次带 <code>ping_tool</code> 的工具调用请求，不经过 dsh；失败通常是网关没起、端口不对或模型不支持函数调用。<br />
-    · 上下文窗口要按模型实际能力填；<strong>小于 48k 的模型</strong>还需要调小随包 preset 里的压缩余量（见 README §9.2）。<br />
+    · 上下文窗口要按模型实际能力填（128k 填 131072）；随包 preset 的压缩余量已按 8192 调好，<strong>32k 及以上的模型都能直接用</strong>，不需要再改配置（见 README §9.2）。<br />
     · 保存后必须重启应用：dsh 只在启动时读取 <code>local-model.patch.yml</code>。
   </footer>
 </div>

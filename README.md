@@ -77,7 +77,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 > 3. **本地模型接入（OpenAI 兼容网关）**：见 §9。`tools/local-model.mjs` 生成 `llm-pi-ai` providers + `agent-default-model` + `session-title-llm` + `retryPolicy`，外壳启动时写成 `<userData>/local-model.patch.yml` 作为第二个 `--patch`。
 > 4. **本地模型设置窗口**：菜单 `工具 → 本地模型设置…`（托盘也有），支持连通性测试（主进程 `net` 请求 `/v1/models`）、实时预览生成的 patch、保存并重启。
 > 5. **启动探测**：启动时 4 秒探测已配置的网关，结果写 `logs\shell.log`，失败只提示不阻塞；错误页新增【本地模型设置】按钮。
-> 6. **长上下文/低并发调优**：`retryPolicy.maxRetries 3`、标题生成 512 tokens/20s、preset 内 `compaction-basic` 余量 `headroomTokens: 32768`（128k 窗口不再在 57k 就压缩）。
+> 6. **长上下文/低并发调优**：`retryPolicy.maxRetries 3`、标题生成 512 tokens/20s、preset 内 `compaction-basic` 余量 `headroomTokens: 8192`（128k 窗口不再在 57k 就压缩，32k 小模型也能直接跑）。
 > 7. 打包态验证：目录版 `{"ok":true,"elapsedMs":4095}`、portable `{"ok":true,"elapsedMs":36517}`、打包态面板 `m2ok:true`（七个标签、24 表、实体/时间线真实数据、`errors:[]`）、打包态设置窗口 `{"ok":true,…,"previewHasRetryPolicy":true,"badGatewayRejected":true}`（页面来自 asar 内的 `dist/renderer/local-model.html`）。
 
 > **v0.1.7 改了什么**
@@ -386,11 +386,12 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 
 ### 9.2 长上下文与低并发调优
 
-本地模型的上下文窗口大、并发低，因此随包取证 preset 把 `compaction-basic` 的 `headroomTokens` 从官方默认 65536 调到 **32768**：
+本地模型的上下文窗口大、并发低，因此随包取证 preset 把 `compaction-basic` 的 `headroomTokens` 从官方默认 65536 调到 **8192**：
 
-- 触发阈值 = `min(W × thresholdRatio, W − O − headroomTokens)`。128k 窗口 + 8192 输出时，默认值只能等到 ~57k tokens 才压缩（一半窗口没用上），改后是 ~90k；256k 窗口则按 `0.8 × W` 触发。
+- 触发阈值 = `min(W × thresholdRatio, W − O − headroomTokens)`（W=窗口，O=系统+工具描述开销，实测约 5k）。官方默认 65536 时 128k 窗口只能等到 ~57k 才压缩（一半窗口没用上）；改成 8192 后：**128k → ~102k（`0.8×W` 生效）、256k → `0.8×W`、32k → ~19k**。
 - 压缩本身要重算 prefill，本地模型这一步很慢，**压得越晚越省时**；但余量也不能太小，否则压缩时留给摘要输出的空间不够。
-- ⚠️ 换用 **< 48k 窗口**的模型（如 32k 的 7B/14B）时，要把 `resources/forensics/cordis.patch.yml` 里 `preset-standard → compaction → compaction-basic` 的 `headroomTokens` 调回 65536 或更小（`W − O − B ≤ 0` 会让该插件报错）。这一行在 preset 内部，**不能用 local-model patch 覆盖**（overlay 只能改顶层行）。
+- 取 8192 的理由：它正好等于随包配置的输出上限（`maxTokens: 8192`），再小就会让长输出触发溢出重试；同时 `W − O − B` 对 32k 窗口仍为正，**32k 的 7B/14B 也能直接跑，不必再手改 preset**。若你把输出上限调到 8192 以上，要同步调大这个余量。
+- 这一行嵌在 preset 内部，**不能用 local-model patch 覆盖**（overlay 只能改顶层行）——所以它是随包固定值，换模型时不需要重打包。
 - `tool-result-pruner` 保持官方 8192/4096/1024：本地模型同样吃 token，工具输出超长时截断比留全量更划算。
 
 ### 9.3 验证

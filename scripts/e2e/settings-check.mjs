@@ -17,7 +17,7 @@ import { join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 
-const REPO = resolve(fileURLToPath(new URL('..', import.meta.url)))
+const REPO = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const argOut = process.argv.indexOf('--out')
 const OUT = argOut > -1 ? process.argv[argOut + 1] : join(REPO, '.probe', 'shots', 'local-model-settings.png')
 const CDP_PORT = 9351
