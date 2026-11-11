@@ -129,7 +129,7 @@
   <div class="field">
     <label for="models">模型列表（一行一个，可选“ | 显示名”）</label>
     <textarea id="models" placeholder="qwen2.5-32b-instruct&#10;qwen2.5-32b-instruct | Qwen2.5 32B（本地）" spellcheck="false"></textarea>
-    <div class="hint">ID 必须与网关 <code>/v1/models</code> 返回的一致；“设为默认”用第一个模型。</div>
+    <div class="hint">ID 必须与网关 <code>/v1/models</code> 返回的一致；“设为默认”用第一个模型。不确定就点下方<b>【从网关拉取模型列表】</b>自动填。</div>
   </div>
 
   <div class="row2">
@@ -155,6 +155,7 @@
 
   <div class="actions">
     <button class="primary" id="btn-save">保存</button>
+    <button id="btn-models">从网关拉取模型列表</button>
     <button id="btn-test">测试连接与能力自检</button>
     <button id="btn-probe">重新探测网关</button>
     <button id="btn-save-restart">保存并重启</button>
@@ -335,6 +336,35 @@
     setStatus('已保存，正在重启应用…', 'ok')
     setTimeout(() => api.restart(), 400)
   })
+  /** 从网关 /v1/models 拉取模型 id，填进「模型列表」；已有「id | 显示名」的显示名保留。 */
+  $('btn-models').addEventListener('click', async () => {
+    const baseURL = $('baseURL').value.trim()
+    if (!baseURL) { setStatus('先填网关地址。', 'err'); return }
+    $('btn-models').disabled = true
+    setStatus('正在读取 ' + baseURL.replace(/\/$/, '') + '/models …')
+    try {
+      const res = await api.test({ baseURL, apiKey: $('apiKey').value.trim() })
+      if (!res || res.ok !== true) {
+        setStatus('拉取失败：' + ((res && res.error) || '未知错误') + '（网关没起、端口不对或需要 apiKey）', 'err')
+        return
+      }
+      const ids = (res.models ?? []).map((m) => m && m.id).filter(Boolean)
+      if (ids.length === 0) { setStatus('网关返回了 200，但模型列表为空。', 'warn'); return }
+      const names = new Map()
+      for (const line of $('models').value.split('\n')) {
+        const [id, name] = line.split('|').map((s) => (s ?? '').trim())
+        if (id) names.set(id, name)
+      }
+      $('models').value = ids.map((id) => (names.get(id) ? id + ' | ' + names.get(id) : id)).join('\n')
+      renderPreview()
+      setStatus('已从网关读到 ' + ids.length + ' 个模型：' + ids.join(', ') + '（记得点「保存」）', 'ok')
+    } catch (error) {
+      setStatus('拉取失败：' + (error && error.message ? error.message : String(error)), 'err')
+    } finally {
+      $('btn-models').disabled = false
+    }
+  })
+
   $('btn-test').addEventListener('click', async () => {
     const form = readForm()
     if (!form.baseURL) { setStatus('先填网关地址。', 'err'); return }

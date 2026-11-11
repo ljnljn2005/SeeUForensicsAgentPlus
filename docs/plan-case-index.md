@@ -977,3 +977,25 @@ retry: {"ok":true,"chatCalls":3,"failTimes":2,"retried":true,"gotReply":true,"er
 - `node scripts/e2e/settings-check.mjs`（重建 dist 后）→ 设置页仍全绿：`{"ok":true,…,"previewHasRetryPolicy":true,"previewHasTitleRow":true,"badGatewayRejected":true,"errors":[]}`。同时修掉一个搬家遗留 bug：该脚本用 `new URL('..', import.meta.url)` 推仓库根，脚本从 `.probe/` 搬到 `scripts/e2e/` 后根目录少退一层，会去 spawn `scripts/node_modules/electron/...` 并 ENOENT；改为 `new URL('../..', import.meta.url)`。其它 e2e 脚本用 `process.cwd()`，需从仓库根运行（npm scripts 已保证）。
 
 **遗留**：余量是静态值，无法按「当前模型上下文」动态算（compaction-basic 嵌在 preset 内部，overlay 与 local-model patch 都改不到）；若将来引入 >8192 的输出上限，需同步改该值并重打包。
+
+### 20.8 第 10 轮：设置页「从网关拉取模型列表」
+
+**问题**：本地网关的模型 id 必须和 `/v1/models` 返回的完全一致才不会被网关拒绝（`model not found`），但用户通常只知道自己「加载了 qwen2.5-32b」，而实际 id 可能是 `qwen2.5-32b-instruct-awq`、`qwen2.5-coder:32b` 之类。之前只能手抄，抄错后表现为会话里模型请求报错，排查成本高。
+
+**实现**（纯渲染进程，复用已有 `testLocalGateway`，**不需要新 IPC**）：
+
+- `renderer/local-model.html` 操作区加【从网关拉取模型列表】（`#btn-models`）：读表单里的 `baseURL`/`apiKey` → `window.seeu.localModel.test()`（主进程 `net.fetch`，8s 超时）→ 把返回的 `models[].id` 逐行写入 `#models` 文本域；**已存在的「id | 显示名」显示名会按 id 合并保留**，避免覆盖用户自定义中文名；随后自动刷新 patch 预览并提示「记得点保存」。
+- 失败分支区分：网关没起/端口错/需要 apiKey（`ok !== true`）、返回 200 但列表为空、异常；三种都有独立文案。
+- 「模型列表」下方的 hint 加了一句「不确定就点下方【从网关拉取模型列表】自动填」。
+
+**验证**（`scripts/e2e/settings-check.mjs` 扩展一步真实点击，mock 网关 `:18081` 返回 `qwen2.5-32b-instruct` 与 `mock-14b`）：
+
+```
+"steps": [..., "拉取模型: qwen2.5-32b-instruct | Qwen2.5 32B（本地） / mock-14b", "错误网关: 按预期失败", ...],
+"pulledModels": ["qwen2.5-32b-instruct | Qwen2.5 32B（本地）", "mock-14b"],
+"ok": true, "errors": []
+```
+
+断言三点：textarea 里出现网关返回的两个 id、已填的显示名 `Qwen2.5 32B（本地）` 仍保留、后续「错误网关」分步仍按预期失败。`npm run test:e2e:settings` 可复跑（需先 `npm run build`）。
+
+**遗留**：拉取只用于填表，不会自动保存；如果网关 `/models` 需要鉴权但只在 `chat/completions` 用别的 header，仍需在 JSON 里手工写 `headers`（设置页暂未暴露 headers 字段）。

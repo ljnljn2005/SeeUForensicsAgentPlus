@@ -217,6 +217,22 @@ try {
   if (reread?.config?.baseURL !== `http://127.0.0.1:${MOCK_PORT}/v1`) throw new Error('重新读取的 baseURL 不一致')
   log('重新读取', '一致')
 
+  // 真实点「从网关拉取模型列表」按钮：应把 /v1/models 的 id 填进 textarea（保留已有显示名）
+  await evaluate(client, `document.getElementById('btn-models').click(), true`)
+  const pulled = await evaluate(client, `(async () => {
+    const t0 = Date.now()
+    while (Date.now() - t0 < 8000) {
+      const v = document.getElementById('models').value
+      if (v.includes('mock-14b') && v.includes('qwen2.5-32b-instruct')) return v
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    return document.getElementById('models').value
+  })()`)
+  report.pulledModels = String(pulled).split('\n').map((l) => l.trim()).filter(Boolean)
+  if (!report.pulledModels.some((l) => l.startsWith('mock-14b'))) throw new Error(`拉取模型列表失败：${JSON.stringify(pulled)}`)
+  if (!report.pulledModels.some((l) => l.includes('Qwen2.5 32B（本地）'))) throw new Error('拉取后丢失了已有显示名')
+  log('拉取模型', report.pulledModels.join(' / '))
+
   const bad = await evaluate(client, `window.seeu.localModel.test({ baseURL: 'http://127.0.0.1:1/v1' })`)
   report.badGatewayRejected = bad?.ok === false
   log('错误网关', report.badGatewayRejected ? '按预期失败' : '意外成功')
