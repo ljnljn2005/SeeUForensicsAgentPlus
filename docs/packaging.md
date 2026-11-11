@@ -328,7 +328,7 @@ node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-un
 
 ## 6. 体积现状
 
-以 2026-11-11 **v0.1.7** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验 + 案件索引插件 + M2 typed 层 + M5 跨案库）为准。
+以 2026-11-11 **v0.2.0** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验 + 案件索引插件 + M2 typed 层 + M5 跨案库 + 主题/品牌插件 + 本地模型接入）为准。
 更早的 Electron 44.11.0 首轮产物已作废，不引用其数字。
 
 `npm run package:dir` 产物：
@@ -336,22 +336,26 @@ node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-un
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 | 234.9 MiB | Electron 主程序（含 rcedit 写入的图标/版本资源） |
-| `release/win-unpacked/resources/app.asar` | 168,558,803 | 160.7 MiB | JS + 资源 + node_modules 生产依赖 + 索引插件 + `tools/ges-index`（19,639 个 asar 条目，`@deepseek-ai` 330/330） |
+| `release/win-unpacked/resources/app.asar` | 168,656,136 | 160.8 MiB | JS + 资源 + node_modules 生产依赖 + 索引/主题插件 + `tools/ges-index`（19,647 个 asar 条目，`@deepseek-ai` 330/330） |
 | `release/win-unpacked/`（整个目录） | — | 769 MiB | 含 Electron 运行时、locales、`app.asar.unpacked` 原生模块（`du -sm`） |
 
 `npm run package:win` 额外产出（同一轮）：
 
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
-| `release/SeeUForensicsAgentPlus-0.1.7-x64.exe` | 211,895,076 | 202.1 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
-| `release/SeeUForensicsAgentPlus-0.1.7-x64.exe.blockmap` | 221,194 | 216.0 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
-| `release/SeeUForensicsAgentPlus-0.1.7-x64-portable.exe` | 189,498,334 | 180.7 MiB | 免安装单文件（自解压运行） |
+| `release/SeeUForensicsAgentPlus-0.2.0-x64.exe` | 211,911,443 | 202.1 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
+| `release/SeeUForensicsAgentPlus-0.2.0-x64.exe.blockmap` | 220,870 | 215.7 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
+| `release/SeeUForensicsAgentPlus-0.2.0-x64-portable.exe` | 189,515,660 | 180.7 MiB | 免安装单文件（自解压运行） |
 
 即：安装包约 **202 MiB**、portable 约 **181 MiB**，解包目录约 **769 MiB**。
 
-> v0.1.0（缺 21 个 peer 包，启动即崩）、v0.1.1（overlay 是定稿前的工具面）与 v0.1.2
-> （工具面还有 21 项，含插件管理/市场）、v0.1.3（无索引插件）、v0.1.4（无 M3 会话查库）、v0.1.5（无 M2 typed 层）、v0.1.6（无 M5 跨案）均已作废，对外只发 v0.1.7；各版本 asar 体积差异
+> v0.1.0（缺 21 个 peer 包，启动即崩）、v0.1.1（overlay 是定稿前的工具面）、v0.1.2
+> （工具面还有 21 项，含插件管理/市场）、v0.1.3（无索引插件）、v0.1.4（无 M3 会话查库）、v0.1.5（无 M2 typed 层）、v0.1.6（无 M5 跨案）、v0.1.7（无主题/本地模型）均已作废，对外只发 v0.2.0；各版本 asar 体积差异
 > 来自补包与取证预设内容。
+>
+> 另注：本轮打包时上一版 portable 仍在运行，`release/` 目录被其 exe 占用无法整体删除，
+> 因此产物先出到 `release-020/` 再逐个移入 `release/`；`release/SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`
+> 是那次遗留（正在运行的进程），0.2.0 三个文件不受影响。
 
 体积构成大头：Electron 运行时本体（exe + DLL/pak/icudtl）、`app.asar` 中
 `@deepseek-ai/*` 与 office/语音/终端相关依赖、`app.asar.unpacked` 中

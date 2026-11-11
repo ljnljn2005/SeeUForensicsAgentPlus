@@ -57,16 +57,28 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.1.7**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.2.0**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 769 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,558,803 B（330/330 个 `@deepseek-ai` 包齐全，19,639 entries，含 `plugins/seeu-case-index/**`、`tools/ges-index/**`） |
-| `release/SeeUForensicsAgentPlus-0.1.7-x64.exe`（NSIS 安装包） | 211,895,076 B |
-| `release/SeeUForensicsAgentPlus-0.1.7-x64-portable.exe` | 189,498,334 B |
+| `release/win-unpacked/resources/app.asar` | 168,656,136 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`） |
+| `release/SeeUForensicsAgentPlus-0.2.0-x64.exe`（NSIS 安装包） | 211,911,443 B（blockmap 220,870 B） |
+| `release/SeeUForensicsAgentPlus-0.2.0-x64-portable.exe` | 189,515,660 B |
 
-实测冷启动到 dsh UI：目录版 4071 ms；portable 首次 42.4s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+实测冷启动到 dsh UI：目录版 4095 ms；portable 首次 36.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+
+> 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；新产物是 0.2.0 的那三个文件。
+
+> **v0.2.0 改了什么**
+>
+> 1. **视觉层**：新增 `plugins/seeu-theme/`（宿主 `index.js` 把 `theme.css` 注入首屏 `<style>`，客户端 `client.js` 兜底 `<link>` + 改 `document.title`）——取证深色主题（深蓝底 + 青色强调）、中文字体栈、圆角/滚动条/选中态统一；官方 `ui-brand-official` 置为 disabled，改由主题插件提供侧栏品牌「SeeU 取证」与欢迎页大图标；`locale.preference: zh`。
+> 2. **索引面板视觉重构**：`plugins/seeu-case-index/client.js` 全量 token 化，加 KPI 条（案件/检材/记录/实体/库大小/生成时间）、pill 标签 + 数量 badge、树行高与竖线指引、检材名加粗 + 平台/备注次级色、骨架屏/空态、表视图 sticky 表头。
+> 3. **本地模型接入（OpenAI 兼容网关）**：见 §9。`tools/local-model.mjs` 生成 `llm-pi-ai` providers + `agent-default-model` + `session-title-llm` + `retryPolicy`，外壳启动时写成 `<userData>/local-model.patch.yml` 作为第二个 `--patch`。
+> 4. **本地模型设置窗口**：菜单 `工具 → 本地模型设置…`（托盘也有），支持连通性测试（主进程 `net` 请求 `/v1/models`）、实时预览生成的 patch、保存并重启。
+> 5. **启动探测**：启动时 4 秒探测已配置的网关，结果写 `logs\shell.log`，失败只提示不阻塞；错误页新增【本地模型设置】按钮。
+> 6. **长上下文/低并发调优**：`retryPolicy.maxRetries 3`、标题生成 512 tokens/20s、preset 内 `compaction-basic` 余量 `headroomTokens: 32768`（128k 窗口不再在 57k 就压缩）。
+> 7. 打包态验证：目录版 `{"ok":true,"elapsedMs":4095}`、portable `{"ok":true,"elapsedMs":36517}`、打包态面板 `m2ok:true`（七个标签、24 表、实体/时间线真实数据、`errors:[]`）、打包态设置窗口 `{"ok":true,…,"previewHasRetryPolicy":true,"badGatewayRejected":true}`（页面来自 asar 内的 `dist/renderer/local-model.html`）。
 
 > **v0.1.7 改了什么**
 >
