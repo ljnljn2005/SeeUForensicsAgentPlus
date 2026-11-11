@@ -8,6 +8,8 @@ import {
   localModelEnv,
   LOCAL_MODEL_DEFAULTS,
   LocalModelConfigError,
+  CONTEXT_PRESETS,
+  localModelWarnings,
 } from '../tools/local-model.mjs'
 
 const require = createRequire(import.meta.url)
@@ -141,4 +143,49 @@ test('每个模型可单独指定上下文/输出上限', () => {
   assert.equal(c.models[0].maxTokens, 4096)
   assert.equal(c.models[1].contextWindow, 131072)
   assert.equal(c.models[1].maxTokens, 8192)
+})
+
+test('窗口档位：32k / 128k / 256k 三档，输出上限不超过窗口的 1/4', () => {
+  assert.equal(CONTEXT_PRESETS.length, 3)
+  assert.deepEqual(CONTEXT_PRESETS.map((p) => p.id), ['32k', '128k', '256k'])
+  for (const preset of CONTEXT_PRESETS) {
+    assert.ok(preset.contextWindow >= 32768)
+    assert.ok(preset.maxTokens <= preset.contextWindow / 4)
+  }
+})
+
+test('默认配置没有健康度警告', () => {
+  const cfg = normalizeLocalModel(base)
+  assert.deepEqual(localModelWarnings(cfg), [])
+})
+
+test('输出上限接近窗口时给出警告，达到窗口时报错级', () => {
+  const warn = normalizeLocalModel({ ...base, contextWindow: 32768, maxTokens: 16384 })
+  const warnKeys = localModelWarnings(warn).map((w) => w.key)
+  assert.ok(warnKeys.includes('output-window'))
+
+  const bad = normalizeLocalModel({ ...base, contextWindow: 32768, maxTokens: 32768 })
+  const badItem = localModelWarnings(bad).find((w) => w.key === 'output-window')
+  assert.equal(badItem.level, 'err')
+})
+
+test('重试过多、超时过短、窗口过小都会提示', () => {
+  const cfg = normalizeLocalModel({
+    ...base,
+    contextWindow: 16384,
+    maxTokens: 2048,
+    retryMaxRetries: 8,
+    timeoutMs: 30000,
+  })
+  const keys = localModelWarnings(cfg).map((w) => w.key)
+  for (const key of ['window-small', 'retries', 'timeout']) assert.ok(keys.includes(key), key)
+})
+
+test('非档位窗口提示最近档位，未启用时无警告', () => {
+  const odd = normalizeLocalModel({ ...base, contextWindow: 200000 })
+  const hint = localModelWarnings(odd).find((w) => w.key === 'preset')
+  assert.ok(hint && hint.message.includes('256k'))
+
+  const disabled = normalizeLocalModel({ ...base, enabled: false })
+  assert.deepEqual(localModelWarnings(disabled), [])
 })

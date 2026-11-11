@@ -89,6 +89,15 @@
   pre#preview { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--dim); font-size: 11px; line-height: 1.6; overflow: auto; max-height: 180px; display: none; }
   footer { margin-top: 18px; color: var(--dim); font-size: 11px; line-height: 1.7; border-top: 1px solid var(--border); padding-top: 12px; }
 
+    .presets { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
+    .presets-label { font-size: 12px; color: var(--fg2); font-weight: 600; }
+    .presets button { padding: 4px 10px; font-size: 12px; }
+    .presets .hint { color: var(--dim); font-size: 11px; }
+    .warns { display: flex; flex-direction: column; gap: 6px; margin: 0 0 10px; }
+    .warns .w { border-radius: 8px; padding: 7px 10px; font-size: 12px; line-height: 1.6; border: 1px solid var(--line); }
+    .warns .w.warn { border-color: rgba(251,191,36,.35); color: var(--warn); }
+    .warns .w.err { border-color: rgba(248,113,113,.4); color: var(--err); }
+    .warns .w.info { color: var(--dim); }
     details.adv { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: rgba(255,255,255,0.02); }
     details.adv > summary { cursor: pointer; font-size: 12px; color: var(--fg2); font-weight: 600; }
     details.adv[open] > summary { margin-bottom: 8px; }
@@ -149,6 +158,15 @@
     </div>
   </div>
 
+  <div class="presets" id="presets">
+    <span class="presets-label">窗口档位：</span>
+    <button type="button" data-preset="32k">32k 小窗口</button>
+    <button type="button" data-preset="128k">128k 个人赛</button>
+    <button type="button" data-preset="256k">256k 团体赛</button>
+    <span class="hint">一键填「上下文窗口 / 输出上限」，再按模型实测调整。</span>
+  </div>
+
+  <div id="warnings" class="warns" hidden></div>
   <details class="adv">
     <summary>高级：超时与重试（低并发本地网关）</summary>
     <div class="row2">
@@ -190,6 +208,7 @@
     <button class="primary" id="btn-save">保存</button>
     <button id="btn-models">从网关拉取模型列表</button>
     <button id="btn-test">测试连接与能力自检</button>
+    <button id="btn-copy">复制诊断信息</button>
     <button id="btn-probe">重新探测网关</button>
     <button id="btn-save-restart">保存并重启</button>
     <button id="btn-reload">重新读取</button>
@@ -215,6 +234,10 @@
   const probeEl = $('probe')
   const previewEl = $('preview')
   const api = window.seeu && window.seeu.localModel
+  // 最近一次读到的配置/探测/自检结果，供「复制诊断信息」拼文本
+  let lastView = null
+  let lastProbe = null
+  let lastDiag = null
 
   function setStatus(text, kind) {
     statusEl.textContent = text
@@ -223,6 +246,7 @@
 
   /** 启动探测结果：外壳启动时已经打过一次 4 秒超时的 /v1/models，这里只做展示。 */
   function renderProbe(probe) {
+    lastProbe = probe || null
     if (!probe) {
       probeEl.textContent = '启动探测：尚未完成（或未配置本地模型，当前使用官方模型）。'
       probeEl.className = 'hint'
@@ -300,6 +324,7 @@
 
   /** 能力自检结果：模型列表 / 基础对话 / 工具调用逐项展示。 */
   function renderDiag(res) {
+    lastDiag = res && Array.isArray(res.items) ? res : null
     const diagEl = document.getElementById('diag')
     if (!res || !Array.isArray(res.items)) {
       diagEl.hidden = true
@@ -339,6 +364,46 @@
     diagEl.append(sum)
   }
 
+  /** 拼一段可直接贴给开发者的诊断文本（不含 apiKey 原文）。 */
+  function diagnosticsText() {
+    const cfg = lastView && lastView.config ? lastView.config : readForm()
+    const lines = []
+    lines.push('=== SeeU 取证智能体增强版 · 本地模型诊断 ===')
+    lines.push('时间: ' + new Date().toISOString())
+    lines.push('配置文件: ' + (lastView && lastView.path ? lastView.path : '(未知)'))
+    lines.push('启用: ' + (cfg.enabled === false ? '否' : '是'))
+    lines.push('网关: ' + (cfg.baseURL || '(未填)'))
+    lines.push('apiKey: ' + (cfg.apiKey ? '(已设置，已省略)' : '(未设置)'))
+    const models = Array.isArray(cfg.models) && cfg.models.length ? cfg.models : (cfg.model ? [{ id: cfg.model }] : [])
+    lines.push('模型: ' + (models.map((m) => m.name && m.name !== m.id ? m.id + ' | ' + m.name : m.id).join(', ') || '(未填)'))
+    lines.push('上下文窗口: ' + (cfg.contextWindow || 131072) + '  输出上限: ' + (cfg.maxTokens || 8192))
+    lines.push('请求超时: ' + Math.round((cfg.timeoutMs || 600000) / 1000) + 's  流式空闲: ' + Math.round((cfg.streamIdleTimeoutMs || 600000) / 1000) + 's  重试: ' + (cfg.retryMaxRetries ?? 3))
+    if (lastProbe) {
+      lines.push('启动探测: ' + (lastProbe.ok ? '可用 · ' + (lastProbe.models || []).join(', ') : '不可用 · ' + (lastProbe.error || '未知错误')) + ' · ' + (lastProbe.at || ''))
+    } else {
+      lines.push('启动探测: (尚未完成)')
+    }
+    if (lastDiag) {
+      lines.push('能力自检:')
+      for (const it of lastDiag.items) {
+        lines.push('  ' + (it.ok ? '✓' : '✗') + ' ' + (it.label || it.key) + ' · ' + (it.detail || '') + (typeof it.ms === 'number' ? ' · ' + it.ms + ' ms' : ''))
+      }
+    } else {
+      lines.push('能力自检: (未运行)')
+    }
+    return lines.join('\n')
+  }
+
+  async function copyDiagnostics() {
+    const text = diagnosticsText()
+    try {
+      const ok = await window.seeu.writeClipboard(text)
+      setStatus(ok ? '已复制诊断信息（' + text.length + ' 字符），可直接粘贴给开发者。' : '复制失败：剪贴板不可用。', ok ? 'ok' : 'err')
+    } catch (error) {
+      setStatus('复制失败：' + (error && error.message ? error.message : error), 'err')
+    }
+  }
+
   async function load() {
     if (!api) {
       setStatus('预加载桥不可用（window.seeu.localModel 缺失），请从桌面版菜单打开本页。', 'err')
@@ -354,9 +419,28 @@
     } else if (view.error) {
       setStatus('配置文件读取失败：' + view.error, 'err')
     } else {
+      lastView = view
       setStatus('已加载现有配置。', 'ok')
     }
     renderPreview()
+  }
+
+  /** 配置健康度建议：窗口/输出上限/重试/超时的配比不合理时提前说出来。 */
+  function renderWarnings(list) {
+    const box = document.getElementById('warnings')
+    if (!Array.isArray(list) || list.length === 0) {
+      box.hidden = true
+      box.textContent = ''
+      return
+    }
+    box.hidden = false
+    box.textContent = ''
+    for (const w of list) {
+      const item = document.createElement('div')
+      item.className = 'w ' + (w.level || 'info')
+      item.textContent = w.message
+      box.append(item)
+    }
   }
 
   async function renderPreview() {
@@ -369,6 +453,7 @@
       previewEl.style.display = 'none'
       previewEl.textContent = ''
     }
+    renderWarnings(res && res.ok ? res.warnings : [])
   }
 
   async function save() {
@@ -389,6 +474,24 @@
     setTimeout(() => api.restart(), 400)
   })
   /** 从网关 /v1/models 拉取模型 id，填进「模型列表」；已有「id | 显示名」的显示名保留。 */
+  /** 一键套用窗口档位（只改输入框，仍要用户点保存才会写文件）。 */
+  const PRESETS = {
+    '32k': { contextWindow: 32768, maxTokens: 4096 },
+    '128k': { contextWindow: 131072, maxTokens: 8192 },
+    '256k': { contextWindow: 262144, maxTokens: 8192 },
+  }
+  for (const btn of document.querySelectorAll('#presets button[data-preset]')) {
+    btn.addEventListener('click', () => {
+      const preset = PRESETS[btn.dataset.preset]
+      if (!preset) return
+      $('contextWindow').value = String(preset.contextWindow)
+      $('maxTokens').value = String(preset.maxTokens)
+      setStatus('已套用「' + btn.textContent.trim() + '」，确认后点保存。', 'ok')
+      void renderPreview()
+    })
+  }
+
+  $('btn-copy').addEventListener('click', copyDiagnostics)
   $('btn-models').addEventListener('click', async () => {
     const baseURL = $('baseURL').value.trim()
     if (!baseURL) { setStatus('先填网关地址。', 'err'); return }

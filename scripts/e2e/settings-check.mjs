@@ -193,6 +193,39 @@ try {
   report.previewHasTitleRow = /session-title-llm/.test(preview.patch)
   log('preview', `patch ${preview.patch.length} 字符，含 retryPolicy=${report.previewHasRetryPolicy}`)
 
+
+  // 窗口档位按钮：点「256k 团体赛」应当把两个输入框都换成档位值
+  await evaluate(client, `(() => { document.querySelector("#presets button[data-preset='256k']").click(); return true })()`)
+  await sleep(300)
+  const presetState = await evaluate(client, `({ contextWindow: document.getElementById('contextWindow').value, maxTokens: document.getElementById('maxTokens').value })`)
+  report.presetApplied = presetState.contextWindow === '262144' && presetState.maxTokens === '8192'
+  if (!report.presetApplied) throw new Error(`预设未生效：${JSON.stringify(presetState)}`)
+  log('窗口档位', `256k → 窗口 ${presetState.contextWindow} / 输出 ${presetState.maxTokens}`)
+
+  // 健康度提示：输出上限接近窗口时应出现警告条
+  const warnPreview = await evaluate(client, `window.seeu.localModel.preview({
+    enabled: true,
+    baseURL: 'http://127.0.0.1:${MOCK_PORT}/v1',
+    models: [{ id: 'qwen2.5-32b-instruct' }],
+    contextWindow: 32768,
+    maxTokens: 16384,
+    retryMaxRetries: 8
+  })`)
+  report.previewWarnings = (warnPreview?.warnings ?? []).map((w) => w.key)
+  if (!report.previewWarnings.includes('output-window')) throw new Error(`缺少 output-window 警告：${JSON.stringify(warnPreview)}`)
+  if (!report.previewWarnings.includes('retries')) throw new Error('缺少 retries 警告')
+  log('健康度警告', report.previewWarnings.join(','))
+  // 复制诊断信息：按钮存在且点击后状态行有反馈（文本长度 > 200 说明拼装正常）
+  const copyResult = await evaluate(client, `(async () => {
+    const btn = document.getElementById('btn-copy')
+    if (!btn) return { ok: false, reason: 'no-button' }
+    btn.click()
+    await new Promise((r) => setTimeout(r, 300))
+    return { ok: true, status: document.getElementById('status').textContent }
+  })()`)
+  report.copiedDiagnostics = copyResult.ok === true && /已复制诊断信息（\d+ 字符）/.test(String(copyResult.status || ''))
+  if (!report.copiedDiagnostics) throw new Error(`复制诊断信息失败：${JSON.stringify(copyResult)}`)
+  log('复制诊断信息', String(copyResult.status).trim())
   const probe = await evaluate(client, `window.seeu.localModel.test({ baseURL: 'http://127.0.0.1:${MOCK_PORT}/v1', apiKey: 'local' })`)
   if (probe?.ok !== true) throw new Error(`测试连接失败：${JSON.stringify(probe)}`)
   report.gatewayModels = (probe.models ?? []).map((m) => m.id)

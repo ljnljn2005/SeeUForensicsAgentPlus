@@ -69,6 +69,12 @@ export interface LocalModelDiagnosis {
   readonly items: LocalModelDiagnosisItem[]
 }
 
+export interface LocalModelWarning {
+  readonly level: 'err' | 'warn' | 'info'
+  readonly key: string
+  readonly message: string
+}
+
 export interface LocalModelProbeResult {
   readonly ok: boolean
   readonly status?: number
@@ -88,12 +94,20 @@ const api = {
   openWorkspace: (): void => { ipcRenderer.send('seeu:open-workspace') },
   openLocalModelSettings: (): void => { ipcRenderer.send('seeu:open-settings') },
   quit: (): void => { ipcRenderer.send('seeu:quit') },
+  writeClipboard: (text: string): Promise<boolean> => ipcRenderer.invoke('seeu:clipboard:write', text) as Promise<boolean>,
   localModel: {
     get: (): Promise<LocalModelView> => ipcRenderer.invoke('seeu:local-model:get') as Promise<LocalModelView>,
     save: (config: unknown): Promise<LocalModelSaveResult> =>
       ipcRenderer.invoke('seeu:local-model:save', config) as Promise<LocalModelSaveResult>,
-    preview: (config: unknown): Promise<{ ok: boolean; patch?: string; error?: string }> =>
-      ipcRenderer.invoke('seeu:local-model:preview', config) as Promise<{ ok: boolean; patch?: string; error?: string }>,
+    preview: (
+      config: unknown,
+    ): Promise<{ ok: boolean; patch?: string; error?: string; warnings?: LocalModelWarning[] }> =>
+      ipcRenderer.invoke('seeu:local-model:preview', config) as Promise<{
+        ok: boolean
+        patch?: string
+        error?: string
+        warnings?: LocalModelWarning[]
+      }>,
     test: (probe: { baseURL?: string; apiKey?: string }): Promise<LocalModelProbeResult> =>
       ipcRenderer.invoke('seeu:local-model:test', probe) as Promise<LocalModelProbeResult>,
     diagnose: (probe: { baseURL?: string; apiKey?: string; model?: string }): Promise<LocalModelDiagnosis> =>

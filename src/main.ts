@@ -9,7 +9,7 @@
  * 明确不负责：dsh agent 本身的工具、模型、会话 —— 那些在 dsh 运行时里。
  */
 
-import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, session, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, Menu, Tray, clipboard, dialog, ipcMain, nativeImage, session, shell, type MenuItemConstructorOptions } from 'electron'
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -519,6 +519,10 @@ function buildMenu(): void {
 // ── IPC ────────────────────────────────────────────────────────────────────
 
 function registerIpc(): void {
+  ipcMain.handle('seeu:clipboard:write', (_event, text: unknown) => {
+    clipboard.writeText(String(text ?? ''))
+    return true
+  })
   ipcMain.handle('seeu:info', () => ({
     productName: PRODUCT_NAME,
     displayName: PRODUCT_DISPLAY_NAME,

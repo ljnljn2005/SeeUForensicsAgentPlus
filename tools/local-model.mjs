@@ -52,6 +52,16 @@ function str(value) {
  *   { baseURL, model: 'qwen2.5-14b', ... }                    ← 单个模型
  *   { baseURL, models: [{ id, name?, contextWindow?, maxTokens? }, ...] }
  */
+/**
+ * 常见窗口档位：比赛环境通常给 128k（个人赛）/ 256k（团体赛），小机器给 32k。
+ * 设置页一键套用，避免手填 contextWindow 时填错（例如把模型名里的数字当窗口）。
+ */
+export const CONTEXT_PRESETS = [
+  { id: '32k', label: '32k 小窗口', contextWindow: 32768, maxTokens: 4096 },
+  { id: '128k', label: '128k 个人赛', contextWindow: 131072, maxTokens: 8192 },
+  { id: '256k', label: '256k 团体赛', contextWindow: 262144, maxTokens: 8192 },
+]
+
 export function normalizeLocalModel(input = {}) {
   if (input === null || typeof input !== 'object') {
     throw new LocalModelConfigError('local-model 配置必须是 JSON 对象')
@@ -201,4 +211,40 @@ export function localModelEnv(cfg) {
   return { [c.apiKeyEnv]: c.apiKey ?? 'local' }
 }
 
+/**
+ * 配置健康度检查：返回可直接展示给用户的建议（不抛异常）。
+ * cfg 应是 normalizeLocalModel() 的结果。
+ */
+export function localModelWarnings(cfg) {
+  const out = []
+  if (!cfg || cfg.enabled === false) return out
+  const window = num(cfg.contextWindow, DEFAULTS.contextWindow)
+  const output = num(cfg.maxTokens, DEFAULTS.maxTokens)
+  const retries = num(cfg.retryMaxRetries, DEFAULTS.retryMaxRetries)
+  const timeout = num(cfg.timeoutMs, DEFAULTS.timeoutMs)
+  const idle = num(cfg.streamIdleTimeoutMs, DEFAULTS.streamIdleTimeoutMs)
+
+  if (output >= window) {
+    out.push({ level: 'err', key: 'output-window', message: '输出上限 ' + output + ' 不小于上下文窗口 ' + window + '：一次回答就可能把历史挤掉，压缩也无法工作。建议调到窗口的 1/4 以内。' })
+  } else if (output > window / 4) {
+    out.push({ level: 'warn', key: 'output-window', message: '输出上限 ' + output + ' 占窗口 ' + window + ' 的 ' + Math.round((output / window) * 100) + '%：本地模型很少用满，建议不超过 ' + Math.floor(window / 4) + '，给工具结果和历史留空间。' })
+  }
+  if (window < 32768) {
+    out.push({ level: 'warn', key: 'window-small', message: '上下文窗口 ' + window + ' 小于 32k：系统提示与工具描述本身就占掉不少，建议至少 32k。' })
+  }
+  if (retries > 5) {
+    out.push({ level: 'warn', key: 'retries', message: '重试上限 ' + retries + ' 次：低并发网关排队时会把一次失败放大成多次长超时，建议 2-3 次。' })
+  }
+  if (timeout < 60000) {
+    out.push({ level: 'warn', key: 'timeout', message: '请求超时 ' + Math.round(timeout / 1000) + 's 偏短：本地 32B 模型长上下文首 token 可能要 30s 以上，建议不少于 120s。' })
+  }
+  if (idle > timeout) {
+    out.push({ level: 'info', key: 'idle', message: '流式空闲超时（' + Math.round(idle / 1000) + 's）大于总超时（' + Math.round(timeout / 1000) + 's），实际按总超时生效。' })
+  }
+  if (!CONTEXT_PRESETS.some((p) => p.contextWindow === window)) {
+    const nearest = CONTEXT_PRESETS.reduce((a, b) => (Math.abs(b.contextWindow - window) < Math.abs(a.contextWindow - window) ? b : a))
+    out.push({ level: 'info', key: 'preset', message: '窗口 ' + window + ' 不在常用档位；如果模型实测窗口是 ' + nearest.contextWindow + '，可一键套用「' + nearest.label + '」。' })
+  }
+  return out
+}
 export { DEFAULTS as LOCAL_MODEL_DEFAULTS }

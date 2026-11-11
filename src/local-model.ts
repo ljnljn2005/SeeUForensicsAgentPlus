@@ -17,6 +17,7 @@ import {
   LocalModelConfigError,
   localModelEnv,
   localModelPatch,
+  localModelWarnings,
   normalizeLocalModel,
 } from '../tools/local-model.mjs'
 
@@ -190,9 +191,28 @@ export function disableLocalModel(
 }
 
 /** 设置界面实时预览：把表单内容编译成 patch 文本（不落盘）。 */
-export function previewLocalModelPatch(input: unknown): { ok: true; patch?: string } | { ok: false; error: string } {
+export interface LocalModelWarning {
+  readonly level: 'err' | 'warn' | 'info'
+  readonly key: string
+  readonly message: string
+}
+
+export type LocalModelPreview =
+  | { ok: true; patch?: string; warnings: LocalModelWarning[] }
+  | { ok: false; error: string }
+
+/**
+ * 生成 patch 预览，同时做配置健康度检查（窗口/输出上限/重试/超时的配比）。
+ * 校验失败时只回错误，因为此时任何建议都会误导。
+ */
+export function previewLocalModelPatch(input: unknown): LocalModelPreview {
   try {
-    return { ok: true, patch: localModelPatch(input) }
+    const cfg = normalizeLocalModel(input)
+    return {
+      ok: true,
+      patch: localModelPatch(input),
+      warnings: localModelWarnings(cfg) as LocalModelWarning[],
+    }
   } catch (error) {
     return { ok: false, error: (error as Error).message }
   }

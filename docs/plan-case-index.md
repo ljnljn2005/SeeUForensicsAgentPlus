@@ -1097,3 +1097,18 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 补齐 `KNOWN_CATS` 后全案重建（370 叶、266 s）：`records 22777`、`typedRecords 21123`、`coverage 0.927`、`misses 60`、`fingerprint 30e13fe6…` **与改动前完全一致** ⇒ 本案件里没有路径因这次补齐而改分类（只是把潜在的误判风险关掉）。
 
 **遗留**：`query.mjs`（tree/search/cite）与 `build.mjs` 仍靠 e2e 覆盖，未做单测——它们依赖 sqlite 与真实库，更值得做的是「用小型夹具库跑查询快照」，留待后续。
+
+### 20.13 第 13 轮：设置页「复制诊断信息」
+
+- **动机**：真实联调时用户往往只能描述「连不上」，缺少配置路径、探测结果、自检逐项结果，来回问很慢。
+- **实现**：`ipcMain.handle("seeu:clipboard:write")`（`clipboard.writeText`）→ `preload.writeClipboard()` → 设置页 `diagnosticsText()` 拼「时间 / 配置文件路径 / enabled / 网关 / apiKey 是否设置（不输出原文）/ 模型 / 上下文与输出 / 超时与重试 / 启动探测 / 能力自检逐项」→ 按钮 `#btn-copy`。
+- **坑**：`main.ts` 里同一 IPC 通道被注册两次（一次在 `registerIpc()` 顶部、一次在本地模型区）→ Electron 抛 `Attempted to register a second handler`，`whenReady` 里的注册整体中断，设置窗口不再打开（表现是 e2e 报「设置页没出现」）。一个通道名只能对应一个 `handle`。
+- **验证**：`npm run test:e2e:settings` → `copiedDiagnostics: true`，状态行「已复制诊断信息（248 字符）」，`errors: []`。
+
+### 20.14 第 14 轮：窗口档位预设 + 配置健康度检查
+
+- **动机**：用户口径是「128k 个人赛 / 256k 团体赛、并发较少」，而窗口/输出上限/重试/超时四个值互相牵制（输出上限接近窗口会让压缩失效、重试过多会把排队放大成多次长超时、超时过短会让 32B 长上下文首 token 被中断），手填容易踩坑。
+- **实现**：`tools/local-model.mjs` 导出 `CONTEXT_PRESETS`（32k/128k/256k）与 `localModelWarnings(cfg)`（不抛异常，返回 `{level: err|warn|info, key, message}`）；`src/local-model.ts` 的 `previewLocalModelPatch()` 返回 `warnings`；设置页加 `#presets` 三个按钮（只改表单，仍需点保存）与 `#warnings` 提示区，随输入实时刷新。
+- **规则**：输出上限 ≥ 窗口 → err；超过窗口 1/4 → warn；窗口 < 32k → warn；重试 > 5 → warn；超时 < 60s → warn；流式空闲 > 总超时 → info；窗口不在档位 → info（提示最近档位）。
+- **验证**：`npm test` 36 项全绿（新增 5 项：档位形状、默认无警告、输出上限警告分级、窗口/重试/超时组合、非档位提示 + 未启用无警告）；`npm run test:e2e:settings` 全绿（`presetApplied:true`「256k → 窗口 262144 / 输出 8192」、`previewWarnings:["output-window","retries"]`、`copiedDiagnostics:true`）；`npm run test:e2e:local` 仍 `chatCalls 2 / gotReply true`；`npm run check:overlay` OK。
+- **遗留**：预设只覆盖窗口/输出两个字段，重试/超时仍留给高级区手动调（机器差异大，不做「一键最优」）；警告只提示、不阻止保存。
