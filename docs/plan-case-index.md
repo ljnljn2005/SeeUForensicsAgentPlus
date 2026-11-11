@@ -1571,7 +1571,7 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 
 **实现**：
 
-- `plugins/seeu-case-index/index.js` 新增 `writeCaseBrief(indexes?)`：`findIndexes(briefDirs())`（状态文件 + `SEEU_INDEX_SEARCH_DIRS`）→ 取 `tree(root)` 的 `totals/timeRange` 与 `evidences(db)` → 生成带 `<!-- seeu-case-brief ... -->` / `<!-- /seeu-case-brief -->` 标记的 Markdown 区块（案件名、索引库路径、规模、时间范围、`eid|检材|名称|平台|记录数` 表、`$SEEU_INDEX_API` 入口与「不要猜 eid」规则；最多 5 案 × 50 检材）；写入 `<DSH_HOME>/AGENTS.md`（合并式：只替换自己的标记区块，保留用户内容；无标记则追加）与 `<SEEU_WORKSPACE>/SEEU-CASE-BRIEF.md`；模块级 `briefSig` 去重。
+- `plugins/seeu-case-index/index.js` 新增 `writeCaseBrief(indexes?)`：`findIndexes(briefDirs())`（状态文件 + `SEEU_INDEX_SEARCH_DIRS`）→ 取 `tree(root)` 的 `totals/timeRange` 与 `evidences(db)` → 生成带 `<!-- seeu-case-brief ... -->` / `<!-- /seeu-case-brief -->` 标记的 Markdown 区块（案件名、索引库路径、规模、时间范围、`eid|检材|名称|平台|记录数` 表、`$SEEU_INDEX_API` 入口与「不要猜 eid」规则；最多 5 案 × 50 检材）；写入 `<DSH_HOME>/AGENTS.md`（合并式：只替换自己的标记区块，保留用户内容；无标记则追加）；没有 `DSH_HOME` 时退回 `<SEEU_WORKSPACE>/SEEU-CASE-BRIEF.md`；模块级 `briefSig` 去重。
 - 触发点：`apply()` 启动时一次、`GET /list` 扫描后（`refreshBrief(indexes)`）、`POST /build` 成功回调（`job.brief = refreshBrief()`）。失败只 `console.warn`，不影响查库。
 - `resources/forensics/cordis.patch.yml`：两个 preset 的 `agent-instructions.config` 都加 `instructionFileCandidates: ["AGENTS.md", "CLAUDE.md", "SEEU-CASE-BRIEF.md"]`。
 

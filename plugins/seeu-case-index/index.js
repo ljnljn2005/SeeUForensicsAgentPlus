@@ -313,27 +313,25 @@ function writeBriefFile(target, block) {
   return next.length;
 }
 
-/** 写/刷新概览（内容没变就跳过）。全局 AGENTS.md 优先，工作区文件作为补充。 */
+/** 写/刷新概览（内容没变就跳过）。写到 dsh 用户级 AGENTS.md，任何会话都会读到；
+ *  没有 DSH_HOME 时退回到工作区文件。
+ */
 export function writeCaseBrief(indexes) {
   try {
     const list = indexes ?? findIndexes(briefDirs());
-    const sig = list.map((i) => i.caseDir + '|' + i.builtAt).join(';');
-    const globalPath = process.env.DSH_HOME ? join(process.env.DSH_HOME, 'AGENTS.md') : null;
-    const wsPath = process.env.SEEU_WORKSPACE ? join(process.env.SEEU_WORKSPACE, BRIEF_NAME) : null;
-    if (sig === briefSig && ((globalPath === null || existsSync(globalPath)) && (wsPath === null || existsSync(wsPath)))) {
-      return { ok: true, skipped: true, cases: list.length };
-    }
+    const sig = list.map((i) => i.caseDir + "|" + i.builtAt).join(";");
+    const globalPath = process.env.DSH_HOME ? join(process.env.DSH_HOME, "AGENTS.md") : null;
+    const target = globalPath ?? (process.env.SEEU_WORKSPACE ? join(process.env.SEEU_WORKSPACE, BRIEF_NAME) : null);
+    if (target === null) return { ok: false, error: "未设置 DSH_HOME / SEEU_WORKSPACE" };
+    if (sig === briefSig && existsSync(target)) return { ok: true, skipped: true, cases: list.length };
     const block = briefText(list);
-    const out = { ok: true, cases: list.length, chars: block.length };
-    if (globalPath !== null) out.global = { path: globalPath, bytes: writeBriefFile(globalPath, block) };
-    if (wsPath !== null) out.workspace = { path: wsPath, bytes: writeBriefFile(wsPath, block) };
+    const bytes = writeBriefFile(target, block);
     briefSig = sig;
-    return out;
+    return { ok: true, path: target, cases: list.length, chars: block.length, bytes };
   } catch (error) {
     return { ok: false, error: error?.message ?? String(error) };
   }
 }
-
 /** /list 与建库完成后顺手刷新；失败只记日志。 */
 function refreshBrief(indexes) {
   const r = writeCaseBrief(indexes);

@@ -393,7 +393,7 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 - 检材表：`eid | 检材 | 名称 | 平台 | 记录数`（就是火眼里设置的检材名）；
 - 查询入口 `$SEEU_INDEX_API`，以及「用户说检材名时按表对应 eid，不要猜」的规则。
 
-同一份内容也会写到 `<工作区>/SEEU-CASE-BRIEF.md`（overlay 已把该文件名加进 `instructionFileCandidates`，会话工作区恰好是外壳工作区时也能读到）。写入是**合并式**的：只替换自己的标记区块，绝不覆盖用户手写的 `AGENTS.md`。
+写入是**合并式**的：只替换自己的标记区块，绝不覆盖用户手写的 `AGENTS.md`；没有 `DSH_HOME` 时退回写到 `<工作区>/SEEU-CASE-BRIEF.md`（overlay 已把该文件名加进 `instructionFileCandidates`）。
 
 实测（`npm run test:e2e:tools`，mock 网关检查请求里的 messages）：`briefSeen: true`，真实案件（W盘）生成的区块约 700 字符，含 5 个检材的名称/平台/记录数。索引重建或换库后区块会自动刷新，不需要手工维护。
 
