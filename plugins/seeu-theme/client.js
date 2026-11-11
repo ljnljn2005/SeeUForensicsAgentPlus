@@ -111,6 +111,60 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // 欢迎页：logo + 一句定位 + 三步上手提示。
+    // 槽位是 single/root，官方 brand-official 已被 overlay 关掉，所以这里可以整块自绘。
+    const HERO_STEPS = [
+      '侧栏「取证索引」选案件目录 → 建库（只写 .seeu-index，不动原始证据）',
+      '直接提问：哪个检材、某个号码/账号、某段时间发生了什么',
+      '看引用回查：每条结论都带原文件行号，可点到原始记录',
+    ]
+
+    function HeroBrand({ size }) {
+      const s = typeof size === 'number' && size > 0 ? size : 56
+      return h(
+        'div',
+        {
+          style: {
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '10px',
+            maxWidth: '580px',
+            textAlign: 'center',
+          },
+        },
+        h(HeroMark, { size: s }),
+        h(
+          'div',
+          {
+            style: {
+              fontSize: '13px',
+              letterSpacing: '0.08em',
+              opacity: 0.7,
+            },
+          },
+          '证据链优先 · 只读取证 · 结论可回查',
+        ),
+        h(
+          'ol',
+          {
+            style: {
+              margin: 0,
+              padding: 0,
+              listStyle: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              fontSize: '12px',
+              lineHeight: 1.75,
+              opacity: 0.55,
+            },
+          },
+          ...HERO_STEPS.map((text, index) => h('li', { key: String(index) }, `${index + 1}. ${text}`)),
+        ),
+      )
+    }
+
     // ── 注册 ───────────────────────────────────────────────────────────────
     const inject = ['slots']
 
@@ -133,7 +187,7 @@ window.__ModuleLoader__.load({
       }
       own('sidebar.brand.mark', Mark)
       own('sidebar.brand.name', Wordmark)
-      own('conversation.hero.brand.mark', HeroMark)
+      own('conversation.hero.brand.mark', HeroBrand)
     }
 
     return { apply, inject }

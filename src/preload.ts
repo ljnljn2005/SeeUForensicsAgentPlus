@@ -32,11 +32,20 @@ export interface SeeuInfo {
   readonly hostLog: string
 }
 
+export interface LocalModelProbeState {
+  readonly ok: boolean
+  readonly baseURL: string
+  readonly models: string[]
+  readonly error?: string
+  readonly at: string
+}
+
 export interface LocalModelView {
   readonly path: string
   readonly exists: boolean
   readonly config?: unknown
   readonly error?: string
+  readonly probe?: LocalModelProbeState | null
 }
 
 export interface LocalModelSaveResult {
@@ -72,6 +81,13 @@ const api = {
       ipcRenderer.invoke('seeu:local-model:preview', config) as Promise<{ ok: boolean; patch?: string; error?: string }>,
     test: (probe: { baseURL?: string; apiKey?: string }): Promise<LocalModelProbeResult> =>
       ipcRenderer.invoke('seeu:local-model:test', probe) as Promise<LocalModelProbeResult>,
+    probe: (): Promise<LocalModelProbeState | null> =>
+      ipcRenderer.invoke('seeu:local-model:probe') as Promise<LocalModelProbeState | null>,
+    onProbe: (callback: (probe: LocalModelProbeState | null) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, probe: LocalModelProbeState | null): void => callback(probe)
+      ipcRenderer.on('seeu:local-model:probe', listener)
+      return () => ipcRenderer.removeListener('seeu:local-model:probe', listener)
+    },
     restart: (): void => { ipcRenderer.send('seeu:local-model:restart') },
     openFile: (): void => { ipcRenderer.send('seeu:local-model:open-file') },
   },

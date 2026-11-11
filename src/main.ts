@@ -136,25 +136,115 @@ async function showErrorPage(message: string, detail?: string): Promise<void> {
  * 已配置本地模型时，启动阶段先做一次短超时连通性探测。
  * 目的：本地网关没开时不要等到用户发第一条消息才报错——先在日志和加载页里说清楚。
  * 探测失败不阻塞启动（仍可以继续用官方模型），只更新提示。
+ *
+ * 结果会缓存到 `localModelProbeState`，供托盘 tooltip、菜单「本地模型状态…」和
+ * 设置窗口显示；`reason = 'manual'` 时（用户主动点重新探测）不改加载页状态。
  */
-async function probeLocalModelGateway(): Promise<void> {
+interface LocalModelProbeState {
+  readonly ok: boolean
+  readonly baseURL: string
+  readonly models: string[]
+  readonly error?: string
+  readonly at: string
+}
+
+let localModelProbeState: LocalModelProbeState | undefined
+
+function modelStatusLabel(): string {
+  if (localModelProbeState === undefined) return '官方模型'
+  if (localModelProbeState.ok) {
+    const first = localModelProbeState.models[0]
+    return first === undefined ? '本地模型（网关已连通）' : `本地模型 ${first}`
+  }
+  return '本地网关未连通（当前用官方模型）'
+}
+
+/** 托盘提示与菜单是外壳里唯一常驻的「我现在用哪个模型」提示位。 */
+function refreshModelIndicators(): void {
+  if (tray === undefined) return
+  try {
+    tray.setToolTip(`${PRODUCT_NAME} · ${modelStatusLabel()}`)
+  } catch {
+    // 托盘已销毁时忽略
+  }
+}
+
+async function probeLocalModelGateway(reason: 'startup' | 'manual' = 'startup'): Promise<LocalModelProbeState | undefined> {
   const target = probeableLocalModel()
-  if (target === undefined) return
+  if (target === undefined) {
+    localModelProbeState = undefined
+    refreshModelIndicators()
+    broadcastLocalModelProbe()
+    if (reason === 'manual') logShell('local model probe: 未配置本地模型，跳过')
+    return undefined
+  }
   const { baseURL, apiKey } = target
   try {
     const probe = await testLocalGateway({ baseURL, apiKey, timeoutMs: 4000 })
+    const ids = (probe.models ?? []).map((item) => item.id ?? item.name ?? '').filter(Boolean)
+    localModelProbeState = probe.ok
+      ? { ok: true, baseURL, models: ids, at: new Date().toISOString() }
+      : { ok: false, baseURL, models: [], ...(probe.error === undefined ? {} : { error: probe.error }), at: new Date().toISOString() }
+    refreshModelIndicators()
+    broadcastLocalModelProbe()
     if (probe.ok) {
-      const ids = (probe.models ?? []).map((item) => item.id ?? item.name ?? '').filter(Boolean)
       logShell(`local model probe: ${baseURL} 可用（${ids.join(', ') || '网关未返回模型列表'}）`)
-      return
+      return localModelProbeState
     }
     logShell(`local model probe: ${baseURL} 不可用 → ${probe.error ?? '未知错误'}`)
-    if (lastStatus.phase === 'starting') {
+    if (reason === 'startup' && lastStatus.phase === 'starting') {
       setStatus({ phase: 'starting', message: '本地模型网关暂未连通，先用官方模型启动…' })
     }
+    return localModelProbeState
   } catch (error) {
     logShell(`local model probe 异常: ${errorDetail(error) ?? error}`)
+    return undefined
   }
+}
+
+/** 把探测结果推给所有窗口：设置窗口可能在探测完成前就已经打开。 */
+function broadcastLocalModelProbe(): void {
+  const payload = localModelProbeState ?? null
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('seeu:local-model:probe', payload)
+  }
+}
+
+/** 工具 → 本地模型状态…：把配置文件、探测地址/时间/结果一次讲清楚。 */
+function showLocalModelStatus(): void {
+  const view = describeLocalModelConfig()
+  const probe = localModelProbeState
+  const lines: string[] = [`配置文件：${view.path}${view.exists ? '' : '（不存在）'}`]
+  if (view.error !== undefined) lines.push(`配置错误：${view.error}`)
+  if (probe === undefined) {
+    lines.push('启动探测：未配置本地模型（使用官方模型）')
+  } else {
+    lines.push(
+      `启动探测：${probe.ok ? `可用 · ${probe.models.join(', ') || '网关未返回模型列表'}` : `不可用 · ${probe.error ?? '未知错误'}`}`,
+      `探测地址：${probe.baseURL}`,
+      `探测时间：${probe.at}`,
+    )
+  }
+  lines.push('', '修改配置：工具 → 本地模型设置…（保存后需重启应用才生效）')
+  const canProbe = probe !== undefined
+  const buttons = canProbe ? ['重新探测', '关闭'] : ['关闭']
+  void dialog
+    .showMessageBox({
+      type: probe?.ok === true ? 'info' : 'warning',
+      title: '本地模型状态',
+      message: modelStatusLabel(),
+      detail: lines.join('\n'),
+      buttons,
+      defaultId: buttons.length - 1,
+      cancelId: buttons.length - 1,
+    })
+    .then((result) => {
+      if (result.response === 0 && canProbe) {
+        void probeLocalModelGateway('manual').then(() => {
+          showLocalModelStatus()
+        })
+      }
+    })
 }
 
 async function startHost(): Promise<void> {
@@ -331,15 +421,14 @@ function createTray(): void {
   }
   try {
     tray = new Tray(nativeImage.createFromPath(icon))
-    tray.setToolTip(PRODUCT_NAME)
+    tray.setToolTip(`${PRODUCT_NAME} · ${modelStatusLabel()}`)
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: '显示主窗口', click: () => focusMainWindow() },
       { type: 'separator' },
       { label: '打开取证工作区', click: () => void shell.openPath(workspaceDir()) },
       { label: '打开日志目录', click: () => void shell.openPath(logDir()) },
       { label: '本地模型设置…', click: () => openLocalModelSettings() },
-      { type: 'separator' },
-      { label: '本地模型设置…', click: () => openLocalModelSettings() },
+      { label: '本地模型状态…', click: () => showLocalModelStatus() },
       { type: 'separator' },
       { label: '退出', click: () => void requestQuit() },
     ]))
@@ -361,6 +450,7 @@ function showAbout(): void {
       `Chromium：${process.versions.chrome}`,
       `Node：${process.versions.node}`,
       `运行时：@deepseek-ai/dsh（web profile + 取证 overlay）`,
+      `本地模型：${modelStatusLabel()}`,
       `DSH_HOME：${dshHome()}`,
       `工作区：${workspaceDir()}`,
     ].join('\n'),
@@ -408,6 +498,9 @@ function buildMenu(): void {
       label: '工具',
       submenu: [
         { label: '本地模型设置…', click: () => openLocalModelSettings() },
+        { label: '本地模型状态…', click: () => showLocalModelStatus() },
+        { label: '重新探测本地网关', click: () => { void probeLocalModelGateway('manual').then(() => { showLocalModelStatus() }) } },
+        { type: 'separator' },
         { label: '打开配置文件目录', click: () => void shell.openPath(userDataDir()) },
       ],
     },
@@ -448,7 +541,8 @@ function registerIpc(): void {
   ipcMain.on('seeu:open-settings', () => { openLocalModelSettings() })
 
   // 本地模型设置窗口
-  ipcMain.handle('seeu:local-model:get', () => describeLocalModelConfig())
+  ipcMain.handle('seeu:local-model:get', () => ({ ...describeLocalModelConfig(), probe: localModelProbeState ?? null }))
+  ipcMain.handle('seeu:local-model:probe', async () => (await probeLocalModelGateway('manual')) ?? null)
   ipcMain.handle('seeu:local-model:save', (_event, input: unknown) => writeLocalModelConfig(input))
   ipcMain.handle('seeu:local-model:preview', (_event, input: unknown) => previewLocalModelPatch(input))
   ipcMain.handle('seeu:local-model:test', (_event, probe: { baseURL?: string; apiKey?: string }) =>

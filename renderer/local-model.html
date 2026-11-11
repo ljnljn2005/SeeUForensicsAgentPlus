@@ -73,6 +73,10 @@
   #status.ok { border-color: rgba(52,211,153,.35); color: var(--ok); }
   #status.warn { border-color: rgba(251,191,36,.35); color: var(--warn); }
   #status.err { border-color: rgba(248,113,113,.35); color: var(--err); }
+  #probe { border-radius: 8px; padding: 8px 12px; background: var(--surface); border: 1px dashed var(--border); color: var(--dim); font-size: 11px; line-height: 1.7; word-break: break-all; }
+  #probe.ok { border-color: rgba(52,211,153,.35); color: var(--ok); }
+  #probe.warn { border-color: rgba(251,191,36,.35); color: var(--warn); }
+  #probe.err { border-color: rgba(248,113,113,.35); color: var(--err); }
   pre#preview { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--dim); font-size: 11px; line-height: 1.6; overflow: auto; max-height: 180px; display: none; }
   footer { margin-top: 18px; color: var(--dim); font-size: 11px; line-height: 1.7; border-top: 1px solid var(--border); padding-top: 12px; }
 </style>
@@ -143,11 +147,13 @@
   <div class="actions">
     <button class="primary" id="btn-save">保存</button>
     <button id="btn-test">测试连接</button>
+    <button id="btn-probe">重新探测网关</button>
     <button id="btn-save-restart">保存并重启</button>
     <button id="btn-reload">重新读取</button>
     <button id="btn-open">打开配置文件位置</button>
   </div>
 
+  <div id="probe" class="hint">启动探测：探测中…</div>
   <div id="status">就绪。</div>
   <pre id="preview"></pre>
 
@@ -162,12 +168,31 @@
 <script>
   const $ = (id) => document.getElementById(id)
   const statusEl = $('status')
+  const probeEl = $('probe')
   const previewEl = $('preview')
   const api = window.seeu && window.seeu.localModel
 
   function setStatus(text, kind) {
     statusEl.textContent = text
     statusEl.className = kind || ''
+  }
+
+  /** 启动探测结果：外壳启动时已经打过一次 4 秒超时的 /v1/models，这里只做展示。 */
+  function renderProbe(probe) {
+    if (!probe) {
+      probeEl.textContent = '启动探测：尚未完成（或未配置本地模型，当前使用官方模型）。'
+      probeEl.className = 'hint'
+      return
+    }
+    const at = String(probe.at || '').replace('T', ' ').replace(/\..*$/, '')
+    if (probe.ok) {
+      const models = Array.isArray(probe.models) && probe.models.length > 0 ? probe.models.join(', ') : '网关未返回模型列表'
+      probeEl.textContent = `启动探测：可用 · ${models} · ${probe.baseURL} · ${at}`
+      probeEl.className = 'hint ok'
+    } else {
+      probeEl.textContent = `启动探测：不可用 · ${probe.error || '未知错误'} · ${probe.baseURL} · ${at}（仍可用官方模型）`
+      probeEl.className = 'hint err'
+    }
   }
 
   function readForm() {
@@ -219,6 +244,7 @@
     $('config-path').textContent = view.path
     if (view.config) fillForm(view.config)
     else fillForm({})
+    renderProbe(view.probe)
     if (!view.exists) {
       setStatus('当前未配置本地模型（文件不存在）。填好网关后点「保存并重启」。', 'warn')
     } else if (view.error) {
@@ -270,12 +296,23 @@
       setStatus('连接失败：' + res.error, 'err')
     }
   })
+  $('btn-probe').addEventListener('click', async () => {
+    setStatus('正在按已保存配置探测网关…')
+    const probe = await api.probe()
+    renderProbe(probe)
+    setStatus(probe ? (probe.ok ? '探测完成：网关可用。' : '探测完成：网关不可用（仍可用官方模型）。') : '当前没有已保存的本地模型配置。', probe ? (probe.ok ? 'ok' : 'warn') : 'warn')
+  })
   $('btn-reload').addEventListener('click', () => { void load() })
   $('btn-open').addEventListener('click', () => api.openFile())
 
   for (const el of document.querySelectorAll('input, textarea')) {
     el.addEventListener('input', () => { void renderPreview() })
     el.addEventListener('change', () => { void renderPreview() })
+  }
+
+  // 探测是启动时并发跑的：设置窗口可能先打开，等外壳推结果过来再刷新这一行。
+  if (api && typeof api.onProbe === 'function') {
+    api.onProbe((probe) => { renderProbe(probe) })
   }
 
   void load()

@@ -865,3 +865,32 @@ typed 表行数（实测）：`health_metric` 6,200、`exif` 4,518、`msg_csv` 4
 - 模型选择器「设为默认」在 overlay 场景下静默失败，默认模型只能靠 `useAsDefault`。
 - `compaction-basic` 的 `headroomTokens` 已随 preset 调到 32768（128k/256k 窗口实测阈值 ~90k / 0.8×W）；若换 <48k 窗口模型需手工调回，属于「知道了但没做成开关」的遗留。
 - 调优后的回归：`--dump-config` exit 0、1341 行，`retryPolicy.maxRetries: 3`、`session-title-llm` 顶层覆盖（`maxOutputTokens: 512`）、preset 内 `compaction-basic.headroomTokens: 32768` 均在；`.probe/local-model-e2e.mjs` 复跑通过 `REPORT {"ok":true,"chatCalls":2,"gotReply":true,"errors":[]}`（真 Electron + mock 网关 + CDP）。
+
+### 20.4 第 5 轮：欢迎页品牌块 + 模型状态可见性（2026-11-11）
+
+**背景**：前几轮把主题/品牌/面板/本地模型接入做完了，但两件事用户看不见——① 欢迎页只有 logo，没有「这个软件怎么用」的第一屏引导；② 本地模型探测结果只写进日志，界面上没有「我现在用的是哪个模型 / 网关通不通」的常驻提示位。
+
+**前端（欢迎页）**：`plugins/seeu-theme/client.js` 把 `conversation.hero.brand.mark`（single/root 槽，官方 brand 已 disabled）从单个 `HeroMark` 换成 `HeroBrand` 复合块：
+
+- logo（保留 56px 圆角光晕）+ 定位句「证据链优先 · 只读取证 · 结论可回查」；
+- 三步上手：`1. 侧栏「取证索引」选案件目录 → 建库（只写 .seeu-index，不动原始证据）`、`2. 直接提问：哪个检材、某个号码/账号、某段时间发生了什么`、`3. 看引用回查：每条结论都带原文件行号，可点到原始记录`。
+- 尺寸/颜色只用现有 token 与 `currentColor` opacity，不写死主题色，浅色/深色都成立。
+
+**本地模型状态可见性**（外壳层，`src/main.ts`）：
+
+- 新增 `LocalModelProbeState` 与模块级缓存 `localModelProbeState`；`probeLocalModelGateway(reason: 'startup' | 'manual')` 探测后写入缓存，`modelStatusLabel()` 产出「本地模型 <id>」/「本地网关未连通（当前用官方模型）」/「官方模型」。
+- 托盘 tooltip 从固定产品名改为 `<产品名> · <模型状态>`；`工具 → 本地模型状态…` 弹 `dialog`（配置路径、配置错误、探测可用性/地址/时间、模型列表；有配置时按钮为【重新探测】【关闭】，点重新探测会再弹一次最新结果）；`工具 → 重新探测本地网关` 手动触发；`帮助 → 关于` 增加「本地模型」一行。
+- 顺带修掉托盘菜单里重复的「本地模型设置…」项。
+- 设置窗口：`seeu:local-model:get` 现在返回 `{...describeLocalModelConfig(), probe}`；新增 `seeu:local-model:probe`（手动探测）与广播通道 `seeu:local-model:probe`（探测完成推给所有窗口，因为 `SEEU_OPEN_SETTINGS=1` 时设置窗口可能早于探测结果打开）；`renderer/local-model.html` 新增 `#probe` 行（可用=绿、不可用=黄并标明「仍可用官方模型」、未完成=灰）+【重新探测网关】按钮；preload 增 `localModel.probe()` / `localModel.onProbe(cb)`。
+
+**验证**（`.probe/welcome-check.mjs`，开发态：mock 网关 `:18083` + `SEEU_DEV_MULTI=1` + 独立 `SEEU_DSH_HOME`/`SEEU_USER_DATA` + `SEEU_OPEN_SETTINGS=1` + CDP 两个 page 同时断言）：
+
+```
+{"ok":true,"title":"SeeU 取证智能体增强版","heroTagline":true,"heroSteps":true,"themeApplied":true,
+ "probeLine":"启动探测：可用 · qwen2.5-32b-instruct · http://127.0.0.1:18083/v1 · 2026-11-11 15:23:01",
+ "probeOkShown":true,"manualProbe":"ok:qwen2.5-32b-instruct","errors":[]}
+```
+
+回归：`.probe/local-model-e2e.mjs` → `{"ok":true,"chatCalls":2,"gotReply":true,"errors":[]}`；`.probe/settings-check.mjs` → `{"ok":true,...,"badGatewayRejected":true}`；`.probe/m2-ui-check.mjs`（面板）→ `errors: []`。
+
+**遗留**：欢迎页三步提示是静态文本，没有和实际索引状态联动（例如「还没建库」时无法高亮第一步）；模型状态只有 tooltip/对话框/设置页，主界面会话区内仍看不到当前模型（dsh 自带模型 chip 已显示，未重复造）。
