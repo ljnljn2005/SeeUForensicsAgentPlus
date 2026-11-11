@@ -351,6 +351,8 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 | `contextWindow` / `maxTokens` | `131072` / `8192` | 生成 patch 时的默认上下文与单次输出上限 |
 | `useAsDefault` | `false` | 为 `true` 时覆盖 `agent-default-model`，新会话直接用它 |
 | `timeoutMs` / `streamIdleTimeoutMs` | `600000` | 本地模型首 token 可能很慢，默认给 10 分钟 |
+| `retryMaxRetries` | `3` | 低并发网关的失败重试次数（dsh 默认 5 次，排队时会放大成 5 次长超时） |
+| `titleMaxOutputTokens` / `titleTimeoutMs` | `512` / `20000` | 会话标题生成的输出上限与超时（本地模型不值得给 4096 tokens） |
 
 外壳启动时把它编译成 `<userData>\local-model.patch.yml`，作为**第二个 `--patch`** 传给 dsh（后层覆盖前层，优先级高于取证 overlay 与 profile），并注入 API key；启动日志（`%APPDATA%\SeeUForensicsAgentPlus\logs\shell.log`）会打印 `local-model: …` 摘要，`--dump-config` 能看到 `provider: local-openai`。
 
@@ -358,9 +360,20 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 
 - `api: openai-completions`（OpenAI 兼容协议）；
 - `compat: { supportsUsageInStreaming: false, maxTokensField: max_tokens }`——不带 `stream_options.include_usage`（部分本地网关会 400），用 `max_tokens` 而不是 `max_completion_tokens`；
-- 每个模型 `input: [text]`、`reasoningEfforts: false`（本地模型一般不支持思考档位）。
+- 每个模型 `input: [text]`、`reasoningEfforts: false`（本地模型一般不支持思考档位）；
+- `retryPolicy: { mode: normal, maxRetries: 3 }`（覆盖 dsh 默认的 5 次）；
+- 顶层 `session-title-llm` 覆盖：`maxOutputTokens: 512, timeoutMs: 20000`（每次新会话多一次标题请求，本地模型要省）。
 
-### 9.2 验证
+### 9.2 长上下文与低并发调优
+
+本地模型的上下文窗口大、并发低，因此随包取证 preset 把 `compaction-basic` 的 `headroomTokens` 从官方默认 65536 调到 **32768**：
+
+- 触发阈值 = `min(W × thresholdRatio, W − O − headroomTokens)`。128k 窗口 + 8192 输出时，默认值只能等到 ~57k tokens 才压缩（一半窗口没用上），改后是 ~90k；256k 窗口则按 `0.8 × W` 触发。
+- 压缩本身要重算 prefill，本地模型这一步很慢，**压得越晚越省时**；但余量也不能太小，否则压缩时留给摘要输出的空间不够。
+- ⚠️ 换用 **< 48k 窗口**的模型（如 32k 的 7B/14B）时，要把 `resources/forensics/cordis.patch.yml` 里 `preset-standard → compaction → compaction-basic` 的 `headroomTokens` 调回 65536 或更小（`W − O − B ≤ 0` 会让该插件报错）。这一行在 preset 内部，**不能用 local-model patch 覆盖**（overlay 只能改顶层行）。
+- `tool-result-pruner` 保持官方 8192/4096/1024：本地模型同样吃 token，工具输出超长时截断比留全量更划算。
+
+### 9.3 验证
 
 ```bash
 node .probe/local-model-e2e.mjs
@@ -372,7 +385,7 @@ node .probe/local-model-e2e.mjs
 REPORT {"ok":true,"chatCalls":2,"gotReply":true,...,"errors":[]}
 ```
 
-### 9.3 注意
+### 9.4 注意
 
 - **不要在同一行上用 settings 页改**：overlay 优先级更高时 dsh 会硬拒（`Configuration for "<id>" is overridden by a home patch or command-line overlay`）；换模型请改 `local-model.json` 后重启。
 - 模型选择器里的「设为默认」在 overlay 场景下会静默失败，默认模型请用 `useAsDefault: true`。

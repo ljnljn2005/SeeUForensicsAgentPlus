@@ -842,6 +842,10 @@ typed 表行数（实测）：`health_metric` 6,200、`exif` 4,518、`msg_csv` 4
 - `src/local-model.ts`：读 `<userData>/local-model.json`（`SEEU_LOCAL_MODEL_JSON` 优先）→ 写 `<userData>/local-model.patch.yml`；配置错误只记摘要、不阻塞启动。
 - `src/host.ts`：取证 overlay 之后追加第二个 `--patch <local-model.patch.yml>`，合并 env。
 - 生成行固定：`api: openai-completions`、`compat: { supportsUsageInStreaming: false, maxTokensField: max_tokens }`、每模型 `input: [text]`、`reasoningEfforts: false`；默认 `contextWindow: 131072`（个人赛 128k）、`maxTokens: 8192`、`timeoutMs: 600000`；`useAsDefault: true` 时写 `agent-default-model`。
+- 低并发/长上下文调优（v0.2.0 第二轮）：
+  - provider 加 `retryPolicy: { mode: normal, maxRetries: 3 }`（dsh 默认 5 次；低并发网关排队时会把一次失败放大成 5 次长超时）；
+  - 同一 patch 覆盖顶层 `- id: session-title-llm`：`maxOutputTokens: 512, timeoutMs: 20000`（每次新会话多一次标题请求）；
+  - 随包 preset 的 `compaction-basic` 从默认 `headroomTokens: 65536` 改为 `32768`（+ `thresholdRatio: 0.8`、`retainRatio: 0.16`）。触发阈值 `min(W×0.8, W−O−B)`：128k 窗口从 ~57k 提到 ~90k，256k 窗口按 0.8×W；⚠️ <48k 窗口模型需调回 65536 或更小（`W−O−B ≤ 0` 会报错）。**注意该行嵌在 preset-standard 内部，overlay 无法就地改**（实验：写顶层 `- id: compaction-basic` 只会在 dump 里新增一条 `disabled: true` 的行，preset 内的四份副本不变），只能随 preset 整块重写。
 - 示例配置：`resources/forensics/local-model.example.json`；dev-web 支持 `--local-model`。
 
 **验证**：`--dump-config` 1336 行、exit 0、`provider: local-openai`/`model: mock-14b`/`baseURL: http://127.0.0.1:18080/v1` 均在；`.probe/local-model-e2e.mjs`（mock OpenAI 网关 + 真 Electron + CDP）通过：`REPORT {"ok":true,"chatCalls":2,"gotReply":true,"errors":[]}`，页面出现「MOCK-OK：本地网关已连通，模型是 mock-14b」，模型 chip 显示「Mock 14B (本地)」，预设显示「取证分析（Forensics）」。
@@ -853,4 +857,5 @@ typed 表行数（实测）：`health_metric` 6,200、`exif` 4,518、`msg_csv` 4
 - 面板视觉改造已完成（v0.2.0）：`plugins/seeu-case-index/client.js` 1186 行——主题 token 化 `<style id="seeu-case-index-style">`、顶部 KPI 概览条（案件/检材/记录/实体/库大小/生成时间）、pill 标签栏 + 数量 badge、树行「检材 N · 名称 · 平台/人员 · 备注」+ 竖线 guide、统一 `seeu-row`/`Skeleton`/`LoadingLine`/`EmptyState`、表视图吸顶表头。验收 `.probe/m2-ui-check.mjs`：`m2ok: true`、`errors: []`（六标签真实数据，KPI 与 badge 正确）；`.probe/shot.mjs` 暗/浅两态截图正常。
 - 真实本地网关未联调（用户自备端点）；mock 已证明协议层与 UI 链路可用。
 - 模型选择器「设为默认」在 overlay 场景下静默失败，默认模型只能靠 `useAsDefault`。
-- `compaction-basic` 的 `headroomTokens`（默认 65536）对小上下文网关偏大，等真实网关联调后再决定是否随 preset 重写。
+- `compaction-basic` 的 `headroomTokens` 已随 preset 调到 32768（128k/256k 窗口实测阈值 ~90k / 0.8×W）；若换 <48k 窗口模型需手工调回，属于「知道了但没做成开关」的遗留。
+- 调优后的回归：`--dump-config` exit 0、1341 行，`retryPolicy.maxRetries: 3`、`session-title-llm` 顶层覆盖（`maxOutputTokens: 512`）、preset 内 `compaction-basic.headroomTokens: 32768` 均在；`.probe/local-model-e2e.mjs` 复跑通过 `REPORT {"ok":true,"chatCalls":2,"gotReply":true,"errors":[]}`（真 Electron + mock 网关 + CDP）。

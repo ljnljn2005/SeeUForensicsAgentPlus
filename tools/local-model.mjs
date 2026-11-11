@@ -22,6 +22,12 @@ const DEFAULTS = {
   maxTokens: 8192,
   timeoutMs: 600_000,
   streamIdleTimeoutMs: 600_000,
+  // 本地网关并发低：默认 5 次重试会在网关排队时把一次失败放大成 5 次长超时，
+  // 因此默认压到 3 次（仍保留 normal 模式的指数退避）。
+  retryMaxRetries: 3,
+  // 标题生成是每次新会话的额外一次请求：本地模型不值得给 4096 输出 tokens。
+  titleMaxOutputTokens: 512,
+  titleTimeoutMs: 20_000,
 }
 
 export class LocalModelConfigError extends Error {
@@ -94,6 +100,9 @@ export function normalizeLocalModel(input = {}) {
     maxTokens,
     timeoutMs: num(input.timeoutMs, DEFAULTS.timeoutMs),
     streamIdleTimeoutMs: num(input.streamIdleTimeoutMs, DEFAULTS.streamIdleTimeoutMs),
+    retryMaxRetries: num(input.retryMaxRetries, DEFAULTS.retryMaxRetries),
+    titleMaxOutputTokens: num(input.titleMaxOutputTokens, DEFAULTS.titleMaxOutputTokens),
+    titleTimeoutMs: num(input.titleTimeoutMs, DEFAULTS.titleTimeoutMs),
     compat: input.compat !== null && typeof input.compat === 'object' ? input.compat : {},
     models: models.map((m) => ({
       id: m.id,
@@ -129,6 +138,9 @@ export function localModelPatch(cfg) {
     `        apiKeyEnv: ${q(c.apiKeyEnv)}`,
     `        timeoutMs: ${c.timeoutMs}`,
     `        streamIdleTimeoutMs: ${c.streamIdleTimeoutMs}`,
+    '        retryPolicy:',
+    '          mode: normal',
+    `          maxRetries: ${c.retryMaxRetries}`,
   ]
   if (c.headers !== undefined) {
     lines.push('        headers:')
@@ -150,6 +162,17 @@ export function localModelPatch(cfg) {
     lines.push('            input: [text]')
     lines.push('            reasoningEfforts: false')
   }
+
+  // 会话标题生成是每次新会话的额外一次 LLM 请求；本地模型不需要 4096 输出 tokens。
+  lines.push(
+    '- id: session-title-llm',
+    '  config:',
+    '    targetWords: 5',
+    '    targetCjkCharacters: 10',
+    '    maxInputBytes: 4096',
+    `    maxOutputTokens: ${c.titleMaxOutputTokens}`,
+    `    timeoutMs: ${c.titleTimeoutMs}`,
+  )
 
   if (c.defaultModel !== undefined) {
     lines.push(
