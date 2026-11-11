@@ -1582,3 +1582,16 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - e2e：`scripts/e2e/local-tools-e2e.mjs` 的 mock 网关记录每个请求的 messages，新增 `briefSeen/briefChars` 并纳入 `ok` → `{"ok":true,"briefSeen":true,"briefChars":475,...}`（无索引库时的提示区块）；`npm test` 43/43、`check:overlay` OK。
 
 **遗留**：只取前 5 个案件、每案前 50 个检材；`AGENTS.md` 每次启动会重写一次（内容相同）；如果用户自己也有同标记文本会被当成 SeeU 区块替换（标记前缀已足够独特）。
+
+## 20.39 面板显示「会话概览注入状态」（v0.2.5 起）
+
+- 问题：AGENTS.md 注入是全自动的，用户看不到；如果注入失败（DSH_HOME 不可写、索引被删）只会表现为「模型又开始瞎猜 eid」。
+- 实现：`plugins/seeu-case-index/index.js` 增加模块级 `briefState = { at, ok, path, cases, chars, error }`，`writeCaseBrief` 成功/失败都更新；新增 `GET /brief`（附 `db` 时多返回 `current.included`）与 `POST /brief`（立即 `refreshBrief()`）。`plugins/seeu-case-index/client.js` 在 KPI 下方渲染状态行（绿/黄/红点 + 文案 + 【刷新会话概览】），文案写清「含本库/不含本库」。
+- 验证：`m2-ui-check` 新增 `briefVisible`（正文含「会话语境」「已注入」）与 `briefRefreshOk`（点按钮后出现「已刷新」）并纳入 `m2ok`：
+
+```json
+{"briefVisible":true,"briefText":"会话语境：已注入 1 个案件概览（含本库） · 05:00:56 · 新会话会自动带上检材清单","briefRefreshText":"已刷新","briefRefreshOk":true,"m2ok":true,"errors":[]}
+```
+
+- 回归：`local-tools-e2e` 仍 `briefSeen:true / briefChars:475`；`npm test` 43/43；`npm run check:overlay` OK。
+- 遗留：`briefState` 只在进程内保存，重启后到第一次写入前显示「尚未注入」；多案件时只显示总数，不列案件名单。

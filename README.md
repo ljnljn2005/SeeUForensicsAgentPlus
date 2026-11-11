@@ -397,6 +397,8 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 
 实测（`npm run test:e2e:tools`，mock 网关检查请求里的 messages）：`briefSeen: true`，真实案件（W盘）生成的区块约 700 字符，含 5 个检材的名称/平台/记录数。索引重建或换库后区块会自动刷新，不需要手工维护。
 
+**面板里能看见**：KPI 下方一行「● 会话语境：已注入 N 个案件概览（含本库/不含本库） · HH:MM:SS · 新会话会自动带上检材清单」，旁边【刷新会话概览】按钮可立即重写 `AGENTS.md`（点完显示「已刷新」）。绿点=注入成功、黄点=尚未注入/读取失败、红点=注入失败。对应接口 `GET /seeu-index/brief?db=…`（最近一次注入状态 + 当前库是否在列表里）与 `POST /seeu-index/brief`。
+
 ## 9. 本地模型（OpenAI 兼容网关）接入
 
 默认走官方 DeepSeek 账号链路；如果模型跑在本地/内网，只要网关兼容 **OpenAI**（`POST /v1/chat/completions` 支持 SSE 流式、`GET /v1/models`），改一个 JSON 就能接入——不用改代码、不用重打包。
