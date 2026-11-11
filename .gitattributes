@@ -1,0 +1,6 @@
+# 统一换行：仓库内以 LF 存储，Windows 检出时由 Git 自行处理
+* text=auto eol=lf
+# 二进制资源不做换行转换
+*.ico binary
+*.png binary
+*.exe binary

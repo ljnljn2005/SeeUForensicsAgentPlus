@@ -1,0 +1,238 @@
+# SeeUForensicsAgentPlus · 取证 profile overlay (cordis.patch.yml)
+#
+# 用法（桌面版由 Electron 外壳调用，等价命令）：
+#   dsh --patch <本文件> --profile web --no-open --port 0
+#   注意：`dsh web ...` 缩写只在 argv[0] 不以 '-' 开头时才会被展开成 `--profile web`，
+#   带 --patch 时必须显式写 `--profile web`，否则报 error: --profile <name> is required。
+#
+# 机制（dsh 0.2.2-rc.1 patch-list）：
+#   - 文件是 entry 列表；`- id: <行id>` 定位已存在的行，整行覆盖其字段；
+#     `config` 是整体替换而不是深合并，因此覆盖某行时必须重写该行的全部 config。
+#   - `disabled: true` 关闭一行；`- insert: [...]` 可新增行（本文件不使用，保持零 unknown row）。
+#   - 未匹配到目标行会在 stderr 打印 "patch: entry ... not found"，视为配置错误。
+#
+# 本文件只引用官方 bundle patch 中真实存在的行 id：
+#   @deepseek-ai/dsh-base/cordis.patch.yml      -> otel, session-telemetry-otel, system-prompt
+#   @deepseek-ai/dsh-web-app/cordis.patch.yml   -> desktop-product-telemetry, product-analytics
+#   @deepseek-ai/dsh-web-app/presets/standard.patch.yml -> preset-standard
+#
+# 注意：web profile 里每个会话挂的是 agent preset；真正决定会话 system prompt 的是
+# preset-standard 内的 persona 子行。只改 host 的 system-prompt 行不会改变会话行为，
+# 所以下面同时覆盖这两处，且两处文本保持一致。
+
+# ---------------------------------------------------------------------------
+# 1) 关闭遥测 / 产品分析（取证场景不向外部发送任何使用数据）
+#
+#    otel                         共享 OTel 服务行：单独挂载不发送任何数据，但它只被
+#                                 session-telemetry-otel 与 host-product-telemetry-otel
+#                                 注入；两者在下面都被关闭，因此一并关闭以彻底移除出口。
+#    session-telemetry-otel       会话遥测导出（反馈/会话记录 → OTLP）
+#    desktop-product-telemetry    桌面版产品遥测（endpoint 由运行时注入，默认开启）
+#    product-analytics            Web 客户端产品分析事件
+# ---------------------------------------------------------------------------
+- id: otel
+  disabled: true
+
+- id: session-telemetry-otel
+  disabled: true
+
+- id: desktop-product-telemetry
+  disabled: true
+
+- id: product-analytics
+  disabled: true
+
+# ---------------------------------------------------------------------------
+# 2) 取证专用 system prompt（host 层 system-prompt 行整行覆盖）
+#
+#    原行（dsh-web-app 覆盖后）的 config 只有 personaPrefix 一个 key，这里原样重写；
+#    其余行为由 @deepseek-ai/dsh-system-prompt 的 schema 默认值（includeHarnessIdentity、
+#    includeRuntimeContext 等）保持不变，不需要显式列出。
+# ---------------------------------------------------------------------------
+- id: system-prompt
+  config:
+    personaPrefix: |
+      你是 SeeUForensicsAgentPlus 的取证分析助手，服务于电子数据取证与事件响应（DFIR）场景。你的首要目标是产出可复核、可追溯的结论，而不是尽快给出答案。
+
+      工作准则：
+      1. 证据链优先：任何结论都必须指向具体证据（文件路径、进程/网络记录、注册表或日志条目、命令输出）。引用证据时给出源路径、可获取时的 SHA-256 哈希，以及定位范围（行号 / 偏移 / 时间戳）。报告结束前自查：每条结论是否都能落到一条证据上。
+      2. 只读优先：默认只做只读操作（读取、检索、哈希、解析、静态分析）。写入、覆盖、重命名、删除、格式化、修改系统或证据状态、向外部上传等操作，必须先列出「目标 / 影响 / 可回滚方式」并取得用户显式确认后才可执行。
+      3. 不得臆造证据：不确定的结论要明确标注「未验证 / 推测 / 未知」，不得把推测写成事实，不得补全不存在的文件内容、日志行或哈希，不得声称执行过未执行的操作。信息缺失时说明取证缺口和下一步建议。
+      4. 保持原始性：不得修改原始证据；需要加工时复制到独立工作目录，并记录副本与原始证据的对应关系（含哈希）。
+      5. 报告规范：按「结论 → 支撑证据（路径 / 哈希 / 时间戳）→ 分析方法 → 置信度 → 局限」组织；区分事实与推断，附可复现的验证命令。
+      6. 时间与范围：时间戳标注时区与来源（文件系统时间 / 日志时间 / UTC）；说明取证范围与未覆盖部分。
+      7. 敏感信息：令牌、密钥、个人信息在报告中脱敏，但保留可追溯的定位信息。
+
+      当用户请求涉及删除、修改、上传或外传证据时，先给出操作清单与风险，等待显式确认；不要以「为了完成任务」为由绕过确认。
+
+# ---------------------------------------------------------------------------
+# 3) 取证 agent preset（整行覆盖 preset-standard）
+#
+#    web profile 的每个会话使用一个 agent preset（agent-preset-registry 的 default
+#    仍是 standard），所以取证 persona 必须落在 preset-standard 的 persona 子行上。
+#    patch 无法按 id 定位 preset 内的嵌套子行（include-local 的 id 不被推断），
+#    因此这里整行重写 preset-standard 的 config：plugins 列表与官方
+#    presets/standard.patch.yml 逐项一致，只有 persona 文本和展示名/描述不同。
+#    保留 id: standard 与 order: 1，避免会话里已保存的 preset identity 失配。
+# ---------------------------------------------------------------------------
+- id: preset-standard
+  config:
+    id: standard
+    order: 1
+    name: 取证分析（Forensics）
+    description: 只读取证优先、结论必须可追溯到证据与哈希的分析预设；已关闭遥测与产品分析。
+    plugins:
+      - id: persona
+        name: '@deepseek-ai/dsh-persona'
+        config:
+          prefix: |
+            你是 SeeUForensicsAgentPlus 的取证分析助手，服务于电子数据取证与事件响应（DFIR）场景。你的首要目标是产出可复核、可追溯的结论，而不是尽快给出答案。
+
+            工作准则：
+            1. 证据链优先：任何结论都必须指向具体证据（文件路径、进程/网络记录、注册表或日志条目、命令输出）。引用证据时给出源路径、可获取时的 SHA-256 哈希，以及定位范围（行号 / 偏移 / 时间戳）。报告结束前自查：每条结论是否都能落到一条证据上。
+            2. 只读优先：默认只做只读操作（读取、检索、哈希、解析、静态分析）。写入、覆盖、重命名、删除、格式化、修改系统或证据状态、向外部上传等操作，必须先列出「目标 / 影响 / 可回滚方式」并取得用户显式确认后才可执行。
+            3. 不得臆造证据：不确定的结论要明确标注「未验证 / 推测 / 未知」，不得把推测写成事实，不得补全不存在的文件内容、日志行或哈希，不得声称执行过未执行的操作。信息缺失时说明取证缺口和下一步建议。
+            4. 保持原始性：不得修改原始证据；需要加工时复制到独立工作目录，并记录副本与原始证据的对应关系（含哈希）。
+            5. 报告规范：按「结论 → 支撑证据（路径 / 哈希 / 时间戳）→ 分析方法 → 置信度 → 局限」组织；区分事实与推断，附可复现的验证命令。
+            6. 时间与范围：时间戳标注时区与来源（文件系统时间 / 日志时间 / UTC）；说明取证范围与未覆盖部分。
+            7. 敏感信息：令牌、密钥、个人信息在报告中脱敏，但保留可追溯的定位信息。
+
+            当用户请求涉及删除、修改、上传或外传证据时，先给出操作清单与风险，等待显式确认；不要以「为了完成任务」为由绕过确认。
+
+      - id: agent-instructions
+        name: '@deepseek-ai/dsh-agent-instructions'
+        config:
+          maxBytes: 65536
+
+      - id: time-context
+        name: '@deepseek-ai/dsh-time-context'
+
+      - id: tool-bash
+        name: '@deepseek-ai/dsh-tool-bash'
+        disabled: !!js process.platform === 'win32'
+
+      - id: tool-pwsh
+        name: '@deepseek-ai/dsh-tool-pwsh'
+        disabled: !!js process.platform !== 'win32'
+
+      - id: tool-fs
+        name: '@deepseek-ai/dsh-tool-fs'
+        config:
+          # 保持官方默认：不提供 apply_patch 工具，减少「整体改写文件」的误操作面；
+          # 文件修改仍走 edit，且受 persona 的显式确认约束。
+          applyPatch: false
+
+      - id: tool-fs-search
+        name: '@deepseek-ai/dsh-tool-fs-search'
+        config:
+          sampleOverCapGlobResults: false
+
+      - id: tool-jobs
+        name: '@deepseek-ai/dsh-tool-jobs'
+
+      - id: tool-schedule
+        name: '@deepseek-ai/dsh-tool-schedule'
+
+      - id: skill-filesystem
+        name: '@deepseek-ai/dsh-skill-filesystem'
+
+      - id: tool-skill
+        name: '@deepseek-ai/dsh-tool-skill'
+
+      - id: command-goal
+        name: '@deepseek-ai/dsh-command-goal'
+
+      - id: tool-goal
+        name: '@deepseek-ai/dsh-tool-goal'
+
+      - id: planning
+        name: cordis:group
+        group: true
+        isolate:
+          planMode: true
+        config:
+          - id: plan-mode
+            name: '@deepseek-ai/dsh-plan-mode'
+            config:
+              section: |
+                You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
+                Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
+
+                The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
+
+                Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
+
+                Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.
+
+                When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
+
+      - id: compaction
+        name: cordis:group
+        group: true
+        isolate:
+          compaction: true
+          toolResultPruner: true
+        config:
+          - id: compaction-basic
+            name: '@deepseek-ai/dsh-compaction-basic'
+          - id: command-compact
+            name: '@deepseek-ai/dsh-command-compact'
+          - id: tool-result-pruner
+            name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+            config:
+              thresholdChars: 8192
+              headChars: 4096
+              tailChars: 1024
+
+      - id: delegation
+        name: cordis:group
+        group: true
+        isolate:
+          workflowEngine: true
+        config:
+          - id: tool-subagent-control
+            name: '@deepseek-ai/dsh-tool-subagent-control'
+          - id: tool-subagent
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: spawn
+              toolName: subagent
+              modelSelection: true
+              modelDiscovery: true
+          - id: tool-subagent-fork
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: fork
+              toolName: subagent_fork
+          - id: workflow-ptc
+            name: '@deepseek-ai/dsh-workflow-ptc'
+            config:
+              provider: spawn
+          - id: tool-workflow
+            name: '@deepseek-ai/dsh-tool-workflow'
+
+      - id: tool-ask-user
+        name: '@deepseek-ai/dsh-tool-ask-user'
+
+      - id: tool-todo
+        name: '@deepseek-ai/dsh-tool-todo'
+        config:
+          allowParallelInProgress: true
+
+      - id: tool-web
+        name: '@deepseek-ai/dsh-tool-web'
+        config:
+          fetch: true
+          searchTimeoutMs: 60000
+
+      - id: present
+        name: '@deepseek-ai/dsh-tool-present'
+
+      - id: tool-plugin-manager
+        name: '@deepseek-ai/dsh-plugin-manager/tools'
+        disabled: !!js "!ctx.get('profileContext')"
+
+      - id: tool-plugin-market
+        name: '@deepseek-ai/dsh-plugin-market/tools'
+        disabled: true

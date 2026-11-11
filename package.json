@@ -1,0 +1,32 @@
+{
+  "name": "seeu-forensics-agent-plus",
+  "productName": "SeeUForensicsAgentPlus",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SeeUForensicsAgentPlus — 取证专用 DeepSeek Harness 桌面版",
+  "author": {
+    "name": "SeeU Forensics"
+  },
+  "license": "MIT",
+  "main": "dist/main.cjs",
+  "engines": {
+    "node": ">=24.9.0"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/build.mjs && electron .",
+    "verify": "node scripts/verify-launch.mjs",
+    "package:dir": "node scripts/build.mjs && electron-builder --win --x64 --dir",
+    "package:win": "node scripts/build.mjs && electron-builder --win --x64"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.2.2-rc.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.0",
+    "electron": "44.7.0",
+    "electron-builder": "^26.17.0",
+    "esbuild": "^0.25.0"
+  }
+}

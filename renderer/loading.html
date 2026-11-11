@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+<title>SeeUForensicsAgentPlus</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0B1220;
+    --surface: #111C31;
+    --accent: #22D3EE;
+    --accent-soft: #164E63;
+    --text: #E2E8F0;
+    --muted: #94A3B8;
+    --danger: #F87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(1200px 700px at 50% -10%, #12304a 0%, var(--bg) 55%, #060B14 100%);
+    color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none; overflow: hidden;
+  }
+  .card {
+    width: min(720px, 86vw);
+    padding: 44px 48px 36px;
+    border-radius: 20px;
+    background: linear-gradient(180deg, rgba(17,28,49,.92), rgba(11,18,32,.92));
+    border: 1px solid rgba(34,211,238,.18);
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04);
+    text-align: center;
+  }
+  .logo { width: 76px; height: 76px; margin: 0 auto 22px; }
+  .logo svg { width: 100%; height: 100%; filter: drop-shadow(0 0 18px rgba(34,211,238,.35)); }
+  h1 { font-size: 24px; font-weight: 600; letter-spacing: .3px; margin: 0 0 6px; }
+  .tagline { color: var(--muted); font-size: 13px; letter-spacing: .6px; margin-bottom: 30px; }
+  .status { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 26px; font-size: 14px; color: var(--text); }
+  .spinner {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid rgba(34,211,238,.25); border-top-color: var(--accent);
+    animation: spin .9s linear infinite;
+  }
+  .spinner.hidden { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hint { margin-top: 26px; color: #64748B; font-size: 12px; line-height: 1.8; }
+  .brandline { margin-top: 30px; padding-top: 18px; border-top: 1px solid rgba(148,163,184,.12); color: #64748B; font-size: 12px; display: flex; justify-content: space-between; }
+  .brandline code { color: #7DD3FC; font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M48 6 84 22v26c0 21-14.6 35.4-36 42C26.6 83.4 12 69 12 48V22L48 6Z"
+              stroke="#22D3EE" stroke-width="3.5" fill="rgba(34,211,238,0.06)"/>
+        <circle cx="44" cy="44" r="16" stroke="#7DD3FC" stroke-width="3.5"/>
+        <path d="M56 56 70 70" stroke="#7DD3FC" stroke-width="4.5" stroke-linecap="round"/>
+        <path d="M36 44h16M44 36v16" stroke="#22D3EE" stroke-width="2.4" stroke-linecap="round" opacity=".85"/>
+      </svg>
+    </div>
+    <h1>SeeUForensicsAgentPlus</h1>
+    <div class="tagline">取证专用 · 智能体增强工作台</div>
+
+    <div class="status">
+      <div class="spinner" id="spinner"></div>
+      <span id="status-text">正在启动取证运行时…</span>
+    </div>
+
+    <p class="hint">
+      首次启动会初始化隔离的取证 profile 与工作区，可能需要数十秒。<br />
+      运行时、模型与工具均在本机启动，界面由内部 Web 服务提供。
+    </p>
+
+    <div class="brandline">
+      <span>DeepSeek Harness 运行时 · 取证 overlay</span>
+      <span>v<span id="version">—</span></span>
+    </div>
+  </main>
+
+<script>
+  const text = document.getElementById('status-text')
+  const spinner = document.getElementById('spinner')
+  const version = document.getElementById('version')
+
+  if (window.seeu && window.seeu.info) {
+    window.seeu.info().then((info) => {
+      version.textContent = info.version
+      document.title = info.productName
+    }).catch(() => {})
+    window.seeu.onStatus((status) => {
+      if (!status) return
+      if (status.phase === 'error') {
+        text.textContent = status.message || '启动失败'
+        spinner.classList.add('hidden')
+        text.style.color = 'var(--danger)'
+      } else {
+        text.textContent = status.message || '正在启动取证运行时…'
+        spinner.classList.remove('hidden')
+        text.style.color = ''
+      }
+    })
+  }
+</script>
+</body>
+</html>

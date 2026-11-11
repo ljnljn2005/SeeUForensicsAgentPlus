@@ -1,0 +1,94 @@
+# SeeUForensicsAgentPlus — electron-builder 配置
+# 打包：npm run package:dir（免安装目录版） / npm run package:win（NSIS + portable）
+appId: com.seeu.forensicsagentplus
+productName: SeeUForensicsAgentPlus
+copyright: Copyright © 2026 SeeU Forensics
+
+directories:
+  output: release
+  buildResources: build
+
+# files 是「白名单」语义：只列需要进包的内容，未列出的目录（.probe/、src/、
+# scripts/、docs/）天然不进包；下面再用 ! 显式排除，防止未来目录变化误打包。
+# build/ 只放行运行时真正用到的三个图标（src/paths.ts 以 appRoot()/build/ 读取
+# icon.ico、tray.ico），生成脚本与预览图不进包。
+files:
+  - dist/**
+  - renderer/**
+  - resources/**
+  - build/icon.ico
+  - build/tray.ico
+  - build/icon.png
+  - package.json
+  - node_modules/**
+  - "!**/*.map"
+  # 只剔除 node_modules 里的 Markdown 说明；不能写成 !**/*.md——
+  # 那会把 resources/forensics/**/SKILL.md（dsh 技能定义）与 resources 里的
+  # 说明文档一起排除，打包后技能会全部失效（exclusion 优先于白名单）。
+  - "!node_modules/**/*.md"
+  - "!**/test/**"
+  - "!**/__tests__/**"
+  - "!**/*.ts"
+  - "!**/docs/**"
+  - "!.probe/**"
+  - "!src/**"
+  - "!scripts/**"
+  - "!docs/**"
+  - "!release/**"
+  - "!build/*.py"
+  - "!build/*-preview.png"
+  - "!build/make-icons.py"
+
+asar: true
+
+# 原生模块与随包二进制不能从 asar 内加载（.node 需要真实路径；soffice.exe 等
+# 需要可执行文件路径），必须解包到 resources/app.asar.unpacked/。
+# 来源：node_modules 内 *.node 扫描结果 + dsh 运行时依赖清单。
+asarUnpack:
+  - "**/*.node"
+  - "node_modules/**/prebuilds/**"
+  - "node_modules/node-pty/**"
+  - "node_modules/koffi/**"
+  - "node_modules/@koromix/**"
+  - "node_modules/sherpa-onnx-win-x64/**"
+  - "node_modules/node-addon-require-builtin-win32-x64-msvc/**"
+  - "node_modules/@img/sharp-win32-x64/**"
+  - "node_modules/@deepseek-ai/dsh-session-query-sqlite/**"
+  - "node_modules/@deepseek-ai/libreoffice-kit/**"
+  - "node_modules/@deepseek-ai/libreoffice-kit-win32-x64/**"
+  # dsh 全文检索用 rg.exe：子进程 spawn 需要真实路径，asar 虚拟路径会 ENOENT。
+  - "node_modules/@vscode/ripgrep-win32-x64/**"
+
+# 原生模块均为 N-API/预编译产物；避免无 VS Build Tools 环境触发 node-gyp。
+# 若将来引入必须重编译的模块，改回 true。
+npmRebuild: false
+
+# 不自动发布，更新通道后续接入（见 docs/packaging.md）。
+publish: null
+
+# 确保打包后 package.json 的 main 指向 esbuild 产物（工程里的 main 字段不参与打包改写）。
+extraMetadata:
+  main: dist/main.cjs
+
+win:
+  target:
+    - nsis
+    - portable
+  icon: build/icon.ico
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  # 无代码签名证书：保留 signAndEditExecutable 默认 true（写入图标/版本资源），
+  # 未配置 certificateFile 时 electron-builder 不会执行签名，不会因此中断。
+  signAndEditExecutable: true
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  shortcutName: SeeUForensicsAgentPlus
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+
+portable:
+  artifactName: ${productName}-${version}-${arch}-portable.${ext}

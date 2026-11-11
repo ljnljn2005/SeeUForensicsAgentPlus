@@ -1,0 +1,319 @@
+# SeeUForensicsAgentPlus 打包说明
+
+> 维护者：品牌与打包（brand-pack）。本文覆盖 Windows x64 打包命令、产物结构、
+> asar 解包策略、签名/公证/更新通道待办与体积现状。
+
+## 1. 前置环境
+
+| 项 | 要求 | 现状 |
+| --- | --- | --- |
+| Node.js | `>= 24.9.0`（package.json `engines`），工程为 ESM | v24.18.0 |
+| 包管理器 | npm（使用仓库内 `package-lock.json`） | npm 随 Node |
+| Electron | `electron ^44.7.0`（devDependency） | 44.x |
+| electron-builder | `^26.17.0`（devDependency） | 26.18.0 |
+| 图标生成 | Python 3 + Pillow（仅重新生成图标时需要） | 3.13 / Pillow 12.3 |
+
+```bash
+npm install        # 只装一次；原生模块全部有预编译产物
+```
+
+### 1.1 国内镜像与打包期下载
+
+工程根 `.npmrc` 已配置三个镜像：
+
+```ini
+registry=https://registry.npmmirror.com
+electron_mirror=https://npmmirror.com/mirrors/electron/
+electron_builder_binaries_mirror=https://npmmirror.com/mirrors/electron-builder-binaries/
+```
+
+- **Electron 二进制**：`npm install` 会经 `electron_mirror` 下载。若安装脚本被
+  `--ignore-scripts` 跳过或中断导致 `node_modules/electron/dist/` 为空，需手工补：
+  `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node node_modules/electron/install.js`
+  （直接 `node install.js` 时 npm 不会把 `.npmrc` 里的 `electron_mirror` 注入环境，
+  必须显式带 env）。装完用 `node_modules/electron/dist/version` 校验版本号。
+- **electron-builder 辅助二进制**（只 `package:win` 需要）：`winCodeSign-2.6.0`、
+  `nsis-3.0.4.1`、`nsis-resources-3.4.1`，缓存在
+  `%LOCALAPPDATA%\electron-builder\Cache\`。镜像可直接访问（302 到
+  `cdn.npmmirror.com`，均 200）：winCodeSign 5,635,384B / nsis 1,287,512B /
+  nsis-resources 730,800B。缓存已在则不会重复下载。
+- **不需要为此关闭的功能**：`win.signAndEditExecutable` 保持默认 `true`
+  （否则 exe 的图标/版本资源写不进去）；无证书时 electron-builder 只会打印
+  `no code signing certificate configured, signing is skipped`，不会中断。
+
+## 2. 打包命令
+
+```bash
+# 构建 dist/（esbuild 打 CJS）+ 生成免安装目录版 release/win-unpacked
+npm run package:dir
+
+# 构建 + NSIS 安装包 + portable 单文件
+npm run package:win
+
+# 仅构建 dist/（不打包）
+npm run build
+
+# 开发态启动（构建后用系统 Electron 直接跑工程目录）
+npm start
+```
+
+产物命名：`SeeUForensicsAgentPlus-0.1.0-x64.exe`（NSIS）、
+`SeeUForensicsAgentPlus-0.1.0-x64-portable.exe`（portable）。
+
+## 3. 品牌图标
+
+图标由 `build/make-icons.py` 用 Pillow 生成，每个尺寸独立渲染（8× 超采样后
+LANCZOS 缩放，16/24px 单独加粗描边），不是从 256 缩下来的，避免小尺寸糊成一团。
+手工合并成标准 ICONDIR（小尺寸 BMP DIB，256×256 为 PNG）——Pillow 的
+`sizes=` 只能缩放单图，会牺牲小尺寸锐度。
+
+| 文件 | 尺寸 | 用途 |
+| --- | --- | --- |
+| `build/icon.ico` | 16/24/32/48/64/128/256 | 窗口图标、exe 图标、安装包图标 |
+| `build/icon.png` | 512×512 | mac/linux 打包（后续平台） |
+| `build/tray.ico` | 16/32 | 系统托盘 |
+
+重新生成：
+
+```bash
+python build/make-icons.py   # 需要 Pillow；无参，输出到 build/
+```
+
+设计：`#0B1220` 深蓝底 + 青色 `#22D3EE` 放大镜环与手柄，镜片内浅色盾牌，
+居中留白、无文字。
+
+打包时 `build/` 只有这三个图标被放行（见 `electron-builder.yml` 的 `files`）：
+`src/paths.ts` 的 `windowIconPath()` / `trayIconPath()` 读取
+`appRoot()/build/icon.ico`、`appRoot()/build/tray.ico`，因此它们在 asar 内必须存在；
+`make-icons.py` 与预览图不进包。
+
+## 4. 产物结构（`npm run package:dir`）
+
+`release/` 为 `directories.output`，`--dir` 只产免安装目录版；`package:win` 会额外产出
+NSIS 安装包与 portable 单文件。
+
+```text
+release/
+├─ win-unpacked/                        # 免安装目录版（可直接运行/分发绿色版）
+│  ├─ SeeUForensicsAgentPlus.exe        # 主程序（Electron 44.7.0 外壳）
+│  ├─ LICENSE.electron.txt
+│  ├─ LICENSES.chromium.html
+│  ├─ chrome_100_percent.pak
+│  ├─ chrome_200_percent.pak
+│  ├─ d3dcompiler_47.dll
+│  ├─ dxcompiler.dll
+│  ├─ dxil.dll
+│  ├─ ffmpeg.dll
+│  ├─ icudtl.dat
+│  ├─ resources.pak
+│  ├─ snapshot_blob.bin
+│  ├─ v8_context_snapshot.bin
+│  ├─ vk_swiftshader.dll
+│  ├─ vk_swiftshader_icd.json
+│  ├─ vulkan-1.dll
+│  ├─ locales/                          # 55 个 Chromium 语言包（*.pak）
+│  └─ resources/
+│     ├─ app.asar                       # 应用代码与资源（见 §5）
+│     └─ app.asar.unpacked/             # 原生模块 + 随包可执行文件（见 §5）
+│        └─ node_modules/
+│           ├─ @deepseek-ai/            # libreoffice-kit-win32-x64、dsh-session-query-sqlite
+│           ├─ @img/                    # sharp-win32-x64
+│           ├─ @koromix/                # koffi 平台包
+│           ├─ @vscode/                 # ripgrep-win32-x64（rg.exe）
+│           ├─ koffi/
+│           ├─ node-addon-require-builtin-win32-x64-msvc/
+│           ├─ node-pty/                # conpty.node + OpenConsole.exe + conpty.dll
+│           └─ sherpa-onnx-win-x64/     # sherpa-onnx.node + onnxruntime*.dll
+└─ （package:win 时）SeeUForensicsAgentPlus-0.1.0-x64.exe            # NSIS 安装包
+   （package:win 时）SeeUForensicsAgentPlus-0.1.0-x64-portable.exe   # portable 单文件
+```
+
+`resources/app.asar` 内（打包白名单实际放行）：
+
+```text
+/app.asar
+├─ dist/main.cjs、dist/preload.cjs、dist/renderer/{loading,error}.html
+├─ build/icon.ico、build/tray.ico、build/icon.png     # src/paths.ts 以 appRoot()/build/ 读取
+├─ resources/forensics/cordis.patch.yml               # 取证 profile overlay
+├─ resources/forensics/skills/**/SKILL.md             # 取证技能（必须随包）
+├─ renderer/**、package.json
+└─ node_modules/**（生产依赖；`!node_modules/**/*.md` 只剔除说明文档）
+```
+
+asar 内容实测（2026-11-11，Electron 44.7.0 轮，`@electron/asar listPackage`）：
+
+- 命中：`resources/forensics/cordis.patch.yml`、`resources/forensics/README.md`、
+  `resources/forensics/skills/{evidence-chain-report,read-only-evidence-analysis,windows-artifact-triage}/SKILL.md`、
+  `build/icon.ico`、`build/icon.png`、`build/tray.ico`；
+- 未命中（符合预期）：`.probe/`、顶层 `src/`、`scripts/`、`docs/`、
+  `build/make-icons.py`。asar 里出现的 `src/|scripts/|docs/` 路径全部位于
+  `node_modules/` 内部（第三方包自带），属正常。
+
+`.probe/`、`src/`、`scripts/`、`docs/`、`release/`、`build/make-icons.py`、
+`build/*-preview.png` 均不进包（`files` 白名单之外的路径本来就打不进，`!` 是双保险）。
+注意 **exclusion 优先于白名单**：不要把排除写成 `!**/*.md`，否则
+`resources/forensics/**/SKILL.md` 会被一起剔除，打包版技能会全部失效；因此排除限定为
+`!node_modules/**/*.md`。
+
+## 5. asar 与原生模块解包策略
+
+`asar: true`：JS 全部打进 `resources/app.asar`，减少文件数、提升启动 IO。
+
+但 asar 是只读虚拟文件系统，以下两类必须解包到
+`resources/app.asar.unpacked/`（`electron-builder.yml` 的 `asarUnpack`）：
+
+1. **`.node` 原生模块**：Node 的 `process.dlopen` 只接受真实文件路径。
+   - `**/*.node` 通配兜底；
+   - `node-pty`（终端 PTY：`conpty.node`，外加 `prebuilds/win32-x64/conpty/` 下的
+     `OpenConsole.exe` / `conpty.dll`，这些东西 `spawn` 时必须真实存在）；
+   - `koffi` 及其平台包 `@koromix/koffi-win32-x64`（FFI，调用系统 API）；
+   - `sherpa-onnx-win-x64`（语音识别，`.node` + `onnxruntime.dll` 等 4 个 DLL）；
+   - `node-addon-require-builtin-win32-x64-msvc`（内置模块加载器）；
+   - `@img/sharp-win32-x64`（图像处理，sharp 的 .node）。
+2. **随包可执行文件/资源**：
+   - `@vscode/ripgrep-win32-x64`（`bin/rg.exe`，全文检索由 dsh 子进程 spawn，
+     asar 虚拟路径 `spawn()` 会 ENOENT）；
+   - `@deepseek-ai/libreoffice-kit-win32-x64`（`program/` 下的 soffice 及 DLL，
+     Office→PDF 转换用 `spawn` 调用，绝对路径不能在 asar 里）；
+   - `@deepseek-ai/dsh-session-query-sqlite`（SQLite 会话检索后端，按需解包）。
+
+**为什么必须解包**：Electron 的 asar 兼容层只覆盖 `fs`/`require` 等读取路径；
+`child_process.spawn()`、`process.dlopen()` 最终交给操作系统，只认真实文件路径。
+因此凡是「被 spawn 的 exe」「.node 原生模块」必须出现在
+`resources/app.asar.unpacked/` 下；若代码里用 `__dirname` 拼路径，需要在运行时把
+`app.asar` 替换成 `app.asar.unpacked`（或统一走 `process.resourcesPath`）。
+打包产物启动验证时若看到 `ENOENT ... app.asar/node_modules/...`，即为此问题，
+按缺失包补进 `asarUnpack`。
+
+`npmRebuild: false`：所有原生模块都是 N-API / 预编译产物，打包机不需要
+VS Build Tools；若将来引入必须针对 Electron ABI 重编译的模块，改回 `true`。
+
+## 6. 体积现状
+
+以 2026-11-11 最终轮（Electron 44.7.0，修正 `files` 白名单 + `src/main.ts` 标题锁之后）为准。
+更早的 Electron 44.11.0 首轮产物已作废，不引用其数字。
+
+`npm run package:dir` 产物：
+
+| 产物 | 字节 | 约合 | 说明 |
+| --- | --- | --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 | 234.9 MiB | Electron 主程序（含 rcedit 写入的图标/版本资源） |
+| `release/win-unpacked/resources/app.asar` | 167,872,527 | 160.1 MiB | JS + 资源 + node_modules 生产依赖（19,460 个 asar 条目） |
+| `release/win-unpacked/`（整个目录） | — | 768 MiB | 含 Electron 运行时、locales、`app.asar.unpacked` 原生模块（`du -sh`） |
+
+`npm run package:win` 额外产出（同一轮）：
+
+| 产物 | 字节 | 约合 | 说明 |
+| --- | --- | --- | --- |
+| `release/SeeUForensicsAgentPlus-0.1.0-x64.exe` | 211,755,996 | 201.9 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
+| `release/SeeUForensicsAgentPlus-0.1.0-x64.exe.blockmap` | 220,491 | 215 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
+| `release/SeeUForensicsAgentPlus-0.1.0-x64-portable.exe` | 189,438,201 | 180.7 MiB | 免安装单文件（自解压运行） |
+
+即：安装包约 **202 MiB**、portable 约 **181 MiB**，解包目录约 **768 MiB**。
+
+体积构成大头：Electron 运行时本体（exe + DLL/pak/icudtl）、`app.asar` 中
+`@deepseek-ai/*` 与 office/语音/终端相关依赖、`app.asar.unpacked` 中
+`libreoffice-kit-win32-x64` 等原生/随包二进制。
+
+后续可做的瘦身（尚未实施，避免影响 dsh 运行时探测）：
+
+1. `electronLanguages: [zh-CN, en-US]` 裁掉 53 个 `locales/*.pak`（约省 10 MiB）；
+2. 继续收紧 `!node_modules/**` 排除：`test/`、`__tests__/`、`examples/`、
+   `*.d.ts`、`docs/`、多平台二进制（`@electron-internal/extract-zip` 等）；
+3. `libreoffice-kit` 改为按需下载/可选组件（它是单包最大项）；
+4. `asar` 已是未压缩归档，若追求启动 IO 可评估 `compression: maximum`（对
+   NSIS 打包时间有影响，对 asar 无影响）。
+
+## 7. 签名 / 公证 / 更新通道（待办）
+
+1. **代码签名（Windows）**：当前无证书，`win.signAndEditExecutable` 保持默认
+   `true`（写图标/版本资源），未配置 `certificateFile`/`CSC_LINK` 时不执行签名，
+   不会因此中断。发布前需购买 OV/EV 证书或使用 Azure Trusted Signing，
+   在 CI 里注入 `CSC_LINK` + `CSC_KEY_PASSWORD`，并开启时间戳
+   （`win.signingHashAlgorithms`，或 electron-builder 默认 RFC3161）。
+2. **SmartScreen 信誉**：签名后仍需累积下载量；EV 证书可即时通过。
+3. **macOS 公证**（后续平台）：`hardenedRuntime` + `entitlements.mac.plist` +
+   notarytool，需要 Apple Developer ID。
+4. **自动更新**：当前 `publish: null`。建议接入 `electron-updater` +
+   generic/GitHub provider，NSIS 差分更新；需要先固定更新源域名与签名校验。
+5. **安装包体验**：`oneClick: false`、可选安装目录、`perMachine: false`
+   （按用户安装，免 UAC），快捷方式名 `SeeUForensicsAgentPlus`。
+6. **打包后的 host 回退路径（重要）**：`src/host.ts` 在 Electron 运行时指纹不被
+   `node-addon-require-builtin` 支持时，会用系统 `node` 重试一次。系统 node 不读
+   asar，`app.asar/node_modules/@deepseek-ai/dsh/lib/bin.js` 会
+   `ERR_MODULE_NOT_FOUND`。对策：固定 Electron 在支持列表内
+   （43.0.0 / 44.0.0 / 44.7.0 / 45.0.0-alpha.6，本项目用 44.7.0），回退仅作兜底；
+   若要保留回退，回退分支应改指 `app.asar.unpacked` 中的 dsh 副本，或给系统 node
+   准备独立的 `node_modules`。
+7. **用户配置隔离**：主进程用 `DSH_HOME=%APPDATA%\SeeUForensicsAgentPlus\dsh-home`
+   启动 dsh 子进程，不读写用户全局 `~/.dsh`；卸载默认保留该目录
+   （`deleteAppDataOnUninstall: false`），便于取证会话留档，清理需手工或后续提供
+   卸载选项。
+
+## 8. 启动验证（打包产物自检）
+
+推荐用仓库脚本（清掉 `ELECTRON_RUN_AS_NODE`、通过 CDP 等页面 ready 再退出）：
+
+```bash
+# 开发态：构建后由脚本拉起系统 Electron
+node scripts/verify-launch.mjs --timeout 180000
+
+# 打包产物：直接拉起 win-unpacked 里的 exe
+node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9333
+```
+
+通过标准：输出 JSON 含 `"ok": true`，`pages[0].url` 为
+`http://127.0.0.1:<port>/?token=...`，`title` 为 `SeeUForensicsAgentPlus`。
+
+记录（2026-11-11，开发态，Electron 44.7.0）：
+
+```json
+{ "ok": true, "elapsedMs": 8126, "title": "SeeUForensicsAgentPlus",
+  "url": "http://127.0.0.1:53804/?token=WTGLQ-yl6n1OLbputQ8ixuX1znNKlP-hbO-jYGEKzAk" }
+```
+
+### 打包产物（`--dir` 版，Electron 44.7.0）
+
+三轮冷启动记录：`4074 / 4164 / 4101 ms`，即**约 4.1s 冷启动到 UI 可达**（含 dsh 子进程就绪）。
+
+最早两轮（页面刚加载时抓取，`title` 仍是窗口标题）：
+
+```json
+{ "ok": true, "elapsedMs": 4164,
+  "url": "http://127.0.0.1:63130/?token=...",
+  "title": "SeeUForensicsAgentPlus" }
+```
+
+最终轮（UI 完全稳定后抓取，`?token=` 已被客户端去掉）：
+
+```json
+{ "ok": true, "elapsedMs": 4074,
+  "url": "http://127.0.0.1:49806/",
+  "title": "DeepSeek Harness" }
+```
+
+asar 内已确认 overlay 与取证技能随包（见 §4 实测清单）。
+
+**已知品牌局限（发布前需知晓）**：上面两条 JSON 恰好体现同一件事——`?token=` 与
+`document.title` 在 UI 稳定后都会变：客户端会去掉 URL 里的 token（变为
+`http://127.0.0.1:<port>/`），且 `document.title` 实为官方客户端包携带的
+`DeepSeek Harness`。`src/main.ts` 已加
+`win.on('page-title-updated', e => { e.preventDefault(); win.setTitle(PRODUCT_NAME) })`
+锁住 **OS 窗口/任务栏标题**（verify 在页面刚加载时读到的 `title` 就是它）；
+但该锁不影响 CDP 里的 `document.title`，界面内部文案与 favicon 仍来自官方客户端包，
+`cordis.patch.yml` overlay 改不到 —— 现状是「仅窗口标题可控」，**不是**标题已完全品牌化；
+界面内品牌文案要等上游支持或客户端注入方案。打包产物与 dev 态行为一致。
+
+手工等价命令（脚本不可用时）：
+
+```bash
+release/win-unpacked/SeeUForensicsAgentPlus.exe --remote-debugging-port=9333 &
+sleep 20
+curl -s http://127.0.0.1:9333/json/list
+taskkill //IM SeeUForensicsAgentPlus.exe //F
+```
+
+启动失败时看两处日志：
+
+- `%APPDATA%\SeeUForensicsAgentPlus\logs\shell.log`（主进程外壳日志）
+- `%APPDATA%\SeeUForensicsAgentPlus\logs\dsh-host-YYYY-MM-DD.log`（dsh 子进程 stdout/stderr）
