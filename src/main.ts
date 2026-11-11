@@ -23,6 +23,7 @@ import { DshHost, type HostState } from './host.js'
 import {
   describeLocalModelConfig,
   diagnoseLocalGateway,
+  disableLocalModel,
   localModelConfigFile,
   previewLocalModelPatch,
   probeableLocalModel,
@@ -550,6 +551,19 @@ function registerIpc(): void {
     testLocalGateway(probe ?? {}))
   ipcMain.handle('seeu:local-model:diagnose', (_event, probe: { baseURL?: string; apiKey?: string; model?: string }) =>
     diagnoseLocalGateway(probe ?? {}))
+  ipcMain.handle('seeu:local-model:disable', () => {
+    const res = disableLocalModel()
+    logShell(res.ok ? `local model: 已禁用（${res.path}）` : `local model: 禁用失败（${res.error}）`)
+    return res
+  })
+  ipcMain.handle('seeu:local-model:disable-restart', () => {
+    const res = disableLocalModel()
+    logShell(res.ok
+      ? `local model: 启动失败兜底，已禁用本地模型并重启（${res.path}）`
+      : `local model: 启动失败兜底，禁用本地模型失败（${res.error}）`)
+    if (res.ok) setTimeout(() => { app.relaunch(); void requestQuit() }, 250)
+    return res
+  })
   ipcMain.on('seeu:local-model:restart', () => {
     logShell('local model: 用户从设置页请求重启')
     app.relaunch()

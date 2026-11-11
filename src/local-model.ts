@@ -161,6 +161,34 @@ export function writeLocalModelConfig(
   }
 }
 
+/**
+ * 启动失败的兜底：把现有配置里的 `enabled` 置为 false（其余字段原样保留），
+ * 让下一次启动回到官方账号链路。文件不存在时也会写一份 `{ enabled: false }`，
+ * 这样错误页按钮在任何情况下都有确定行为；文件损坏时直接覆盖兜底。
+ */
+export function disableLocalModel(
+  configFile = localModelConfigFile(),
+): { ok: true; path: string } | { ok: false; error: string } {
+  try {
+    let raw: Record<string, unknown> = {}
+    if (existsSync(configFile)) {
+      try {
+        const parsed: unknown = JSON.parse(readFileSync(configFile, 'utf8'))
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          raw = parsed as Record<string, unknown>
+        }
+      } catch {
+        // 配置本身坏了也要能兜底：直接覆盖成 enabled:false
+      }
+    }
+    mkdirSync(join(configFile, '..'), { recursive: true })
+    writeFileSync(configFile, `${JSON.stringify({ ...raw, enabled: false }, null, 2)}\n`, 'utf8')
+    return { ok: true, path: configFile }
+  } catch (error) {
+    return { ok: false, error: (error as Error).message }
+  }
+}
+
 /** 设置界面实时预览：把表单内容编译成 patch 文本（不落盘）。 */
 export function previewLocalModelPatch(input: unknown): { ok: true; patch?: string } | { ok: false; error: string } {
   try {

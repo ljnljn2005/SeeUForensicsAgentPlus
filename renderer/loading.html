@@ -14,6 +14,7 @@
     --text: #E2E8F0;
     --muted: #94A3B8;
     --danger: #F87171;
+    --warn: #FBBF24;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
@@ -45,6 +46,7 @@
   }
   .spinner.hidden { display: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .model { margin-top: 12px; font-size: 12px; color: var(--muted); min-height: 16px; }
   .hint { margin-top: 26px; color: #64748B; font-size: 12px; line-height: 1.8; }
   .brandline { margin-top: 30px; padding-top: 18px; border-top: 1px solid rgba(148,163,184,.12); color: #64748B; font-size: 12px; display: flex; justify-content: space-between; }
   .brandline code { color: #7DD3FC; font-family: Consolas, monospace; }
@@ -69,6 +71,8 @@
       <span id="status-text">正在启动取证运行时…</span>
     </div>
 
+    <div class="model" id="model"></div>
+
     <p class="hint">
       首次启动会初始化隔离的取证 profile 与工作区，可能需要数十秒。<br />
       运行时、模型与工具均在本机启动，界面由内部 Web 服务提供。
@@ -84,6 +88,25 @@
   const text = document.getElementById('status-text')
   const spinner = document.getElementById('spinner')
   const version = document.getElementById('version')
+
+  // 本地模型探测结果：外壳启动时会打一次 4 秒超时的 /models，这里只展示
+  const modelEl = document.getElementById('model')
+  const renderModel = (probe) => {
+    if (!modelEl) return
+    if (!probe) { modelEl.textContent = ''; return }
+    if (probe.ok) {
+      const first = (probe.models && probe.models[0]) || '网关可用'
+      modelEl.textContent = '本地模型：' + first + ' · ' + probe.baseURL
+      modelEl.style.color = 'var(--muted)'
+    } else {
+      modelEl.textContent = '本地模型网关不可用（仍可用官方模型）：' + (probe.error || '未知错误')
+      modelEl.style.color = 'var(--warn)'
+    }
+  }
+  if (window.seeu && window.seeu.localModel) {
+    window.seeu.localModel.get().then((view) => renderModel((view && view.probe) || null)).catch(() => {})
+    window.seeu.localModel.onProbe(renderModel)
+  }
 
   if (window.seeu && window.seeu.info) {
     window.seeu.info().then((info) => {

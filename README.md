@@ -418,7 +418,8 @@ node scripts/e2e/local-diagnose-check.mjs # 能力自检：支持工具的模型
 - **不要在同一行上用 settings 页改**：overlay 优先级更高时 dsh 会硬拒（`Configuration for "<id>" is overridden by a home patch or command-line overlay`）；换模型请改 `local-model.json` 后重启。
 - 模型选择器里的「设为默认」在 overlay 场景下会静默失败，默认模型请用 `useAsDefault: true`。
 - 网关必须支持流式 SSE；首 token 很慢的本地模型可把 `timeoutMs` 调到 900000。
-- **启动会先探测一次网关**（4 秒超时，`GET <baseURL>/models`）：结果写进 `logs\shell.log`（`local model probe: … 可用/不可用`），失败只在加载页提示「本地模型网关暂未连通，先用官方模型启动」，不阻塞启动。启动失败的错误页上有【本地模型设置】按钮，可直接改配置后重试。
+- **启动会先探测一次网关**（4 秒超时，`GET <baseURL>/models`）：结果写进 `logs\shell.log`（`local model probe: … 可用/不可用`），失败只在加载页提示「本地模型网关暂未连通，先用官方模型启动」，不阻塞启动。启动失败的错误页上有两个兜底按钮：【本地模型设置】（改配置后重试）与【禁用本地模型并重启】（把配置里的 `enabled` 置 false、其余字段原样保留，然后自动重启回到官方账号链路）。
+- **加载页会显示本地模型状态行**：探测完成后（约 1 秒）显示「本地模型：qwen2.5-32b-instruct · http://…」或「本地模型网关不可用（仍可用官方模型）：net::ERR_CONNECTION_REFUSED」；`npm run test:e2e:loading` 用一个必然连不上的网关验证这一行。
 - **探测结果在界面上可见**：托盘 tooltip 显示当前模型（`SeeU 取证 · 本地模型 qwen2.5-32b-instruct` / `… · 官方模型`）；菜单 `工具 → 本地模型状态…` 打开对话框（配置路径、探测地址/时间/结果，可点「重新探测」）；设置窗口顶部有「启动探测」行，探测完成会由外壳推送刷新（不需要关窗口重开）；`工具 → 重新探测本地网关` 可手动触发一次。
 
 ## 10. 许可与来源

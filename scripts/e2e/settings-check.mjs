@@ -237,6 +237,17 @@ try {
   report.badGatewayRejected = bad?.ok === false
   log('错误网关', report.badGatewayRejected ? '按预期失败' : '意外成功')
 
+  // 错误页兜底：禁用本地模型（enabled=false），其余字段必须原样保留
+  const disabled = await evaluate(client, 'window.seeu.localModel.disable()')
+  if (disabled?.ok !== true) throw new Error(`禁用本地模型失败：${JSON.stringify(disabled)}`)
+  const afterDisable = JSON.parse(readFileSync(CONFIG, 'utf8'))
+  report.disableLocalModel = { enabled: afterDisable.enabled, keptModel: afterDisable.models?.[0]?.id, keptContext: afterDisable.contextWindow }
+  if (afterDisable.enabled !== false) throw new Error('禁用后 enabled 仍不是 false')
+  if (afterDisable.models?.[0]?.id !== 'qwen2.5-32b-instruct') throw new Error('禁用时丢掉了其它字段（models）')
+  const viewAfter = await evaluate(client, 'window.seeu.localModel.get()')
+  if (viewAfter?.config?.enabled !== false) throw new Error('get() 读到的 enabled 不是 false')
+  log('禁用本地模型', `enabled=false，其余字段保留（models=${report.disableLocalModel.keptModel}）`)
+
   const shot = await client.send('Page.captureScreenshot', { format: 'png' })
   mkdirSync(join(REPO, '.probe', 'shots'), { recursive: true })
   writeFileSync(OUT, Buffer.from(shot.data, 'base64'))

@@ -98,6 +98,10 @@ const api = {
       ipcRenderer.invoke('seeu:local-model:test', probe) as Promise<LocalModelProbeResult>,
     diagnose: (probe: { baseURL?: string; apiKey?: string; model?: string }): Promise<LocalModelDiagnosis> =>
       ipcRenderer.invoke('seeu:local-model:diagnose', probe) as Promise<LocalModelDiagnosis>,
+    disable: (): Promise<{ ok: boolean; path?: string; error?: string }> =>
+      ipcRenderer.invoke('seeu:local-model:disable') as Promise<{ ok: boolean; path?: string; error?: string }>,
+    disableAndRestart: (): Promise<{ ok: boolean; path?: string; error?: string }> =>
+      ipcRenderer.invoke('seeu:local-model:disable-restart') as Promise<{ ok: boolean; path?: string; error?: string }>,
     probe: (): Promise<LocalModelProbeState | null> =>
       ipcRenderer.invoke('seeu:local-model:probe') as Promise<LocalModelProbeState | null>,
     onProbe: (callback: (probe: LocalModelProbeState | null) => void): (() => void) => {

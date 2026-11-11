@@ -999,3 +999,34 @@ retry: {"ok":true,"chatCalls":3,"failTimes":2,"retried":true,"gotReply":true,"er
 断言三点：textarea 里出现网关返回的两个 id、已填的显示名 `Qwen2.5 32B（本地）` 仍保留、后续「错误网关」分步仍按预期失败。`npm run test:e2e:settings` 可复跑（需先 `npm run build`）。
 
 **遗留**：拉取只用于填表，不会自动保存；如果网关 `/models` 需要鉴权但只在 `chat/completions` 用别的 header，仍需在 JSON 里手工写 `headers`（设置页暂未暴露 headers 字段）。
+
+### 20.9 第 11 轮：启动期可见性 + 启动失败兜底
+
+**问题**：本地模型的失败大多发生在「启动之后、第一次请求时」，用户在加载页只看到「正在启动取证运行时…」，不知道自己的网关根本没连上；更糟的是网关配错导致启动失败时，错误页只有【本地模型设置】，用户得先看懂配置才能救回来。
+
+**实现**
+
+- `renderer/loading.html` 新增状态行 `#model`：订阅 `window.seeu.localModel.get()` 的 `probe` 与 `onProbe` 推送，显示「本地模型：<第一个模型> · <baseURL>」或「本地模型网关不可用（仍可用官方模型）：<错误>」（黄色 `--warn`）。探测由外壳启动时发起，4 秒超时，不阻塞启动。
+- `src/local-model.ts` 新增 `disableLocalModel(configFile)`：读现有 JSON → 把 `enabled` 置 `false`、**其余字段原样保留** → 写回；文件不存在时写 `{enabled:false}`，文件损坏时直接覆盖兜底。
+- IPC：`seeu:local-model:disable`（只改文件）与 `seeu:local-model:disable-restart`（改文件 + 250ms 后 `app.relaunch()`）；preload 暴露 `localModel.disable()` / `disableAndRestart()`。
+- `renderer/error.html` 新增【禁用本地模型并重启】按钮（在【本地模型设置】旁）：点击后提示「正在禁用本地模型并重启…」，失败会把错误写回 `#message`。
+
+**验证**
+
+- `scripts/e2e/loading-check.mjs`（新增，`npm run test:e2e:loading`）：用必然连不上的网关 `http://127.0.0.1:19999/v1` 启动真 Electron，在壳子还停在 loading 页时用 CDP 读 `#model`：
+
+```
+[loading-check] 页面: file:///…/dist/renderer/loading.html
+[loading-check] 状态行: 本地模型网关不可用（仍可用官方模型）：net::ERR_CONNECTION_REFUSED
+REPORT {"ok":true,"modelLine":"本地模型网关不可用（仍可用官方模型）：net::ERR_CONNECTION_REFUSED","errors":[]}
+```
+
+- `scripts/e2e/settings-check.mjs` 增加禁用步骤（走真实 preload 桥）：
+
+```
+"禁用本地模型: enabled=false，其余字段保留（models=qwen2.5-32b-instruct）",
+"disableLocalModel": {"enabled": false, "keptModel": "qwen2.5-32b-instruct", "keptContext": 131072},
+"ok": true, "errors": []
+```
+
+**遗留**：错误页的【禁用本地模型并重启】会重启整个应用（不可避免，dsh 只在启动时读 patch）；若失败原因其实不是本地模型，用户可能白重启一次——按钮文案已写明「禁用本地模型并重启」，不会让人误以为能修好其它问题。
