@@ -28,7 +28,7 @@ stderr 报 `patch: entry ... not found`。因此本 overlay **不新增行 id**�
 | `desktop-product-telemetry` | `@deepseek-ai/dsh-web-app` | `disabled: true` | 桌面版产品遥测，桌面模式默认开启 |
 | `product-analytics` | `@deepseek-ai/dsh-web-app` | `disabled: true` | Web 客户端产品分析事件 |
 | `system-prompt` | `@deepseek-ai/dsh-base`（被 web-app 覆盖 persona） | 重写 `config.personaPrefix` 为取证顾问设定 | 任务要求的 host 层 persona；原行 config 只有 `personaPrefix` 一个 key，已原样重写 |
-| `preset-standard` | `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` | 整行重写 `config`（`plugins` 列表与官方逐项一致），改 `persona` 文本、`name`、`description` | **真正生效**的会话 persona 在 preset 里；patch 无法定位嵌套子行 id，只能整行替换 |
+| `preset-standard` | `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` | 整行重写 `config`（`plugins` 以官方为基准：去掉 `tool-web`、`tool-fs` 收成只读），改 `persona` 文本、`name`、`description` | **真正生效**的会话 persona 在 preset 里；patch 无法定位嵌套子行 id，只能整行替换 |
 
 ### 为什么必须同时改 `system-prompt` 和 `preset-standard`
 
@@ -45,12 +45,13 @@ preset。会话的 system prompt 由 preset 内的 `persona` 子行生成。只�
 是预期架构。若在 overlay 里重新启用 host 行，会与 preset 内的同名插件重复挂载（同一服务/工具
 注册两次），属于错误做法。取证需要的工具已经全部在 preset 内可用：
 
-- `tool-fs`：`applyPatch: false`（官方默认，去掉整体改写文件的能力，降低误操作面）
+- `tool-fs`：**只读**（`read/readImage: true`，`write/edit/applyPatch: false`）；要写文件走命令行，写操作留在命令记录里
 - `tool-fs-search`：`sampleOverCapGlobResults: false`
 - `tool-bash` / `tool-pwsh`：按平台互斥启用（Windows 下启用 pwsh）
 - `tool-skill` + `skill-filesystem`：技能加载
 - `present`：报告/产物交付
-- `tool-web`（fetch + search）、`tool-jobs`、`tool-schedule`、delegation 系列保持官方默认
+- `tool-jobs`、`tool-schedule`、`tool-goal`、`planning`、delegation（子代理/工作流）等保持官方默认，取证分析要用
+- `tool-web` **已移除**：取证会话不联网；需要联网检索时由分析员另行取证（恢复方法见 `docs/forensics-profile.md` §1.1）
 
 ### 账号/登录相关行为什么保留
 

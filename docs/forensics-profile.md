@@ -52,10 +52,42 @@ overlay 修改的 6 行：
 负责 `deepseek-official` 的鉴权、模型目录与准入，`deepseek-account` 负责登录态读取；关闭会
 导致无法登录/默认模型不可用。取舍 = 关闭遥测出口、保留登录能力。
 
-工具行没有「重新启用 host 行」：取证需要的 `tool-fs`（`applyPatch: false`）、`tool-fs-search`、
-`tool-bash`/`tool-pwsh`（按平台互斥）、`tool-jobs`、`tool-schedule`、`tool-skill` +
-`skill-filesystem`、`tool-web`、`present`、delegation 系列都已由 preset 挂载。再启用 host 行会
-造成同名插件重复挂载。
+工具面以 **preset 为唯一真源**：`dsh-web-app` 的 patch 后半段已经把 host 层工具行
+（`tool-fs`、`tool-bash`、`tool-skill` 等）`disabled` 掉，会话可见的工具完全由
+`preset-standard.plugins` 决定。所以本 overlay 不「重新启用 host 行」（那会造成同名插件重复
+挂载），只整行重写 `preset-standard` 的 `plugins` 列表。
+
+### 1.1 取证 preset 的工具面（v0.1.2）
+
+**为什么只动两处**：工具描述 + 参数 schema 每轮请求都要进 system prompt，是固定开销；但
+「精简上下文」不能拿能力换。经确认，子代理、工作流引擎、后台作业、定时任务、目标长跑、
+plan 模式都是取证分析要用的，**必须保留**；只有联网抓取在取证场景里明确不要。所以最终形态是：
+
+- **移除 1 项**：`tool-web`（联网抓取/检索）。取证机通常离线，也不希望证据内容被发往外部；
+  需要联网检索时由分析员另行取证。
+- **保留 20 项**：官方 standard 预设的全部能力——`persona`、`agent-instructions`、
+  `time-context`、`tool-bash`/`tool-pwsh`（按平台互斥）、`tool-fs`、`tool-fs-search`、
+  `tool-jobs`（后台作业）、`tool-schedule`（定时任务）、`skill-filesystem` + `tool-skill`、
+  `command-goal` + `tool-goal`、`planning`（plan 模式）、`compaction`、
+  `delegation`（subagent / subagent_fork / workflow-ptc / workflow）、`tool-ask-user`、
+  `tool-todo`、`present`、`tool-plugin-manager`、`tool-plugin-market`。
+- **改 1 项**：`tool-fs` 收成只读（`read/readImage: true`，`write/edit/applyPatch: false`）。
+  要写文件就走命令行（`Copy-Item` / `Out-File` / 导出命令），好处是每一次写操作都变成一条
+  可复核的命令行记录，符合只读取证与证据链要求；确实需要编辑工具时把三个 `false` 改回 `true`。
+
+**省了多少**：`tool-web` 的描述/参数约 3.4k 字符，`tool-fs` 去掉写工具约 2k 字符，合计约
+**5–6k 字符 ≈ 1.5k token / 每次请求（估算值，不是精确计量）**。估算方法：用括号配平从各包
+`lib/index.js` 的 `defineTool({...})` / `tools.register({...})` 片段累计字符数，按 ≈3.5 字符/token
+折算；离线没有官方「导出工具清单」命令，这个数字只用于说明量级。
+
+**为什么不继续砍**：`delegation` 约 15.4k 字符、`tool-fs` 全量约 15.5k、`tool-jobs`/
+`tool-schedule`/`tool-goal` 各约 5k 字符，是 context 的大头，但这些都是确认要保留的能力；
+真正的大头应该在「长会话压缩」（`compaction` 已启用）和「工具结果裁剪」
+（`tool-result-pruner`：>8192 字符留头 4096 / 尾 1024）上省，而不是砍工具。
+
+**怎么恢复/调整**：`plugins` 里每一项都是独立行，加回/删掉即可。官方原文见
+`node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml`，或
+`dsh --profile web --dump-default-config`；升级 dsh 后必须重新对齐这份列表。
 
 ## 2. 验证命令
 
@@ -99,12 +131,20 @@ dsh --patch <install-dir>/resources/forensics/cordis.patch.yml --profile web --n
 ```bash
 ERR=/tmp/fp/overlay.err; OUT=/tmp/fp/overlay.yml
 grep -c "not found" "$ERR"          # 期望 0（unmatched target = 0）
-wc -l < "$OUT"                      # 期望 1305（默认为 1243）
+wc -l < "$OUT"                      # 期望 1304（默认为 1243；去掉 tool-web 后比 v0.1.1 的 1305 少 1 行）
 grep -c "patched by .*resources.forensics" "$OUT"   # 期望 4 个注释块，覆盖 6 行
 grep -A2 "^- id: otel$" "$OUT"                       # 期望 disabled: true
 grep -A2 "^- id: desktop-product-telemetry$" "$OUT"  # 期望 disabled: true
 sed -n "/^- id: system-prompt$/,+4p" "$OUT"          # 期望 personaPrefix: 你是 SeeUForensicsAgentPlus...
 sed -n "/^- id: preset-standard$/,+8p" "$OUT"        # 期望 name: 取证分析（Forensics）
+
+# 2.5 精简后的工具面（v0.1.2）：列 preset 内的 plugin 子项
+awk '/^- id: preset-standard$/{f=1} f&&/^      - id: /{print $3} f&&/^      - id: tool-plugin-market$/{exit}' "$OUT"
+# 期望正好 21 行（官方 22 项 - tool-web）：persona / agent-instructions / time-context /
+# tool-bash / tool-pwsh / tool-fs / tool-fs-search / tool-jobs / tool-schedule / skill-filesystem /
+# tool-skill / command-goal / tool-goal / planning / compaction / delegation / tool-ask-user /
+# tool-todo / present / tool-plugin-manager / tool-plugin-market
+# 不应出现：tool-web（取证会话不联网）
 ```
 
 ## 3. 实测证据（dsh 0.2.2-rc.1，2026-11-11）
@@ -112,7 +152,7 @@ sed -n "/^- id: preset-standard$/,+8p" "$OUT"        # 期望 name: 取证分析
 **基线**：`--dump-default-config` → 退出码 0、stderr 空、1243 行（196 个顶层 `- id:`）。
 
 **叠加 overlay**：`--dump-config` → 退出码 0、stderr 为空（无 unmatched target / unknown row）、
-1305 行（+62 行来自多行 persona 与 preset 的 `name`/`description`）。
+**1304 行**（v0.1.2 去掉 tool-web 之后；v0.1.1 为 1305 行，默认 1243 行；行数差异来自删掉的那一项与多行 persona 的折叠）。
 
 dump 注释标注被 overlay 覆盖的行（4 个注释块，覆盖 6 行）：
 
@@ -181,8 +221,10 @@ dump 注释标注被 overlay 覆盖的行（4 个注释块，覆盖 6 行）：
    `!!js` 表达式原样保留（否则会丢运行时读取，例如 port、endpoint）。
 3. **改工具面**：优先改 `preset-standard.plugins` 里对应子项（如把 `tool-bash` 的 `disabled`
    固定为 false/true），但注意 `plugins` 要与官方 `presets/standard.patch.yml` 同步升级。
-   例如要禁用插件市场：把 `tool-plugin-market` 子项的 `disabled: true` 保留（官方已 true），
-   要禁用子代理：把 `delegation` group 整组去掉（会改变工具面，需评估）。
+   例如要禁用插件市场：把 `tool-plugin-market` 子项的 `disabled: true` 保留（官方已 true）。
+   v0.1.2 只从 preset 里去掉 `tool-web`（联网抓取），并把 `tool-fs` 收成只读（见 §1.1）；
+   子代理/工作流/后台作业/定时任务/目标/plan 都保留。要恢复 `tool-web` 就把官方原文里对应
+   条目加回 `plugins` 列表，然后重跑第 2 节验证。
 4. **改 persona**：同时改 `system-prompt.personaPrefix` 与 `preset-standard` 内 `persona.prefix`
    两处并保持一致（前者是 host 默认，后者是会话实际生效值）。
 5. **新增行**（如自定义 preset）必须用官方存在的包名：`- insert: [{ id, name, config }]`；

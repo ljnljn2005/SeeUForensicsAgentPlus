@@ -225,9 +225,42 @@ electron-builder 会先用依赖图过滤 node_modules，glob 只在过滤结果
 （本项目实测仍是 309/330）。升级 `@deepseek-ai/dsh` 后必须重跑上面的自检，
 按缺失列表补齐 `dependencies`。
 
+### 5.2 打包前 overlay 校验（`npm run check:overlay`）
+
+`resources/forensics/cordis.patch.yml` 是**运行时才解析**的：YAML 写坏、行 id 写错，
+构建阶段不会报错，只会在打包产物的 dsh 子进程里炸成
+`failed to parse overlay ... YAMLException` / `patch: entry ... not found`，
+外壳只能显示错误页。v0.1.2 就踩过这个坑：打包进程读 overlay 的同时，另一处写入还在改
+该文件，结果进了 `app.asar` 的是**半截内容**（asar 里 overlay 字节数相同但 md5 不同，
+首行从句子中间开始），启动立刻失败。
+
+现在 `scripts/check-overlay.mjs` 在打包前做一次离线组合校验：
+
+```bash
+npm run check:overlay        # 也可单独跑
+```
+
+它用随包的 dsh 跑 `--patch <overlay> --profile web --dump-config`（隔离的临时
+`DSH_HOME`），校验：退出码 0、stderr 为空、无解析失败/未命中行、dump 行数正常、
+preset 里保留必需的 19 行工具、不含 `tool-web`、`tool-fs` 为只读。
+已挂到 `prepackage:dir` / `prepackage:win` 钩子，**打包前直接失败，不再产出坏包**。
+
+排查同类问题的两条快查命令：
+
+```bash
+# 1) 源文件能否组合
+dsh --patch resources/forensics/cordis.patch.yml --profile web --dump-config >/dev/null
+# 2) asar 里的副本是否与源文件一致（md5 必须相同）
+node -e "require('@electron/asar').extractAll('release/win-unpacked/resources/app.asar','.probe/asar-check')"
+md5sum resources/forensics/cordis.patch.yml .probe/asar-check/resources/forensics/cordis.patch.yml
+```
+
+另外，**打包期间不要改被 `files` 白名单收进去的文件**（`src/`、`resources/`、`build/`、
+`renderer/`、`package.json`）；改 `docs/`、根 README 这类不进包的文件是安全的。
+
 ## 6. 体积现状
 
-以 2026-11-11 最终轮（Electron 44.7.0，修正 `files` 白名单 + `src/main.ts` 标题锁之后）为准。
+以 2026-11-11 **v0.1.2** 轮（Electron 44.7.0，工具面定稿 + 打包前 overlay 校验接入之后）为准。
 更早的 Electron 44.11.0 首轮产物已作废，不引用其数字。
 
 `npm run package:dir` 产物：
@@ -235,21 +268,21 @@ electron-builder 会先用依赖图过滤 node_modules，glob 只在过滤结果
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 | 234.9 MiB | Electron 主程序（含 rcedit 写入的图标/版本资源） |
-| `release/win-unpacked/resources/app.asar` | 168,374,857 | 160.6 MiB | JS + 资源 + node_modules 生产依赖（19,621 个 asar 条目，`@deepseek-ai` 330/330） |
+| `release/win-unpacked/resources/app.asar` | 168,376,076 | 160.6 MiB | JS + 资源 + node_modules 生产依赖（19,621 个 asar 条目，`@deepseek-ai` 330/330） |
 | `release/win-unpacked/`（整个目录） | — | 769 MiB | 含 Electron 运行时、locales、`app.asar.unpacked` 原生模块（`du -sm`） |
 
 `npm run package:win` 额外产出（同一轮）：
 
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
-| `release/SeeUForensicsAgentPlus-0.1.1-x64.exe` | 211,853,609 | 202.0 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
-| `release/SeeUForensicsAgentPlus-0.1.1-x64.exe.blockmap` | 220,687 | 215.5 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
-| `release/SeeUForensicsAgentPlus-0.1.1-x64-portable.exe` | 189,488,499 | 180.7 MiB | 免安装单文件（自解压运行） |
+| `release/SeeUForensicsAgentPlus-0.1.2-x64.exe` | 211,854,113 | 202.0 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
+| `release/SeeUForensicsAgentPlus-0.1.2-x64.exe.blockmap` | 220,816 | 215.7 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
+| `release/SeeUForensicsAgentPlus-0.1.2-x64-portable.exe` | 189,470,595 | 180.7 MiB | 免安装单文件（自解压运行） |
 
 即：安装包约 **202 MiB**、portable 约 **181 MiB**，解包目录约 **769 MiB**。
 
-> v0.1.0 的同名产物（`app.asar` 167,872,527 B、缺失 21 个 peer 包）启动即崩，
-> 已被 v0.1.1 取代，不要再用；体积差异（+502 KB）正是补进来的 21 个包。
+> v0.1.0（缺 21 个 peer 包，启动即崩）与 v0.1.1（overlay 是定稿前的工具面）均已作废，
+> 对外只发 v0.1.2；三者在 asar 体积上的差异来自补包与取证预设内容。
 
 体积构成大头：Electron 运行时本体（exe + DLL/pak/icudtl）、`app.asar` 中
 `@deepseek-ai/*` 与 office/语音/终端相关依赖、`app.asar.unpacked` 中
@@ -333,6 +366,26 @@ node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus
 ```
 
 asar 内已确认 overlay 与取证技能随包（见 §4 实测清单）。
+
+### v0.1.2 回归验证（工具面定稿 + overlay 校验上线，2026-11-11）
+
+工具面改成「官方 22 项保留 21 项、只去 `tool-web`、`tool-fs` 只读」后重新打包的两条记录：
+
+```json
+// --dir 产物（port 9333）
+{ "ok": true, "elapsedMs": 4144, "title": "SeeUForensicsAgentPlus",
+  "url": "http://127.0.0.1:63461/?token=..." }
+```
+
+```json
+// portable（port 9334；55.7s 含首次把 ~800MB 解包到 %TEMP% 的时间）
+{ "ok": true, "elapsedMs": 55651, "title": "DeepSeek Harness",
+  "url": "http://127.0.0.1:63847/" }
+```
+
+两条都进入了 dsh UI；`title` 差异只取决于抓取时机（页面刚加载 = 窗口标题，UI 稳定后
+= 官方客户端 `document.title`），不是崩溃信号。本轮之前那两条超时（180s / 240s）的根因
+是 asar 里 overlay 被并发写入截断，详见 §5.2。
 
 ### v0.1.1 回归验证（补齐 peer 包之后，2026-11-11）
 

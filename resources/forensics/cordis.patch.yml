@@ -71,8 +71,9 @@
 #    web profile 的每个会话使用一个 agent preset（agent-preset-registry 的 default
 #    仍是 standard），所以取证 persona 必须落在 preset-standard 的 persona 子行上。
 #    patch 无法按 id 定位 preset 内的嵌套子行（include-local 的 id 不被推断），
-#    因此这里整行重写 preset-standard 的 config：plugins 列表与官方
-#    presets/standard.patch.yml 逐项一致，只有 persona 文本和展示名/描述不同。
+#    因此这里整行重写 preset-standard 的 config：plugins 列表以官方
+#    presets/standard.patch.yml 为基准，去掉 tool-web 并把 tool-fs 收成只读，
+#    其余条目（含子代理/工作流/后台作业/定时任务/目标/plan）与官方一致。
 #    保留 id: standard 与 order: 1，避免会话里已保存的 preset identity 失配。
 # ---------------------------------------------------------------------------
 - id: preset-standard
@@ -81,6 +82,14 @@
     order: 1
     name: 取证分析（Forensics）
     description: 只读取证优先、结论必须可追溯到证据与哈希的分析预设；已关闭遥测与产品分析。
+    # 取证工具面（相对官方 standard 预设）：
+    #   * 只去掉 tool-web（联网抓取）——取证机通常离线，也不希望证据内容发往外部；
+    #     其余 21 项全部按官方默认挂载：子代理 / 工作流 / 后台作业 / 定时任务 / 目标长跑 /
+    #     plan 模式 / todo / 插件管理都保留（分析员按需使用）。
+    #   * tool-fs 收成只读（write/edit/applyPatch: false）：写文件一律走命令行（Copy-Item /
+    #     Out-File 等），每次写操作都留在命令记录里；确实要用编辑工具时把三个 false 改回 true。
+    #   * 想恢复联网：把官方 preset 里的 tool-web 条目加回本列表即可（注意官方默认
+    #     fetch: true + searchTimeoutMs: 60000，等于开启外发能力，取证场景需谨慎）。
     plugins:
       - id: persona
         name: '@deepseek-ai/dsh-persona'
@@ -98,53 +107,46 @@
             7. 敏感信息：令牌、密钥、个人信息在报告中脱敏，但保留可追溯的定位信息。
 
             当用户请求涉及删除、修改、上传或外传证据时，先给出操作清单与风险，等待显式确认；不要以「为了完成任务」为由绕过确认。
-
       - id: agent-instructions
         name: '@deepseek-ai/dsh-agent-instructions'
         config:
           maxBytes: 65536
-
       - id: time-context
         name: '@deepseek-ai/dsh-time-context'
-
       - id: tool-bash
         name: '@deepseek-ai/dsh-tool-bash'
         disabled: !!js process.platform === 'win32'
-
       - id: tool-pwsh
         name: '@deepseek-ai/dsh-tool-pwsh'
         disabled: !!js process.platform !== 'win32'
-
       - id: tool-fs
         name: '@deepseek-ai/dsh-tool-fs'
         config:
-          # 保持官方默认：不提供 apply_patch 工具，减少「整体改写文件」的误操作面；
-          # 文件修改仍走 edit，且受 persona 的显式确认约束。
+          # 只读工具箱：关掉 write / edit / apply_patch，模型只能 read / read_image。
+          # 需要写文件时走命令行（Copy-Item / Out-File 等），写操作会留在命令记录里；
+          # 想恢复写能力就把下面三个 false 改回 true。
+          read: true
+          readImage: true
+          write: false
+          edit: false
           applyPatch: false
 
       - id: tool-fs-search
         name: '@deepseek-ai/dsh-tool-fs-search'
         config:
           sampleOverCapGlobResults: false
-
       - id: tool-jobs
         name: '@deepseek-ai/dsh-tool-jobs'
-
       - id: tool-schedule
         name: '@deepseek-ai/dsh-tool-schedule'
-
       - id: skill-filesystem
         name: '@deepseek-ai/dsh-skill-filesystem'
-
       - id: tool-skill
         name: '@deepseek-ai/dsh-tool-skill'
-
       - id: command-goal
         name: '@deepseek-ai/dsh-command-goal'
-
       - id: tool-goal
         name: '@deepseek-ai/dsh-tool-goal'
-
       - id: planning
         name: cordis:group
         group: true
@@ -166,7 +168,6 @@
                 Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.
 
                 When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
-
       - id: compaction
         name: cordis:group
         group: true
@@ -184,7 +185,6 @@
               thresholdChars: 8192
               headChars: 4096
               tailChars: 1024
-
       - id: delegation
         name: cordis:group
         group: true
@@ -211,28 +211,17 @@
               provider: spawn
           - id: tool-workflow
             name: '@deepseek-ai/dsh-tool-workflow'
-
       - id: tool-ask-user
         name: '@deepseek-ai/dsh-tool-ask-user'
-
       - id: tool-todo
         name: '@deepseek-ai/dsh-tool-todo'
         config:
           allowParallelInProgress: true
-
-      - id: tool-web
-        name: '@deepseek-ai/dsh-tool-web'
-        config:
-          fetch: true
-          searchTimeoutMs: 60000
-
       - id: present
         name: '@deepseek-ai/dsh-tool-present'
-
       - id: tool-plugin-manager
         name: '@deepseek-ai/dsh-plugin-manager/tools'
         disabled: !!js "!ctx.get('profileContext')"
-
       - id: tool-plugin-market
         name: '@deepseek-ai/dsh-plugin-market/tools'
         disabled: true

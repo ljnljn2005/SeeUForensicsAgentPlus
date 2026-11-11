@@ -1,7 +1,7 @@
 {
   "name": "seeu-forensics-agent-plus",
   "productName": "SeeUForensicsAgentPlus",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "SeeUForensicsAgentPlus — 取证专用 DeepSeek Harness 桌面版",
@@ -17,6 +17,9 @@
     "build": "node scripts/build.mjs",
     "start": "node scripts/build.mjs && electron .",
     "verify": "node scripts/verify-launch.mjs",
+    "check:overlay": "node scripts/check-overlay.mjs",
+    "prepackage:dir": "node scripts/check-overlay.mjs",
+    "prepackage:win": "node scripts/check-overlay.mjs",
     "package:dir": "node scripts/build.mjs && electron-builder --win --x64 --dir",
     "package:win": "node scripts/build.mjs && electron-builder --win --x64"
   },
