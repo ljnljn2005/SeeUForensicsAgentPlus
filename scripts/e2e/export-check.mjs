@@ -183,6 +183,7 @@ try {
     hasEvidence: clipOverview.includes('CHAN_MH_mobile.zip') || clipOverview.includes('检材分析'),
     hasTable: clipOverview.includes('| 检材 | 名称 |'),
     hasScale: /规模：检材\s*\d+\s*个/.test(clipOverview),
+    hasRange: /数据时间范围：\d{4}-\d{2}-\d{2} ~ \d{4}-\d{2}-\d{2}/.test(clipOverview),
   }
 
   // ---- 1) 记录视图：复制本页引用清单 ----
@@ -242,7 +243,7 @@ try {
   report.savedTab = await evaluate("localStorage.getItem('seeu.panelTab')")
 
   report.ok = report.panelOpened && report.scanned &&
-    report.overviewCopied && report.overviewClipboard.hasHeader && report.overviewClipboard.hasTable && report.overviewClipboard.hasScale && report.overviewClipboard.len > 0 &&
+    report.overviewCopied && report.overviewClipboard.hasHeader && report.overviewClipboard.hasTable && report.overviewClipboard.hasScale && report.overviewClipboard.hasRange && report.overviewClipboard.len > 0 &&
     report.tabRecords && report.recordsCopied && report.recordsClipboard.hasHeader && report.recordsClipboard.hasCite && report.recordsClipboard.len > 0 &&
     report.tabEntity && report.entityCopied && report.entityClipboard.hasHeader && report.entityClipboard.len > 0 &&
     report.tabTables && !!report.tablePicked && report.tableCopied && report.tableClipboard.hasHeader && report.tableClipboard.hasCite &&

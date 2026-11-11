@@ -1630,3 +1630,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 实现：`tools/local-model.mjs` 的 `DEFAULTS.titleGeneration = true`；`normalizeLocalModel()` 接受 `false` / `'false'`；`localModelPatch()` 在 `titleGeneration === false` 时输出 `- id: session-title-llm` + `disabled: true`（不再输出 config 块），否则维持原来的小输出配置。设置页新增复选框「用本地模型生成会话标题」（默认勾选），`readForm()`/`fillForm()` 同步该字段。
 - 验证：`tests/local-model.test.mjs` 新增 1 例（默认带 config；关掉整行 disabled 且无 `targetWords`；`'false'` 字符串也归一成 false）→ `npm test` 45/45。`scripts/e2e/local-tools-e2e.mjs` 统计不带 tools 的标题请求并支持 `SEEU_TOOLS_E2E_NO_TITLE=1`：默认 `"titleGeneration":"on","titleRequests":1,"ok":true`；关掉后 `"titleGeneration":"off","titleRequests":0,"ok":true`（带工具请求仍是 12 个工具的精简预设）。`scripts/e2e/settings-check.mjs` 断言 `titleGenDefault:true`、`titleGenOffPreview:true`（取消勾选后 preview 里 `session-title-llm` 变 `disabled: true` 且无 `targetWords`）、`titleGenSaved:true`。
 - 遗留：标题回退到「首句截断」是 dsh 自身行为，未在本仓库定制；如果网关支持并发（vLLM `--max-num-seqs > 1`），建议保持开启。
+
+## 20.45 面板：KPI 数据时间范围、树视图本层过滤、概览带时间范围（v0.2.6 起）
+
+- KPI 增加「时间范围」：`view.timeRange` 存在时显示 `YYYY-MM-DD ~ YYYY-MM-DD`（真实案件实测 `2016-12-11 ~ 2025-05-16`），避免研判时为了看时间跨度去翻树根标题或跑 `timeline`。
+- 树视图本层过滤：`Panel` 新增 `treeFilter` 状态，`drill`/`goCrumb` 切换节点时清空；`children.length > 1` 时在节点列表上方渲染输入框（`data-seeu-tree-filter` 供 e2e 定位），按 `labelOf(c)` 做大小写无关子串过滤，右侧显示「显示 X/Y」或「本层 N 项」，过滤后为空渲染「本层没有匹配的节点」，有过滤条件时给【清空】。
+- 案件概览导出加 `- 数据时间范围：…` 一行（`export-check` 新增 `hasRange` 断言并纳入 `ok`）。
+- 验证：`m2-ui-check` 新增 `kpiRange`（KPI 文本含「时间范围」+ `\d{4}-\d{2}-\d{2} ~ …`）、`treeFilterVisible`/`treeFilterEmpty`/`treeFilterOk`（检材 3 下 8 个应用节点，输入 `zzzz-no-match` 出现空匹配文案，清空后行数恢复 8）→ 实测 `kpiRange:true, treeFilterVisible:true, treeFilterOk:true, treeRowsBefore/After:8/8, m2ok:true, errors:[]`；`export-check` 覆盖 `hasRange`；`npm test` 45/45。
+- 遗留：树过滤只作用于已加载的当前层，跨层搜索仍用「检索」标签；过滤不做拼音/模糊匹配。

@@ -140,6 +140,8 @@ report.treeRoot = /检材 5/.test(text) && /文件 370/.test(text)
 // v0.1.8：树根每个检材要显示火眼里的名称与备注
 report.evNames = /CHAN_MH_mobile\.zip/.test(text) && /LEUNG_YL_mobile\.zip/.test(text)
 report.evRemark = text.includes('伤人案')
+// KPI 里要能直接看到数据时间范围
+report.kpiRange = /时间范围/.test(text) && /\d{4}-\d{2}-\d{2} ~ \d{4}-\d{2}-\d{2}/.test(text)
 // 会话上下文注入状态（AGENTS.md 里的案件概览）要能在面板上看到
 report.briefVisible = /会话语境/.test(text) && /已注入/.test(text)
 report.briefText = (text.match(/会话语境[^\n]{0,120}/) || [''])[0]
@@ -156,6 +158,19 @@ await sleep(6000)
 text = await bodyText()
 report.drilledApps = text.includes('WhatsApp') || text.includes('Safari')
 report.drilledText = text.slice(text.indexOf('检材 3') >= 0 ? text.indexOf('检材 3') : 0, text.indexOf('检材 3') + 900)
+
+// 树视图：本层过滤（分类里文件很多时按名字找）
+const treeRowCount = () => ev("document.querySelectorAll('.seeu-tree-row').length")
+report.treeFilterVisible = await ev("!!document.querySelector('[data-seeu-tree-filter]')")
+report.treeRowsBefore = await treeRowCount()
+const setTreeFilter = (value) => ev(`(() => { const i = document.querySelector('[data-seeu-tree-filter]'); if (!i) return 'no-input'; const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(i, ${JSON.stringify(value)}); i.dispatchEvent(new Event('input', { bubbles: true })); return 'ok' })()`)
+report.treeFilterTyped = await setTreeFilter('zzzz-no-match')
+await sleep(500)
+report.treeFilterEmpty = /本层没有匹配的节点/.test(await bodyText())
+await setTreeFilter('')
+await sleep(500)
+report.treeRowsAfter = await treeRowCount()
+report.treeFilterOk = report.treeFilterVisible === true && report.treeFilterEmpty === true && report.treeRowsBefore === report.treeRowsAfter && Number(report.treeRowsBefore) > 1
 // 先切到「检索」标签，否则 last input 是顶部的案件目录输入框
 await clickText('检索', 'button')
 await sleep(1500)
@@ -212,7 +227,7 @@ report.timelineText = text.slice(text.indexOf('时间线'), text.indexOf('时间
 report.tabTablesClick = await openTab('表')
 text = await bodyText()
 report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
-report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true
+report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true
 
 // ---------- 浅色主题回归（SEEU_E2E_THEME=light；暗色为默认） ----------
 if (process.env.SEEU_E2E_THEME === 'light') {

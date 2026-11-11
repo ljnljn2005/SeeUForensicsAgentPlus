@@ -1046,6 +1046,8 @@ window.__ModuleLoader__.load({
       // 会话上下文（<DSH_HOME>/AGENTS.md）里案件概览的注入状态：让「模型已经知道检材」可见
       const [briefInfo, setBriefInfo] = useState(null);
       const [briefNote, setBriefNote] = useState('');
+      // 树视图：本层节点的快速过滤（分类/文件多的时候按名字找）
+      const [treeFilter, setTreeFilter] = useState('');
       useEffect(() => {
         let alive = true;
         if (!db) { setEvList([]); return undefined; }
@@ -1307,11 +1309,13 @@ window.__ModuleLoader__.load({
       }, [db, result, query, filters, copyText]);
 
       const drill = useCallback((nextNode, label) => {
+        setTreeFilter('');
         setCrumbs((c) => [...c, { node, label: label ?? nodeLabel(view, node) }]);
         loadNode(db, nextNode);
       }, [db, node, view, loadNode]);
 
       const goCrumb = useCallback((idx) => {
+        setTreeFilter('');
         const target = idx < 0 ? 'root' : crumbs[idx].node;
         setCrumbs((c) => (idx < 0 ? [] : c.slice(0, idx)));
         loadNode(db, target);
@@ -1341,12 +1345,21 @@ window.__ModuleLoader__.load({
 
       const totals = view?.totals ?? null;
       const children = view?.children ?? null;
+      const treeQuery = treeFilter.trim().toLowerCase();
+      const shownChildren = children
+        ? (treeQuery
+          ? children.filter((c) => String(labelOf(c) ?? c.name ?? c.id ?? '').toLowerCase().includes(treeQuery))
+          : children)
+        : null;
       const activeIndex = db ? (indexes.find((ix) => ix.dbPath === db) ?? null) : null;
       const crossStats = crossInfo.data?.stats ?? null;
       const tabCounts = {};
       if (rootTotalsRef.current?.records != null) tabCounts.records = rootTotalsRef.current.records;
       if (crossStats) tabCounts.cross = crossStats.sharedEntities ?? crossStats.cases;
       const rootTotals = rootTotalsRef.current;
+      const rangeText = view?.timeRange
+        ? String(view.timeRange.f ?? '…').slice(0, 10) + ' ~ ' + String(view.timeRange.t ?? '…').slice(0, 10)
+        : '';
       const kpiItems = db ? [
         { label: '案件', value: activeIndex?.caseName ?? view?.name ?? caseNameOf(db), text: true },
         { label: '检材', value: String(rootTotals?.evidences ?? '—') },
@@ -1354,6 +1367,7 @@ window.__ModuleLoader__.load({
         { label: '实体', value: String(rootTotals?.entities ?? '—') },
         { label: '库大小', value: activeIndex ? fmtBytes(activeIndex.sizeBytes ?? 0) : '—' },
         { label: '生成时间', value: activeIndex?.builtAt ? fmtTime(activeIndex.builtAt) : '—', text: true },
+        ...(rangeText ? [{ label: '时间范围', value: rangeText, text: true }] : []),
       ] : null;
       // 案件概览：给研判报告/交接用的 Markdown 抬头（检材清单 + 规模 + 索引信息）
       const copyOverview = async () => {
@@ -1373,6 +1387,7 @@ window.__ModuleLoader__.load({
           lines.push(`- 索引库：${db}`)
           lines.push(`- 生成时间：${activeIndex?.builtAt ? fmtTime(activeIndex.builtAt) : '—'}（schema v${view?.schemaVersion ?? '?'}）`)
           lines.push(`- 规模：检材 ${rootTotals?.evidences ?? evs.length} 个 · 记录 ${rootTotals?.records ?? '—'} 条 · 实体 ${rootTotals?.entities ?? '—'} 个 · 库 ${activeIndex ? fmtBytes(activeIndex.sizeBytes ?? 0) : '—'}`)
+          if (rangeText) lines.push(`- 数据时间范围：${rangeText}`)
           lines.push('')
           lines.push('| 检材 | 名称 | 持有人 | 平台 | 记录数 | 备注 |')
           lines.push('| --- | --- | --- | --- | --- | --- |')
@@ -1517,8 +1532,26 @@ window.__ModuleLoader__.load({
               },
             }, `${view.artifact.app} / ${view.artifact.cat} / ${view.artifact.sub}\n${view.artifact.path}（${view.artifact.lines} 行，${view.artifact.citable ? '可引用' : '不可引用'}）`) : null,
             children
-              ? h('div', { className: 'seeu-tree seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 460, overflow: 'auto' } },
-                children.map((c) => treeChildRow(c, drill)))
+              ? h('div', {},
+                children.length > 1 ? h('div', { style: { ...S.row, gap: 6, margin: '2px 0 4px' } },
+                  h('input', {
+                    style: { ...S.input, flex: '1 1 0', minWidth: 120 },
+                    value: treeFilter,
+                    placeholder: '过滤本层节点（应用 / 分类 / 文件名）',
+                    'data-seeu-tree-filter': '1',
+                    spellCheck: false,
+                    onChange: (e) => setTreeFilter(e.target.value),
+                  }),
+                  h('span', { style: { ...S.muted, flex: 'none' } }, treeQuery
+                    ? '显示 ' + shownChildren.length + '/' + children.length
+                    : '本层 ' + children.length + ' 项'),
+                  treeQuery ? actionButton('清空', () => setTreeFilter('')) : null,
+                ) : null,
+                shownChildren.length
+                  ? h('div', { className: 'seeu-tree seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 460, overflow: 'auto' } },
+                    shownChildren.map((c) => treeChildRow(c, drill)))
+                  : emptyHint('本层没有匹配的节点'),
+              )
               : null,
             view.records ? h('div', { style: S.card },
               h('div', { style: S.row },
