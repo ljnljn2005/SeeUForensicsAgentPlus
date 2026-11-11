@@ -1145,7 +1145,7 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 
 实现：
 - `plugins/seeu-theme/client.js`：新增 `HeroActions` 组件，注册到 `conversation.hero.options`（list 槽、scope session）。按钮用 `data-seeu-action` 标记（`index` / `model` / `workspace`）：打开取证索引走 `ctx.layout.selectPanel('seeu-case-index')`；本地模型设置与工作区目录走 preload 桥 `window.seeu.openLocalModelSettings()` / `openWorkspace()`。桥不存在时（纯浏览器 dev 环境）自动隐藏后两个按钮。
-- `src/main.ts` / `src/preload.ts`：新增 IPC `seeu:open-settings` → `openLocalModelSettings()`，preload 暴露 `openLocalModelSettings()`。
+- `src/main.ts` / `src/preload.ts`：复用已有 IPC `seeu:open-settings`（`ipcMain.on` → `openLocalModelSettings()`；preload 暴露 `openLocalModelSettings()`，走 `ipcRenderer.send`）。
 - 插件 inject 从 `['slots']` 改为 `['slots', 'layout']`（`layout` 由 `dsh-client-ui-layout` 通过 `ctx.reflect.provide("layout", layout)` 提供）。
 
 验证（新增 `npm run test:e2e:hero`）：真 Electron + CDP，先点「本地模型设置」再点「打开取证索引」——顺序不能反：切面板后欢迎页 hero 被面板替换，按钮就不在 DOM 里了。
