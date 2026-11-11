@@ -57,23 +57,23 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.2.5**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.2.6**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,610,372 B ≈ 766 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,777,657 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
-| `release/SeeUForensicsAgentPlus-0.2.5-x64.exe`（NSIS 安装包） | 211,931,937 B（blockmap 220,676 B） |
-| `release/SeeUForensicsAgentPlus-0.2.5-x64-portable.exe` | 189,540,572 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,628,886 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,796,171 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
+| `release/SeeUForensicsAgentPlus-0.2.6-x64.exe`（NSIS 安装包） | 211,934,094 B（blockmap 220,737 B） |
+| `release/SeeUForensicsAgentPlus-0.2.6-x64-portable.exe` | 189,542,424 B |
 
-实测冷启动到 dsh UI：目录版 4088 ms；portable 首次 51.6s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
+实测冷启动到 dsh UI：目录版 4083 ms；portable 首次 51.6s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
 更细的打包说明见 `docs/packaging.md`。
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
 
-### v0.2.6 改了什么（未打包）
+### v0.2.6 改了什么
 
-> 以下改动都在 `main` 上、dev 预览可看，但 v0.2.5 安装包还不包含；打 0.2.6 前会再跑一次打包态回归。
+> 以下改动已进入 v0.2.6 安装包（累计 v0.2.5 之后的 8 个提交），打包态回归见 `docs/packaging.md`。
 
 - **记录视图筛选**：检材改成下拉（选名称，不用记 eid）、加起止日期（驱动后端 `from/to`），结果行显示「检材名 · 应用」，筛选前后条数肉眼可对比；
 - **表视图/检索的应用与类别下拉**：应用、类别不再是手输框，选项来自 `GET /facets`（`group by app/category` 带记录数，各取前 60 项，支持 `?eid=` 只看某个检材）；`npm test` 现 **50/50**（新增 facets 3 例、实体分页 2 例）；
@@ -84,7 +84,8 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 - **流式 token 用量**：设置页可选「流式响应带 token 用量」→ 写 `stream_options.include_usage`，会话里能看到真实 tokens（默认关，兼容不支持该字段的网关）；
 - **外壳窗口跟随系统浅色**：加载页 / 启动失败页 / 本地模型设置窗口跟随系统深浅色（浅色下强调色 `#0E7490`、白卡片），dsh 主界面深浅色仍由 `ui-theme` 控制；
 - **可关「会话标题生成」**：低并发网关（单卡/单进程）每开新会话会多一次标题请求，关掉后 `session-title-llm` 直接 disabled，首轮少一次排队；
-- **跨案双案件回归**：新增 `npm run test:e2e:cross`，把真实案件库复制成两个不同案号/案名的夹具，同步进中央库后断言「2 案、30 条重合实体、复制清单含两个案号」；
+- **跨案双案件回归**：新增 `npm run test:e2e:cross`，把真实案件库复制成两个不同案号/案名的夹具，同步进中央库后断言「2 案、30 条重合实体、复制清单含两个案号」；同步后重合 Top 立即刷新，清单里带各案案号；
+- **测试**：`npm test` **50/50**（facets 3 例、实体分页 2 例）；`scripts/e2e/` **16 个**端到端脚本（新增 `test:e2e:cross`），打包态回归覆盖面板/设置/导出/跨案四条链路；
 
 ### v0.2.5 改了什么
 

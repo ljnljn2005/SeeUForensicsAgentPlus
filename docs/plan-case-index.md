@@ -1676,3 +1676,14 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 新脚本 `scripts/e2e/cross-case-check.mjs`（`npm run test:e2e:cross`，端口 `SEEU_CROSS_E2E_PORT` 默认 9384）：扫描 → 切「跨案」→【同步全部案件】→ 等「同步完成：…」→ 断言两案在案件清单里、Top 有 30 条 →【复制重合实体清单】→ `powershell Get-Clipboard -Raw` 读回校验抬头/`2 案`/两个案号/实体类型。实测 `{"ok":true,"syncNote":"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。","copyNote":"已复制 30 条重合实体清单（2675 字符）","clipboard":{"len":2677,"hasHeader":true,"hasTwoCases":true,"hasCaseNumbers":true,"hasKinds":true},"errors":[]}`。
 - 顺带修两个真问题：① `doSync()` 成功后只 `list.reload()`，重合实体 Top 不重拉，用户同步完看到的还是同步前的空列表（e2e 第一次就是 `copyClicked:false` 暴露的）；现在同步后一并 `top.reload()`，已查过的实体也重拉。② `topShared()` 的行里没有案件号，导出清单的「案件：」行永远不出现；SQL 加 `group_concat(distinct case_number) caseNumbers`，导出时按 `r.cases`（旧结构）或 `r.caseNumbers`（新结构）回退。
 - 回归：`npm test` 50/50、`m2-ui-check` `m2ok:true / errors:[]`、`check:overlay` OK、`node scripts/build.mjs` 通过。
+
+## 20.51 v0.2.6 打包与打包态回归（v0.2.6）
+
+- 背景：v0.2.5（`00b8496`）之后累积了 8 个提交（记录筛选 `c0e1303`、流式用量 `d099fb0`、外壳浅色 `f0e442c`、标题生成开关 `14eaa26`、KPI/树过滤/概览时间范围 `8289b73`、应用/类别下拉 `143a190`、时间线下拉 `9af9afd`、实体分页与检材下拉 `9d4ee9c`+`aaa4ff0`、跨案双案件 e2e `9b3a509`），决定直接打 0.2.6，不再等用户逐项确认。
+- 打包：`npm version 0.2.6 --no-git-tag-version`；`node scripts/build.mjs`、`check:overlay`、`npm test`(50/50) 全绿；`npx electron-builder --win --x64 -c.directories.output=release-026`（后台 job，约 12 分钟，无证书跳过签名），产物再搬进 `release/` 并删 0.2.5 三件（保留 0.1.7 portable）。
+- 产物：exe 246,329,856 B；`app.asar` 168,796,171 B（19,647 entries）；NSIS 211,934,094 B（blockmap 220,737）；portable 189,542,424 B；`release/win-unpacked` 总计 803,628,886 B。
+- asar 自检（`.probe/asar-026-check.mjs`）：条目 19,647、15 个必需路径 `missing:[]`；代码抽查 `facets`/实体分页/跨案清单/时间线下拉/`/brief`/树过滤/KPI 时间范围/欢迎页两 chip/设置页 `btn-warmup`+`titleGen`+`usageInStreaming` 全 true。
+- 启动：目录版 4,083 ms、portable 51,560 ms（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）。
+- 打包态 e2e 全绿：面板 `m2-ui-check`（`recordsFilterOk`/`recordsAppFilterOk`/`entityPagingOk`/`entityEvSelectOk`/`timelineFiltersOk`/`briefVisible`/`treeFilterOk`/`kpiRange`，`m2ok:true`）；设置页 `settings-check`（`titleGen*`、`usage*`、`warmupOk`、`pulledContextWindow:32768`、`probeMismatch`、`lightShell`）；导出 `export-check`（概览 718 且 `hasRange`、记录 14,996/实体 1,888/表 7,025/时间线 3,235 字符）；跨案 `cross-case-check`（2 案、30 条重合实体、清单 2,675 字符含两案号）。
+- 坑：`SEEU_UI_EXE` 必须传 Windows 路径（`D:/...`），MSYS 的 `$PWD`（`/d/...`）会让 `spawn` 报 ENOENT；打包日志里 `duplicate dependency references` 巨量列表是 electron-builder 正常输出。
+- 文档：README §2 产物表换 0.2.6 + 「### v0.2.6 改了什么」收尾（50 单测 / 16 个 e2e）；`docs/packaging.md` 追加「### v0.2.6 回归验证」；本节即打包记录。预览仍在线，等用户视觉验收 + 真实网关联调。

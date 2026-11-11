@@ -745,3 +745,30 @@ asar 自检（`@electron/asar.listPackage` + `extractFile`）：`{"entries":1964
 - 设置页：`node scripts/e2e/settings-check.mjs --exe "<win-unpacked exe>"` → `ok:true`（页面来自 `app.asar/dist/renderer/local-model.html`；`presetApplied`、`pulledContextWindow:"32768"`、`warmupOk:true`、`probeMismatch{configured:131072,gateway:32768}`、`probeMissing:["ghost-7b"]`、`disableLocalModel.enabled:false`、`errors:[]`）。
 
 注：`release/` 里仍保留 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`（用户机上有旧实例在跑、文件被占用）。
+
+### v0.2.6 回归验证
+
+产物（`npx electron-builder --win --x64 -c.directories.output=release-026`，无证书跳过签名，产物再搬进 `release/`）：
+
+| 产物 | 大小 |
+| --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,628,886 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,796,171 B（19,647 entries） |
+| `release/SeeUForensicsAgentPlus-0.2.6-x64.exe` | 211,934,094 B（blockmap 220,737 B） |
+| `release/SeeUForensicsAgentPlus-0.2.6-x64-portable.exe` | 189,542,424 B |
+
+asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目前导 `\` 归一化 + `extractFile` 用反斜杠）：`{"entries":19647,"missing":[]}`，15 个必需路径齐全；代码抽查全 true（`facets`、实体分页、跨案清单、时间线下拉、`/brief` 状态、树过滤、KPI 时间范围、欢迎页两个 chip、设置页 `btn-warmup`/`titleGen`/`usageInStreaming`）；`client.js` 109,770 B、`index.js` 16,231 B。
+
+启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：
+
+- 目录版：`node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9391` → `"ok": true, "elapsedMs": 4083`；
+- portable：`--exe release/SeeUForensicsAgentPlus-0.2.6-x64-portable.exe --port 9392` → `"ok": true, "elapsedMs": 51560`。
+
+打包态 e2e（`SEEU_UI_EXE` 指向 win-unpacked exe，独立 `SEEU_DSH_HOME`/`SEEU_USER_DATA`）：
+
+- 面板：`m2-ui-check.mjs` → `m2ok:true, errors:[]`，其中 `recordsFilterOk:true`（22,777 → 8,443）、`recordsAppFilterOk:true`（→ 3,028）、`entityPagingOk:true`（共 3,999 条聚合）、`entityEvSelectOk:true`（6 个检材选项）、`timelineFiltersOk:true`（检材 6 / 应用 9 个选项）、`briefVisible:true`、`treeFilterOk:true`、`kpiRange:true`；
+- 设置页：`settings-check.mjs --exe "<win-unpacked exe>"` → `ok:true`（页面来自 `app.asar/dist/renderer/local-model.html`；`titleGenDefault/titleGenOffPreview/titleGenSaved`、`usagePreview/usageSaved`、`warmupOk:true`、`pulledContextWindow:"32768"`、`probeMismatch{configured:131072,gateway:32768}`、`probeMissing:["ghost-7b"]`、`lightShell:true`、`errors:[]`）；
+- 导出：`SEEU_EXPORT_E2E_PORT=9395 export-check.mjs` → `ok:true`（案件概览 718 字符且 `hasRange:true`、记录 14,996、实体 1,888、表 7,025、时间线 3,235 字符、`savedTab:"timeline"`）；
+- 跨案：`SEEU_CROSS_E2E_PORT=9396 cross-case-check.mjs` → `ok:true`（`syncNote:"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。"`，两份夹具都在列表里，复制 30 条重合实体清单 2,675 字符、含两个案号与类别）。
+
+排障记录：`SEEU_UI_EXE` 必须传 **Windows 路径**（`D:/.../SeeUForensicsAgentPlus.exe`）；传 MSYS 路径（`$PWD/...` → `/d/...`）会 `spawn ... ENOENT`。打包日志里的 `duplicate dependency references` 巨量列表属正常现象（electron-builder 的依赖去重提示）。
