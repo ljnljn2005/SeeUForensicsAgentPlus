@@ -1,6 +1,6 @@
 // 宿主端：把「建库 + 查库」暴露成 Web UI 可调用的本地 HTTP 路由（前缀 /seeu-index）。
 // 桌面外壳把本包装进 web profile，Web 客户端插件（client.js）在设置页里给界面。
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
@@ -95,8 +95,13 @@ async function handle(req, res) {
       return send(res, 200, job);
     }
     if (req.method === 'GET' && path === '/list') {
-      const dirs = [...url.searchParams.getAll('dir'), ...defaultDirs()];
-      return send(res, 200, { indexes: findIndexes([...new Set(dirs)]) });
+      const dirs = [
+        ...url.searchParams.getAll('dir').flatMap((v) => v.split(/[;,]/)).filter(Boolean),
+        ...defaultDirs(),
+      ];
+      const indexes = findIndexes([...new Set(dirs)]);
+      rememberDirs(indexes.map((i) => i.caseDir));
+      return send(res, 200, { indexes });
     }
     if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
 
@@ -125,6 +130,25 @@ async function handle(req, res) {
  * Cordis 宿主插件入口。
  * @param {import('@deepseek-ai/cordis').Context} ctx - 宿主上下文。
  */
+/** 记住最近用过的案件目录，下次启动由外壳拼进 SEEU_INDEX_SEARCH_DIRS。 */
+function rememberDirs(dirs) {
+  const file = process.env.SEEU_INDEX_STATE_FILE
+  if (!file) return
+  try {
+    let prev = []
+    try {
+      if (existsSync(file)) prev = JSON.parse(readFileSync(file, 'utf8')).dirs ?? []
+    } catch {
+      prev = []
+    }
+    const merged = [...new Set([...dirs.filter(Boolean), ...prev.filter(Boolean)])].slice(0, 10)
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, JSON.stringify({ dirs: merged, updatedAt: new Date().toISOString() }, null, 2) + '\n', 'utf8')
+  } catch {
+    /* 状态文件写不了不影响查询 */
+  }
+}
+
 export function apply(ctx) {
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => webCtx.webServer.register({ kind: 'prefix', path: ROUTE, handler: handle }), 'seeu-case-index: /seeu-index 路由');

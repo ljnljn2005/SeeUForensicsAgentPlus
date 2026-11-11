@@ -12,7 +12,8 @@
 
 import { spawn, type ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { appendFileSync, createWriteStream, existsSync, mkdirSync } from 'node:fs'
+import { createServer } from 'node:net'
+import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { dshCliEntry, dshHome, forensicsPatchPath, hostLogFile, workspaceDir } from './paths.js'
 import { DESKTOP_MARKER_ENV, PRODUCT_NAME } from './brand.js'
@@ -31,6 +32,34 @@ const ANSI = /\u001B\[[0-9;]*[A-Za-z]/g
  * 回退到系统 Node（存在时），比让用户面对一屏指纹诊断友好。
  */
 const UNSUPPORTED_ELECTRON_RUNTIME = /unsupported Electron runtime fingerprint/i
+
+/**
+ * 先向系统要一个空闲端口再交给 dsh（而不是让它 `--port 0` 自己选）。
+ * 这样外壳能提前把 `SEEU_INDEX_API=http://127.0.0.1:<port>/seeu-index` 放进子进程环境，
+ * 会话里的 bash 工具就能直接 curl 案件索引，不必再去日志里找端口。
+ */
+async function pickFreePort(): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const server = createServer()
+    server.once('error', (error) => reject(error))
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      const port = typeof address === 'object' && address !== null ? address.port : 0
+      server.close(() => (port > 0 ? resolve(port) : reject(new Error('failed to pick a free port'))))
+    })
+  })
+}
+
+/** 面板记录的"最近用过的案件目录"（由插件写入本文件），下次启动拼进扫描目录。 */
+function readIndexStateDirs(stateFile: string): string[] {
+  try {
+    if (!existsSync(stateFile)) return []
+    const parsed = JSON.parse(readFileSync(stateFile, 'utf8')) as { dirs?: string[] }
+    return Array.isArray(parsed.dirs) ? parsed.dirs.filter((d) => typeof d === 'string' && d !== '') : []
+  } catch {
+    return []
+  }
+}
 
 export interface HostOptions {
   /** 运行 dsh 的 Node 可执行文件；默认当前 Electron 二进制（Node 模式）。 */
@@ -138,6 +167,7 @@ export class DshHost extends EventEmitter {
     //   - 因此要带 launcher 选项（--patch）就必须显式写 `--profile web`，
     //     否则会报 `error: --profile <name> is required`；
     //   - 其后的 --host/--port/--no-open 作为未知选项透传给 web app。
+    const port = await pickFreePort()
     const args = [
       '--expose-internals',
       this.runtimeEntry,
@@ -147,7 +177,7 @@ export class DshHost extends EventEmitter {
       '--host',
       '127.0.0.1',
       '--port',
-      '0',
+      String(port),
       '--no-open',
     ]
 
@@ -164,7 +194,17 @@ export class DshHost extends EventEmitter {
       [DESKTOP_MARKER_ENV]: '1',
       DSH_CLIENT_VERSION: PRODUCT_NAME,
       // 案件索引插件扫描"已建库案件"的默认目录（Web UI 里可再手工输入）。
-      SEEU_INDEX_SEARCH_DIRS: [this.workspace, join(this.homeDir, 'indexes')].join(';'),
+      SEEU_INDEX_SEARCH_DIRS: [
+        ...readIndexStateDirs(join(this.homeDir, 'index-state.json')),
+        this.workspace,
+        join(this.homeDir, 'indexes'),
+      ].join(';'),
+      // 插件把"最近用过的案件目录"记在这里，供下次启动直接扫描。
+      SEEU_INDEX_STATE_FILE: join(this.homeDir, 'index-state.json'),
+      // 会话内直接查库：bash 工具继承本进程环境，技能里用 $SEEU_INDEX_API 拼 URL。
+      SEEU_INDEX_API: `http://127.0.0.1:${port}/seeu-index`,
+      // dsh 用户级技能根（外壳启动前把随包技能复制到这里）。
+      SEEU_SKILLS_DIR: join(this.homeDir, 'skills'),
       // 桌面版不接收远端访问；CLI 已绑定 loopback，这里再收敛一次。
       NO_COLOR: '1',
     }

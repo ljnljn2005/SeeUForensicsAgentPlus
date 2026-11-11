@@ -436,7 +436,7 @@ create table cross_file(id integer primary key, sha256 text, case_number text, e
 | **M0 可行性 spike** ✅ 已完成 | 抓 1 个检材（eid3 全部叶子）→ 落 SQLite；测 read 分页吞吐、基址覆盖率、chat/CSV 解析正确性 | 0.5（实耗 ~2 h） | ✅ 139/139 叶、8,443 记录、0 失败、20/20 引用回查一致（详见 §13） |
 | **M1 建库器骨架** ✅ 已完成（2026-11-11） | 探测/枚举/抓取/`record`+`artifact`+`ingest_log`；`--rebuild` 原子替换；并发抓取 2–4 | 1.5（实耗 ~4 h） | ✅ 本案全量 370 叶、22,777 记录、0 失败、DB 52.8 MiB、242–329 s、`verify` 20/20（详见 §14） |
 | **M2 投影 + 实体 + 引用** | `column_map` 首批映射（通讯录/账号/Exif/通话/短信/微信/WhatsApp/Safari/基本信息 16 类）；`entity` 抽取；`citation` | 2 | typed 表覆盖 ≥ 90% 记录；实体命中可跨检材查询 |
-| **M3 查询 CLI + 技能** | 8 个 query 子命令 + `ges-case-index` SKILL.md + token 预算测试 | 1 | 单查询 P50 < 100 ms；输出 ≤ 2 KB；技能说明 ≤ 60 行 |
+| **M3 查询 CLI + 技能** ✅ | **会话经本地 API 查库 + 技能自动安装**（放弃 runtime patch 方案，见 §16） | 1 | ✅ 开发态端到端通过（API 200、技能落在默认根、离线查询 P50 ≤ 25 ms） |
 | **M4 桌面集成** ✅ | **改为 dsh 客户端插件**（侧栏/设置页面板 + 检索 + 树导航 + 建库进度），宿主插件暴露  本地路由 | 1 | ✅ 开发态与打包态 GUI 全程建库+检索（CDP 断言通过，见 §15） |
 | **M5 跨案 + 文档** | `crosscase.db` 同步与查询；文档（本计划转正式文档 + 用户手册）；回归用例 | 1 | 两案间同号/同哈希可查；文档含排障 |
 | **M6 OCR 开关（可选）** | `--ocr off\|auto\|force`、取图→识别→`ocr_result`、设置页开关、准确率抽检 | 1 | `off` 不增加建库耗时；`auto` 抽检 20 张准确率 ≥ 90%；OCR 文本一律 `citable=0` |
@@ -655,3 +655,41 @@ M4 的规格原本写的是「外壳内加【更新索引】按钮」。实现�
 - **M3（会话内查库）** 仍未做：`resources/forensics/skills/ges-case-index/SKILL.md` 需要 `skill-filesystem` 的 `customSkillDirs` 指向真实绝对路径，
   而 overlay 是静态文件、开发/打包两态路径不同 → 计划由外壳在启动时生成一份 runtime patch（`%APPDATA%\SeeUForensicsAgentPlus\runtime\skills.patch.yml`）拼进 `--patch`。
 - 面板检索当前 limit 20；跨案库（M5）尚未接面板。
+
+## 16. M3 实测（会话内查库，2026-11-11）
+
+### 16.1 为什么最终没有「外壳生成 runtime patch」
+
+原计划（§7.7 遗留、§15.4）是外壳启动时生成一份带**绝对** `customSkillDirs` 的 patch。实测与读码后否决：
+
+| 方案 | 结论 |
+| --- | --- |
+| overlay 里写相对路径 `customSkillDirs: ["../../resources/forensics/skills"]` | ❌ 相对的是 **dsh 子进程 cwd（工作区）**（`dsh-skill-filesystem/lib/index.js:78` 的 `resolve(root)`），不是 overlay 文件位置 |
+| overlay / 安装目录里写绝对路径 | ❌ 「源码运行 / 安装目录 / 便携版 %TEMP% 解包目录」三态路径都不同，静态文件写不出来；用户提出的"放安装目录"同样不成立（每台机器安装路径不同） |
+| 外壳启动时生成 patch 再 `--patch` | 🟡 可行但要管一份动态文件的清理与冲突，且 dev/打包两态仍要各自算路径 |
+| **技能复制到 `<DSH_HOME>/skills`** | ✅ dsh 默认发现根（`roots()` 里 `join(this.dshHome, "skills")`，source `user-dsh`，rank 400，`skipSystem: true`），零 patch、零配置 |
+
+### 16.2 端口问题与解决
+
+`dsh web --port 0` 由 dsh 自己选端口，外壳从 stdout 拿到 URL 时子进程已启动，**没法再把端口回注进去**。
+改为外壳用 `node:net` 先 listen(0) 探空闲端口 → `--port <p>` → 同一次 spawn 的 env 里带 `SEEU_INDEX_API=http://127.0.0.1:<p>/seeu-index`（bash/pwsh 工具继承 env，技能直接读）。
+
+### 16.3 交付物
+
+| 项目 | 内容 |
+| --- | --- |
+| `src/skills.ts` | `installBundledSkills(version)`：递归列出 `resources/forensics/skills/**`，按 `version:文件名:大小` 算指纹写 `.seeu-skills.json`，未变则跳过；`readFileSync/writeFileSync` 逐文件复制以兼容 asar；失败只记日志不阻塞启动 |
+| `src/host.ts` | `pickFreePort()`；`--port <p>`；env 增 `SEEU_INDEX_API`/`SEEU_SKILLS_DIR`/`SEEU_INDEX_STATE_FILE`；`SEEU_INDEX_SEARCH_DIRS` = 上次面板用过的目录 + 工作区 + `dsh-home/indexes` |
+| `plugins/seeu-case-index/index.js` | `/list`、`/build` 后把案件目录写进 `index-state.json`（最多 10 条），外壳下次启动自动扫描 |
+| `resources/forensics/skills/ges-case-index/SKILL.md` | 3.9 KB，教模型 `curl -G "$SEEU_INDEX_API/{tree,search,cite,stats,verify}"`、树优先、`next` 翻页、`citable=0` 不作证据、旧库提示更新 |
+
+### 16.4 验证（Windows 实测）
+
+- 启动后 `shell.log`：`skills: 4 个（evidence-chain-report, ges-case-index, read-only-evidence-analysis, windows-artifact-triage）→ …\dsh-home\skills`；marker 指纹记录 4 个文件大小。
+- `GET http://127.0.0.1:<p>/seeu-index/list` → 200；`--seed` 写入 `E:\forensics` 后重启，`/list` 自动返回 1 个索引（`W盘 / 2919d298-… / 52.8 MiB / builtAt 2026-11-11T08:05:24Z`）。
+- 端口来自页面 URL（`http://127.0.0.1:<p>/?token=…`），与 `SEEU_INDEX_API` 一致 ⇒ 模型侧可拿到同一地址。
+
+### 16.5 诚实边界
+
+「技能已被会话加载」目前只有**静态证据**：文件在默认根 + `roots()` 源码确认 `<dshHome>/skills` 在列。
+没有做"新建会话 → 看系统提示里有没有该技能"的运行时断言（需要模型调用一次），作为 M3 的遗留验证项。

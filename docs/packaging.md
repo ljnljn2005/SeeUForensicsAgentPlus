@@ -294,6 +294,13 @@ node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-un
 只验进程起来（`verify-launch.mjs`）是不够的——插件加载失败不影响窗口起 UI。
 
 
+### 5.4 技能随包与启动时安装
+
+`resources/forensics/skills/**` 进 asar；应用启动时由 `src/skills.ts` 逐文件复制到 `<userData>\dsh-home\skills\`（dsh 默认技能根，零 patch）。
+因此**打包时技能文件不能被白名单/排除规则吃掉**（`!**/*.md` 会连带删 `SKILL.md`，见 §5.1 的教训），且读 asar 内的文件要用 `readFileSync` 而不是 `cpSync`。
+
+验证：启动后看 `logs\shell.log` 的 `skills: N 个（…）→ …\dsh-home\skills` 行，以及该目录下的 `.seeu-skills.json` 指纹。
+
 ## 6. 体积现状
 
 以 2026-11-11 **v0.1.4** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验 + 案件索引插件）为准。
@@ -304,16 +311,16 @@ node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-un
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 | 234.9 MiB | Electron 主程序（含 rcedit 写入的图标/版本资源） |
-| `release/win-unpacked/resources/app.asar` | 168,454,873 | 160.7 MiB | JS + 资源 + node_modules 生产依赖 + 索引插件（19,635 个 asar 条目，`@deepseek-ai` 330/330） |
+| `release/win-unpacked/resources/app.asar` | 168,464,152 | 160.7 MiB | JS + 资源 + node_modules 生产依赖 + 索引插件（19,635 个 asar 条目，`@deepseek-ai` 330/330） |
 | `release/win-unpacked/`（整个目录） | — | 769 MiB | 含 Electron 运行时、locales、`app.asar.unpacked` 原生模块（`du -sm`） |
 
 `npm run package:win` 额外产出（同一轮）：
 
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
-| `release/SeeUForensicsAgentPlus-0.1.4-x64.exe` | 211,873,901 | 202.1 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
+| `release/SeeUForensicsAgentPlus-0.1.5-x64.exe | 211,876,684 | 202.1 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
 | `release/SeeUForensicsAgentPlus-0.1.3-x64.exe.blockmap` | 220,782 | 215.6 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
-| `release/SeeUForensicsAgentPlus-0.1.4-x64-portable.exe` | 189,550,148 | 180.7 MiB | 免安装单文件（自解压运行） |
+| `release/SeeUForensicsAgentPlus-0.1.4-x64-portable.exe` | 189,486,591 | 180.7 MiB | 免安装单文件（自解压运行） |
 
 即：安装包约 **202 MiB**、portable 约 **181 MiB**，解包目录约 **769 MiB**。
 
@@ -510,3 +517,29 @@ taskkill //IM SeeUForensicsAgentPlus.exe //F
 
 即：侧栏出现「取证索引」→ 点开自动扫到 `W盘 / 2919d298-…`（52.8 MiB）→ 树根 370 文件 / 22,777 记录 →
 钻到「检材 3」拿到 8 个应用 → 检索「加密」走 `LIKE` 回退出 20 条命中。开发态同一脚本结果相同。
+
+### v0.1.5 回归验证（M3：固定端口 + 技能安装）
+
+目录版：
+
+```json
+{"ok": true, "elapsedMs": 4073, "url": "http://127.0.0.1:62048/", "title": "DeepSeek Harness"}
+```
+
+portable：
+
+```json
+{"ok": true, "elapsedMs": 36635, "url": "http://127.0.0.1:64964/", "title": "DeepSeek Harness"}
+```
+
+打包态 M3 API + 技能（`SEEU_M3_EXE=release/win-unpacked/... node .probe/m3-check.mjs`）：
+
+```json
+{"ok": true, "port": 53313, "apiStatus": 200, "apiIndexes": 1,
+ "shellSkillsLine": "skills: 4 个（evidence-chain-report, ges-case-index, read-only-evidence-analysis, windows-artifact-triage）→ …\\dsh-home\\skills",
+ "marker": {"version": "0.1.5"}}
+```
+
+打包态 UI（`SEEU_UI_EXE=<abs> node .probe/ui-check.mjs`）：`sidebar/scanFoundCase/treeRoot/drilledApps/searchOk` 全 true，`errors: []`。
+
+asar 自检：19,637 entries、330/330 `@deepseek-ai` 包、`plugins/seeu-case-index/{index,client}.js`、`tools/ges-index/{build,query}.mjs`、overlay 与 4 个 SKILL.md 齐全；overlay md5 `64cd0e7721d17acea8fbba6fdae8f66b` 与源一致。

@@ -20,6 +20,7 @@ import {
   PRODUCT_NAME,
 } from './brand.js'
 import { DshHost, type HostState } from './host.js'
+import { installBundledSkills } from './skills.js'
 import {
   dshHome,
   dshRuntimeDir,
@@ -126,6 +127,10 @@ async function startHost(): Promise<void> {
   if (host !== undefined) await host.stop()
   await showLoadingPage()
   setStatus({ phase: 'starting', message: '正在启动取证运行时…' })
+  const skills = installBundledSkills(app.getVersion())
+  logShell(
+    `skills: ${skills.skills.length} 个（${skills.skills.join(', ') || '无'}）→ ${skills.dir}${skills.changed ? ' [已更新]' : ' [无变化]'}`,
+  )
   logShell(`start host: runtime=${dshRuntimeDir()} home=${dshHome()} patch=${forensicsPatchPath()}`)
 
   const next = new DshHost()
