@@ -96,7 +96,9 @@ function main() {
     for (const id of required) {
       if (!ids.has(id)) fail(`preset 缺少工具行：${id}`)
     }
-    if (ids.has('tool-web')) fail('preset 里仍有 tool-web（联网抓取应关闭）')
+    for (const forbidden of ['tool-web', 'tool-plugin-manager', 'tool-plugin-market']) {
+      if (ids.has(forbidden)) fail(`preset 里仍有 ${forbidden}（取证工具面不应挂载）`)
+    }
 
     const toolFs = entries.find((block) => block.startsWith('- id: tool-fs')) ?? ''
     if (!/write: false/.test(toolFs) || !/edit: false/.test(toolFs)) {

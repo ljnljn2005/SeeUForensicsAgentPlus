@@ -72,8 +72,9 @@
 #    仍是 standard），所以取证 persona 必须落在 preset-standard 的 persona 子行上。
 #    patch 无法按 id 定位 preset 内的嵌套子行（include-local 的 id 不被推断），
 #    因此这里整行重写 preset-standard 的 config：plugins 列表以官方
-#    presets/standard.patch.yml 为基准，去掉 tool-web 并把 tool-fs 收成只读，
-#    其余条目（含子代理/工作流/后台作业/定时任务/目标/plan）与官方一致。
+#    presets/standard.patch.yml 为基准，去掉 tool-web / tool-plugin-manager /
+#    tool-plugin-market 并把 tool-fs 收成只读，其余条目（含子代理/工作流/后台作业/
+#    定时任务/目标/plan）与官方一致。
 #    保留 id: standard 与 order: 1，避免会话里已保存的 preset identity 失配。
 # ---------------------------------------------------------------------------
 - id: preset-standard
@@ -83,13 +84,16 @@
     name: 取证分析（Forensics）
     description: 只读取证优先、结论必须可追溯到证据与哈希的分析预设；已关闭遥测与产品分析。
     # 取证工具面（相对官方 standard 预设）：
-    #   * 只去掉 tool-web（联网抓取）——取证机通常离线，也不希望证据内容发往外部；
-    #     其余 21 项全部按官方默认挂载：子代理 / 工作流 / 后台作业 / 定时任务 / 目标长跑 /
-    #     plan 模式 / todo / 插件管理都保留（分析员按需使用）。
+    #   * 去掉 tool-web（联网抓取）——取证机通常离线，也不希望证据内容发往外部；
+    #   * 去掉 tool-plugin-manager（plugin_manager 可联网安装/移除 npm 插件包，等于打开
+    #     供应链与代码执行路径）与 tool-plugin-market（插件市场，官方默认本就 disabled）；
+    #   * 其余 19 项按官方默认挂载：子代理 / 工作流 / 后台作业 / 定时任务 / 目标长跑 /
+    #     plan 模式 / todo / present 都保留（分析员按需使用）。
     #   * tool-fs 收成只读（write/edit/applyPatch: false）：写文件一律走命令行（Copy-Item /
     #     Out-File 等），每次写操作都留在命令记录里；确实要用编辑工具时把三个 false 改回 true。
-    #   * 想恢复联网：把官方 preset 里的 tool-web 条目加回本列表即可（注意官方默认
-    #     fetch: true + searchTimeoutMs: 60000，等于开启外发能力，取证场景需谨慎）。
+    #   * 想恢复联网/插件管理：把官方 preset 里对应的 tool-web / tool-plugin-manager /
+    #     tool-plugin-market 条目原样加回本列表即可（tool-web 默认 fetch: true +
+    #     searchTimeoutMs: 60000，等于开启外发能力；plugin_manager 可联网装包，取证场景需谨慎）。
     plugins:
       - id: persona
         name: '@deepseek-ai/dsh-persona'
@@ -219,9 +223,3 @@
           allowParallelInProgress: true
       - id: present
         name: '@deepseek-ai/dsh-tool-present'
-      - id: tool-plugin-manager
-        name: '@deepseek-ai/dsh-plugin-manager/tools'
-        disabled: !!js "!ctx.get('profileContext')"
-      - id: tool-plugin-market
-        name: '@deepseek-ai/dsh-plugin-market/tools'
-        disabled: true

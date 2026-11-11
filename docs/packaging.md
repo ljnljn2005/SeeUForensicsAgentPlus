@@ -260,7 +260,7 @@ md5sum resources/forensics/cordis.patch.yml .probe/asar-check/resources/forensic
 
 ## 6. 体积现状
 
-以 2026-11-11 **v0.1.2** 轮（Electron 44.7.0，工具面定稿 + 打包前 overlay 校验接入之后）为准。
+以 2026-11-11 **v0.1.3** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验接入之后）为准。
 更早的 Electron 44.11.0 首轮产物已作废，不引用其数字。
 
 `npm run package:dir` 产物：
@@ -268,21 +268,22 @@ md5sum resources/forensics/cordis.patch.yml .probe/asar-check/resources/forensic
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 | 234.9 MiB | Electron 主程序（含 rcedit 写入的图标/版本资源） |
-| `release/win-unpacked/resources/app.asar` | 168,376,076 | 160.6 MiB | JS + 资源 + node_modules 生产依赖（19,621 个 asar 条目，`@deepseek-ai` 330/330） |
+| `release/win-unpacked/resources/app.asar` | 168,376,348 | 160.6 MiB | JS + 资源 + node_modules 生产依赖（19,621 个 asar 条目，`@deepseek-ai` 330/330） |
 | `release/win-unpacked/`（整个目录） | — | 769 MiB | 含 Electron 运行时、locales、`app.asar.unpacked` 原生模块（`du -sm`） |
 
 `npm run package:win` 额外产出（同一轮）：
 
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
-| `release/SeeUForensicsAgentPlus-0.1.2-x64.exe` | 211,854,113 | 202.0 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
-| `release/SeeUForensicsAgentPlus-0.1.2-x64.exe.blockmap` | 220,816 | 215.7 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
-| `release/SeeUForensicsAgentPlus-0.1.2-x64-portable.exe` | 189,470,595 | 180.7 MiB | 免安装单文件（自解压运行） |
+| `release/SeeUForensicsAgentPlus-0.1.3-x64.exe` | 211,854,228 | 202.0 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
+| `release/SeeUForensicsAgentPlus-0.1.3-x64.exe.blockmap` | 220,782 | 215.6 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
+| `release/SeeUForensicsAgentPlus-0.1.3-x64-portable.exe` | 189,442,160 | 180.7 MiB | 免安装单文件（自解压运行） |
 
 即：安装包约 **202 MiB**、portable 约 **181 MiB**，解包目录约 **769 MiB**。
 
-> v0.1.0（缺 21 个 peer 包，启动即崩）与 v0.1.1（overlay 是定稿前的工具面）均已作废，
-> 对外只发 v0.1.2；三者在 asar 体积上的差异来自补包与取证预设内容。
+> v0.1.0（缺 21 个 peer 包，启动即崩）、v0.1.1（overlay 是定稿前的工具面）与 v0.1.2
+> （工具面还有 21 项，含插件管理/市场）均已作废，对外只发 v0.1.3；各版本 asar 体积差异
+> 来自补包与取证预设内容。
 
 体积构成大头：Electron 运行时本体（exe + DLL/pak/icudtl）、`app.asar` 中
 `@deepseek-ai/*` 与 office/语音/终端相关依赖、`app.asar.unpacked` 中
@@ -366,6 +367,26 @@ node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus
 ```
 
 asar 内已确认 overlay 与取证技能随包（见 §4 实测清单）。
+
+### v0.1.3 回归验证（工具面 19 项：再去插件管理/市场，2026-11-11）
+
+从 `preset-standard.plugins` 整条删除 `tool-plugin-manager` / `tool-plugin-market` 后重新打包，
+两条记录（跑之前都先 `node scripts/kill-app.mjs`，避免单实例锁把新实例顶成 `exit 0`）：
+
+```json
+// --dir 产物（port 9333）
+{ "ok": true, "elapsedMs": 3638, "title": "127.0.0.1:50456",
+  "url": "http://127.0.0.1:50456/" }
+```
+
+```json
+// portable（port 9334；44.4s 含首次解包到 %TEMP% 的时间）
+{ "ok": true, "elapsedMs": 44376, "title": "SeeUForensicsAgentPlus",
+  "url": "http://127.0.0.1:59924/?token=..." }
+```
+
+asar 内 overlay 与源文件 `md5` 一致（`6e251bc208536de44994d67a33cb1d0e`，15,291 B），
+19,621 个条目、`@deepseek-ai` 330/330，3 个 `SKILL.md`、`build/tray.ico`、`build/icon.ico` 均在包内。
 
 ### v0.1.2 回归验证（工具面定稿 + overlay 校验上线，2026-11-11）
 

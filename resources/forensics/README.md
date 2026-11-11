@@ -28,7 +28,7 @@ stderr 报 `patch: entry ... not found`。因此本 overlay **不新增行 id**�
 | `desktop-product-telemetry` | `@deepseek-ai/dsh-web-app` | `disabled: true` | 桌面版产品遥测，桌面模式默认开启 |
 | `product-analytics` | `@deepseek-ai/dsh-web-app` | `disabled: true` | Web 客户端产品分析事件 |
 | `system-prompt` | `@deepseek-ai/dsh-base`（被 web-app 覆盖 persona） | 重写 `config.personaPrefix` 为取证顾问设定 | 任务要求的 host 层 persona；原行 config 只有 `personaPrefix` 一个 key，已原样重写 |
-| `preset-standard` | `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` | 整行重写 `config`（`plugins` 以官方为基准：去掉 `tool-web`、`tool-fs` 收成只读），改 `persona` 文本、`name`、`description` | **真正生效**的会话 persona 在 preset 里；patch 无法定位嵌套子行 id，只能整行替换 |
+| `preset-standard` | `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` | 整行重写 `config`（`plugins` 以官方为基准：去掉 `tool-web` / `tool-plugin-manager` / `tool-plugin-market`，`tool-fs` 收成只读），改 `persona` 文本、`name`、`description` | **真正生效**的会话 persona 在 preset 里；patch 无法定位嵌套子行 id，只能整行替换 |
 
 ### 为什么必须同时改 `system-prompt` 和 `preset-standard`
 
@@ -40,7 +40,8 @@ preset。会话的 system prompt 由 preset 内的 `persona` 子行生成。只�
 ### 为什么没有「启用工具行」
 
 `tool-fs`、`tool-fs-search`、`tool-bash`、`tool-pwsh`、`tool-jobs`、`tool-schedule`、
-`skill-filesystem`、`tool-skill`、`tool-web`、`present`、subagent/delegation 系列在 web profile
+`skill-filesystem`、`tool-skill`、`present`、subagent/delegation 系列（联网抓取 `tool-web` 与
+插件管理/市场 `tool-plugin-manager`/`tool-plugin-market` 已从 preset 移除）在 web profile
 里都是在 **preset-standard 的 `plugins` 列表里挂载**的，host 层的同名行被 web bundle disabled
 是预期架构。若在 overlay 里重新启用 host 行，会与 preset 内的同名插件重复挂载（同一服务/工具
 注册两次），属于错误做法。取证需要的工具已经全部在 preset 内可用：

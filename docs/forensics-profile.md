@@ -30,8 +30,9 @@ dsh 的组合树由空根依次叠加：bundle patches → profile 自身 `cordi
    disabled 掉，并新增 `agent-preset-registry`（`default: standard`）与 4 个 preset 行。
    每个会话挂 `preset-standard`，会话 system prompt 由 preset 内的 `persona` 子行生成。
    因此只改 host 的 `system-prompt` 行不会改变会话行为；本 overlay 同时整行覆盖
-   `preset-standard` 的 config（`plugins` 列表与官方
-   `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` 逐项一致，只改 persona 文本、
+   `preset-standard` 的 config（`plugins` 列表以官方
+   `@deepseek-ai/dsh-web-app/presets/standard.patch.yml` 为基准，去掉 `tool-web` /
+   `tool-plugin-manager` / `tool-plugin-market` 三项并把 `tool-fs` 收成只读，再改 persona 文本、
    `name`、`description`，保留 `id: standard` 与 `order: 1`）。
 2. **不能按 id 定位 preset 内的嵌套子行。** patch 的 include-local id 不被推断，所以改
    preset 内的 `persona`/`skill-filesystem` 只能整行替换 `preset-standard` 的 config。
@@ -57,25 +58,33 @@ overlay 修改的 6 行：
 `preset-standard.plugins` 决定。所以本 overlay 不「重新启用 host 行」（那会造成同名插件重复
 挂载），只整行重写 `preset-standard` 的 `plugins` 列表。
 
-### 1.1 取证 preset 的工具面（v0.1.2）
+### 1.1 取证 preset 的工具面（v0.1.3）
 
-**为什么只动两处**：工具描述 + 参数 schema 每轮请求都要进 system prompt，是固定开销；但
+**为什么这么改**：工具描述 + 参数 schema 每轮请求都要进 system prompt，是固定开销；但
 「精简上下文」不能拿能力换。经确认，子代理、工作流引擎、后台作业、定时任务、目标长跑、
-plan 模式都是取证分析要用的，**必须保留**；只有联网抓取在取证场景里明确不要。所以最终形态是：
+plan 模式都是取证分析要用的，**必须保留**；取证场景明确不要的是联网抓取，以及能联网安装
+代码的插件管理/插件市场。所以最终形态是：
 
-- **移除 1 项**：`tool-web`（联网抓取/检索）。取证机通常离线，也不希望证据内容被发往外部；
-  需要联网检索时由分析员另行取证。
-- **保留 20 项**：官方 standard 预设的全部能力——`persona`、`agent-instructions`、
+- **移除 3 项**（官方 22 项 → 19 项）：
+  - `tool-web`：联网抓取/检索。取证机通常离线，也不希望证据内容被发往外部；需要联网检索时
+    由分析员另行取证。
+  - `tool-plugin-manager`：`plugin_manager` 工具可联网安装/移除 npm 插件包（`installBundle`
+    等动作），等于把供应链与代码执行路径开放给 agent，取证场景整条移除（不是置 disabled）。
+  - `tool-plugin-market`：插件市场工具（官方默认 `disabled: true`），一并整条移除，避免误开。
+- **保留 19 项**：官方 standard 预设的其余能力——`persona`、`agent-instructions`、
   `time-context`、`tool-bash`/`tool-pwsh`（按平台互斥）、`tool-fs`、`tool-fs-search`、
   `tool-jobs`（后台作业）、`tool-schedule`（定时任务）、`skill-filesystem` + `tool-skill`、
   `command-goal` + `tool-goal`、`planning`（plan 模式）、`compaction`、
   `delegation`（subagent / subagent_fork / workflow-ptc / workflow）、`tool-ask-user`、
-  `tool-todo`、`present`、`tool-plugin-manager`、`tool-plugin-market`。
+  `tool-todo`、`present`。
+  注意：overlay 里的 `- id: plugin-manager`（web 服务行）与 `- id: ui-plugin-manager`
+  （Web UI 插件管理界面）是宿主/界面层行，不属于 preset 工具面，保持与官方一致。
 - **改 1 项**：`tool-fs` 收成只读（`read/readImage: true`，`write/edit/applyPatch: false`）。
   要写文件就走命令行（`Copy-Item` / `Out-File` / 导出命令），好处是每一次写操作都变成一条
   可复核的命令行记录，符合只读取证与证据链要求；确实需要编辑工具时把三个 `false` 改回 `true`。
 
-**省了多少**：`tool-web` 的描述/参数约 3.4k 字符，`tool-fs` 去掉写工具约 2k 字符，合计约
+**省了多少**：`tool-web` 的描述/参数约 3.4k 字符，`tool-plugin-manager` / `tool-plugin-market`
+两个工具描述合计再省若干千字符（未精确计量），`tool-fs` 去掉写工具约 2k 字符，合计约
 **5–6k 字符 ≈ 1.5k token / 每次请求（估算值，不是精确计量）**。估算方法：用括号配平从各包
 `lib/index.js` 的 `defineTool({...})` / `tools.register({...})` 片段累计字符数，按 ≈3.5 字符/token
 折算；离线没有官方「导出工具清单」命令，这个数字只用于说明量级。
@@ -131,20 +140,21 @@ dsh --patch <install-dir>/resources/forensics/cordis.patch.yml --profile web --n
 ```bash
 ERR=/tmp/fp/overlay.err; OUT=/tmp/fp/overlay.yml
 grep -c "not found" "$ERR"          # 期望 0（unmatched target = 0）
-wc -l < "$OUT"                      # 期望 1304（默认为 1243；去掉 tool-web 后比 v0.1.1 的 1305 少 1 行）
+wc -l < "$OUT"                      # 期望 1298（默认 1243；v0.1.1 为 1305，去掉 3 个工具条目后 -7 行）
 grep -c "patched by .*resources.forensics" "$OUT"   # 期望 4 个注释块，覆盖 6 行
 grep -A2 "^- id: otel$" "$OUT"                       # 期望 disabled: true
 grep -A2 "^- id: desktop-product-telemetry$" "$OUT"  # 期望 disabled: true
 sed -n "/^- id: system-prompt$/,+4p" "$OUT"          # 期望 personaPrefix: 你是 SeeUForensicsAgentPlus...
 sed -n "/^- id: preset-standard$/,+8p" "$OUT"        # 期望 name: 取证分析（Forensics）
 
-# 2.5 精简后的工具面（v0.1.2）：列 preset 内的 plugin 子项
-awk '/^- id: preset-standard$/{f=1} f&&/^      - id: /{print $3} f&&/^      - id: tool-plugin-market$/{exit}' "$OUT"
-# 期望正好 21 行（官方 22 项 - tool-web）：persona / agent-instructions / time-context /
-# tool-bash / tool-pwsh / tool-fs / tool-fs-search / tool-jobs / tool-schedule / skill-filesystem /
-# tool-skill / command-goal / tool-goal / planning / compaction / delegation / tool-ask-user /
-# tool-todo / present / tool-plugin-manager / tool-plugin-market
-# 不应出现：tool-web（取证会话不联网）
+# 2.5 精简后的工具面（v0.1.3）：列 preset 内的 plugin 子项
+awk '/^- id: preset-standard$/{f=1} f&&/^      - id: /{print $3} f&&/^      - id: present$/{exit}' "$OUT"
+# 期望正好 19 行（官方 22 项 - tool-web - tool-plugin-manager - tool-plugin-market）：
+# persona / agent-instructions / time-context / tool-bash / tool-pwsh / tool-fs /
+# tool-fs-search / tool-jobs / tool-schedule / skill-filesystem / tool-skill /
+# command-goal / tool-goal / planning / compaction / delegation / tool-ask-user /
+# tool-todo / present
+# 不应出现：tool-web / tool-plugin-manager / tool-plugin-market
 ```
 
 ## 3. 实测证据（dsh 0.2.2-rc.1，2026-11-11）
@@ -152,7 +162,8 @@ awk '/^- id: preset-standard$/{f=1} f&&/^      - id: /{print $3} f&&/^      - id
 **基线**：`--dump-default-config` → 退出码 0、stderr 空、1243 行（196 个顶层 `- id:`）。
 
 **叠加 overlay**：`--dump-config` → 退出码 0、stderr 为空（无 unmatched target / unknown row）、
-**1304 行**（v0.1.2 去掉 tool-web 之后；v0.1.1 为 1305 行，默认 1243 行；行数差异来自删掉的那一项与多行 persona 的折叠）。
+**1298 行**（v0.1.3 去掉 tool-web / tool-plugin-manager / tool-plugin-market 之后；v0.1.2 为 1304 行、
+v0.1.1 为 1305 行、默认 1243 行）。
 
 dump 注释标注被 overlay 覆盖的行（4 个注释块，覆盖 6 行）：
 
@@ -221,10 +232,11 @@ dump 注释标注被 overlay 覆盖的行（4 个注释块，覆盖 6 行）：
    `!!js` 表达式原样保留（否则会丢运行时读取，例如 port、endpoint）。
 3. **改工具面**：优先改 `preset-standard.plugins` 里对应子项（如把 `tool-bash` 的 `disabled`
    固定为 false/true），但注意 `plugins` 要与官方 `presets/standard.patch.yml` 同步升级。
-   例如要禁用插件市场：把 `tool-plugin-market` 子项的 `disabled: true` 保留（官方已 true）。
-   v0.1.2 只从 preset 里去掉 `tool-web`（联网抓取），并把 `tool-fs` 收成只读（见 §1.1）；
-   子代理/工作流/后台作业/定时任务/目标/plan 都保留。要恢复 `tool-web` 就把官方原文里对应
-   条目加回 `plugins` 列表，然后重跑第 2 节验证。
+   v0.1.3 已从 preset 里整条移除 `tool-web`（联网抓取）、`tool-plugin-manager`、
+   `tool-plugin-market`，并把 `tool-fs` 收成只读（见 §1.1）；子代理/工作流/后台作业/
+   定时任务/目标/plan/present 都保留。要恢复某一项就把官方原文里对应条目加回 `plugins`
+   列表，然后重跑第 2 节验证 —— 注意 `plugin_manager` 可联网装插件包、`tool-web` 默认
+   `fetch: true`，取证场景需谨慎。
 4. **改 persona**：同时改 `system-prompt.personaPrefix` 与 `preset-standard` 内 `persona.prefix`
    两处并保持一致（前者是 host 默认，后者是会话实际生效值）。
 5. **新增行**（如自定义 preset）必须用官方存在的包名：`- insert: [{ id, name, config }]`；

@@ -26,7 +26,7 @@
 
 - **外壳职责**：窗口、托盘、中文菜单、单实例、权限收紧（全部拒绝）、外链走系统浏览器、加载页/故障页、优雅退出。
 - **运行时职责**：agent 循环、模型接入、工具（文件/搜索/shell/技能/session 等）、会话存储、Web UI。
-- **取证职责**：`resources/forensics/cordis.patch.yml` 以 dsh 官方 patch-list 机制叠加在 `web` profile 之上——关闭遥测/产品分析行，注入中文取证 persona，并把会话 preset（`preset-standard`）改成**取证专用工具面**：保留官方 22 项里的 21 项（子代理 / 工作流 / 后台作业 / 定时任务 / 目标 / plan / todo 都可用），只去掉 `tool-web`（取证会话不联网），`tool-fs` 收成只读。详见 [docs/forensics-profile.md](docs/forensics-profile.md)。
+- **取证职责**：`resources/forensics/cordis.patch.yml` 以 dsh 官方 patch-list 机制叠加在 `web` profile 之上——关闭遥测/产品分析行，注入中文取证 persona，并把会话 preset（`preset-standard`）改成**取证专用工具面**：保留官方 22 项里的 19 项（子代理 / 工作流 / 后台作业 / 定时任务 / 目标 / plan / todo 都可用），去掉 `tool-web`（取证会话不联网）、`tool-plugin-manager`（可联网安装/移除插件包）与 `tool-plugin-market`（插件市场），`tool-fs` 收成只读。详见 [docs/forensics-profile.md](docs/forensics-profile.md)。
 
 ## 2. 快速开始
 
@@ -56,17 +56,27 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.1.2**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.1.3**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 769 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,376,076 B（330/330 个 `@deepseek-ai` 包齐全） |
-| `release/SeeUForensicsAgentPlus-0.1.2-x64.exe`（NSIS 安装包） | 211,854,113 B |
-| `release/SeeUForensicsAgentPlus-0.1.2-x64-portable.exe` | 189,470,595 B |
+| `release/win-unpacked/resources/app.asar` | 168,376,348 B（330/330 个 `@deepseek-ai` 包齐全） |
+| `release/SeeUForensicsAgentPlus-0.1.3-x64.exe`（NSIS 安装包） | 211,854,228 B |
+| `release/SeeUForensicsAgentPlus-0.1.3-x64-portable.exe` | 189,442,160 B |
 
-实测冷启动到 dsh UI：目录版 4144 ms；portable 首次 55.7s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+实测冷启动到 dsh UI：目录版 3638 ms；portable 首次 44.4s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
 
+> **v0.1.3 改了什么**
+>
+> 1. **工具面再收窄两项**：从 `preset-standard.plugins` 整条删除 `tool-plugin-manager`
+>    （`plugin_manager` 可联网安装/移除 npm 插件包，等于打开供应链与代码执行路径）与
+>    `tool-plugin-market`（插件市场，官方默认本就 disabled）。当前 preset = 官方 22 项
+>    减去 3 项 = **19 项**；`present`、子代理、工作流、后台作业、定时任务、目标、plan
+>    等能力全部保留。
+> 2. `npm run check:overlay` 增加断言：preset 内不得出现 `tool-web` /
+>    `tool-plugin-manager` / `tool-plugin-market`。
+>
 > **v0.1.2 改了什么**
 >
 > 1. **取证工具面定稿**：`preset-standard` 保留官方 22 项里的 21 项（子代理 / 工作流 /
@@ -79,8 +89,8 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 > 3. 新增 `scripts/kill-app.mjs`：验证/打包前清理残留实例，避免单实例锁导致
 >    新实例静默退出（`exit 0`）。
 >
-> 历史包袱：v0.1.0 缺 21 个 peer 包（启动即崩），v0.1.1 是定稿前的工具面，
-> 两者都已作废。**请统一使用 0.1.2 的产物。**
+> 历史包袱：v0.1.0 缺 21 个 peer 包（启动即崩），v0.1.1 / v0.1.2 是工具面收窄前的版本，
+> 均已作废。**请统一使用 0.1.3 的产物。**
 
 ## 3. 目录结构
 
@@ -135,7 +145,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 5. **外壳不注入业务代码**：窗口里就是官方 dsh Web UI。取证定制落在 overlay（prompt/preset/遥测开关）与外壳层（品牌、工作区、日志、权限），因此可以跟随官方运行时升级。
 6. **peer 依赖必须显式写进 `dependencies`。** dsh 用 cordis DI，很多 `@deepseek-ai/dsh-*` 只以 `peerDependencies` 声明（如 `@deepseek-ai/cordis-plugin-group`）。electron-builder 只沿 `dependencies`/`optionalDependencies` 收集 node_modules，**忽略 peer**，所以开发态能跑、打包版却报
    `ERR_MODULE_NOT_FOUND: Cannot find package '@deepseek-ai/cordis-plugin-group'`。本项目把 21 个 peer-only 包（精确版本）写进了根 `package.json`；升级 `@deepseek-ai/dsh` 后必须重跑 `docs/packaging.md` §5.1 的 `330/330` 自检，按缺失清单补齐。
-7. **取证工具面只做最小改动。** 工具描述与参数 schema 每轮请求都进 system prompt，是固定开销，但精简不能拿能力换：`preset-standard.plugins` 保留官方 22 项里的 21 项（子代理 / 工作流 / 后台作业 / 定时任务 / 目标 / plan / todo 全部可用），只去掉 `tool-web`（取证会话不联网），并把 `tool-fs` 收成只读（`write/edit/applyPatch: false`，写文件走命令行留痕）。估算省下约 5–6k 字符 ≈ 1.5k token / 次请求（估算，非精确计量）。清单与逐项调整方法见 `docs/forensics-profile.md` §1.1。
+7. **取证工具面只做最小改动。** 工具描述与参数 schema 每轮请求都进 system prompt，是固定开销，但精简不能拿能力换：`preset-standard.plugins` 保留官方 22 项里的 19 项（子代理 / 工作流 / 后台作业 / 定时任务 / 目标 / plan / todo 全部可用），去掉 `tool-web`（不联网）、`tool-plugin-manager`（联网装插件包）、`tool-plugin-market`（插件市场），并把 `tool-fs` 收成只读（`write/edit/applyPatch: false`，写文件走命令行留痕）。估算省下约 5–6k 字符 ≈ 1.5k token / 次请求（估算，非精确计量）。清单与逐项调整方法见 `docs/forensics-profile.md` §1.1。
 
 ## 6. 退出与容错
 
