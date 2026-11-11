@@ -303,7 +303,7 @@ node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-un
 
 ## 6. 体积现状
 
-以 2026-11-11 **v0.1.4** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验 + 案件索引插件）为准。
+以 2026-11-11 **v0.1.6** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验 + 案件索引插件 + M2 typed 层）为准。
 更早的 Electron 44.11.0 首轮产物已作废，不引用其数字。
 
 `npm run package:dir` 产物：
@@ -311,16 +311,16 @@ node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-un
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 | 234.9 MiB | Electron 主程序（含 rcedit 写入的图标/版本资源） |
-| `release/win-unpacked/resources/app.asar` | 168,464,152 | 160.7 MiB | JS + 资源 + node_modules 生产依赖 + 索引插件（19,635 个 asar 条目，`@deepseek-ai` 330/330） |
+| `release/win-unpacked/resources/app.asar` | 168,526,064 | 160.7 MiB | JS + 资源 + node_modules 生产依赖 + 索引插件 + `tools/ges-index`（19,638 个 asar 条目，`@deepseek-ai` 330/330） |
 | `release/win-unpacked/`（整个目录） | — | 769 MiB | 含 Electron 运行时、locales、`app.asar.unpacked` 原生模块（`du -sm`） |
 
 `npm run package:win` 额外产出（同一轮）：
 
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
-| `release/SeeUForensicsAgentPlus-0.1.5-x64.exe | 211,876,684 | 202.1 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
-| `release/SeeUForensicsAgentPlus-0.1.3-x64.exe.blockmap` | 220,782 | 215.6 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
-| `release/SeeUForensicsAgentPlus-0.1.4-x64-portable.exe` | 189,486,591 | 180.7 MiB | 免安装单文件（自解压运行） |
+| `release/SeeUForensicsAgentPlus-0.1.6-x64.exe` | 211,888,816 | 202.1 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
+| `release/SeeUForensicsAgentPlus-0.1.6-x64.exe.blockmap` | 220,719 | 215.6 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
+| `release/SeeUForensicsAgentPlus-0.1.6-x64-portable.exe` | 189,488,673 | 180.7 MiB | 免安装单文件（自解压运行） |
 
 即：安装包约 **202 MiB**、portable 约 **181 MiB**，解包目录约 **769 MiB**。
 
@@ -543,3 +543,22 @@ portable：
 打包态 UI（`SEEU_UI_EXE=<abs> node .probe/ui-check.mjs`）：`sidebar/scanFoundCase/treeRoot/drilledApps/searchOk` 全 true，`errors: []`。
 
 asar 自检：19,637 entries、330/330 `@deepseek-ai` 包、`plugins/seeu-case-index/{index,client}.js`、`tools/ges-index/{build,query}.mjs`、overlay 与 4 个 SKILL.md 齐全；overlay md5 `64cd0e7721d17acea8fbba6fdae8f66b` 与源一致。
+
+### v0.1.6 回归验证（M2 typed 层 + 四视图面板，2026-11-11）
+
+```json
+{"ok": true, "elapsedMs": 4100, "url": "http://127.0.0.1:60691/", "title": "DeepSeek Harness"}
+```
+
+portable：`{"ok": true, "elapsedMs": 44452, "url": "http://127.0.0.1:49215/"}`（首次 44.5s，含 ~800MB 解包）。
+
+asar 自检（19,638 entries）命中：`plugins/seeu-case-index/{index.js,client.js}`、`tools/ges-index/{typed,query,build}.mjs`、
+`resources/forensics/skills/ges-case-index/SKILL.md`（5,803 B，含 `/entity`、`/timeline`），
+`tools/ges-index/typed.mjs`（23,674 B，含 `health_metric`）。
+
+打包态 UI 端到端（`SEEU_UI_EXE=release/win-unpacked/SeeUForensicsAgentPlus.exe node .probe/m2-ui-check.mjs`）：
+六个标签（树/检索/记录/实体/时间线/表）均渲染真实数据，表视图列出 24 张表（联系人 745、健康指标 6200…），
+`m2ok: true`、`errors: []`。
+
+> 注意：MSYS Bash 里给 `SEEU_UI_EXE` 传 `$PWD/...` 会变成 `/d/...` 路径，Node `spawn` 会 ENOENT；
+> 必须用带盘符的 Windows 路径（`D:\...\SeeUForensicsAgentPlus.exe`）。

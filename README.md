@@ -56,16 +56,27 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.1.5**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.1.6**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 769 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,454,873 B（330/330 个 `@deepseek-ai` 包齐全，含 `plugins/seeu-case-index/**`） |
-| `release/SeeUForensicsAgentPlus-0.1.4-x64.exe`（NSIS 安装包） | 211,873,901 B |
-| `release/SeeUForensicsAgentPlus-0.1.4-x64-portable.exe` | 189,550,148 B |
+| `release/win-unpacked/resources/app.asar` | 168,526,064 B（330/330 个 `@deepseek-ai` 包齐全，19,638 entries，含 `plugins/seeu-case-index/**`、`tools/ges-index/**`） |
+| `release/SeeUForensicsAgentPlus-0.1.6-x64.exe`（NSIS 安装包） | 211,888,816 B |
+| `release/SeeUForensicsAgentPlus-0.1.6-x64-portable.exe` | 189,488,673 B |
 
-实测冷启动到 dsh UI：目录版 4073 ms；portable 首次 36.6s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+实测冷启动到 dsh UI：目录版 4100 ms；portable 首次 44.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+
+> **v0.1.6 改了什么**
+>
+> 1. **M2 typed 结构化层**：按**真实表头签名**把全解析结果投影成 24 张表（联系人/账号/消息/通话/短信/浏览搜索/Exif/图片视频/应用/授权/SIM/Wi-Fi/蓝牙/流量/日历/小程序/朋友圈/收藏/设备/健康指标…），
+>    本案 370 叶 / 22,777 记录里 21,123 条进入 typed 表（**92.7%**；CSV 记录 **99.7%**），并生成 22,772 条 `citation`（句柄+行号+可回查状态）。
+> 2. **跨检材实体聚合**：手机号/邮箱/网址/IP/钱包/身份证/车牌/银行卡按值聚合，直接标出「跨 N 检材」；带关键词时唯一命中会返回提及明细（record/eid/app/时间/行号）。
+> 3. **时间线**：按小时/天/月分桶，柱条可点，钻进该时段的记录。
+> 4. **面板四视图**：树 / 检索之外新增 记录 / 实体 / 时间线 / 表 四个标签，全部带中文空态与翻页；引用仍一律回 `record.id` → `Goldeneyes://` 句柄。
+> 5. **技能同步升级**：`ges-case-index` SKILL.md 补上 `/tables /table /entity /timeline /records` 用法，模型在会话里可直接做结构化查询与跨检材关联。
+>
+> 打包态实测：目录版 4100 ms / portable 44.5s 正常起 UI；asar 内插件与工具链齐全，打包态 UI 端到端（六个标签 + 记录/实体/时间线/表真实数据）`errors: []`。
 
 > **v0.1.5 改了什么**
 >
@@ -212,6 +223,16 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 3. **树状导航**：案件 → 检材 N → 应用 → 账号 → 类别 → 文件 → 记录 → 引用，每层只显示摘要与计数，逐层点开。
 4. **关键词检索**：输入后回车（≥3 字符走 FTS5 trigram，1–2 字中文自动退回 `LIKE`），命中行显示 `检材·应用 / 时间 / 片段`；
    点结果可看引用详情（`Goldeneyes://…` 句柄 + 可复制的 `ges read` 核验命令）。
+5. **记录 / 实体 / 时间线 / 表**（M2，v0.1.6 起）：
+   - **记录**：按检材/应用/类别/关键词/时间过滤浏览原始行（行数、翻页、每条可回查引用）；
+   - **实体**：手机号/邮箱/网址/IP/钱包/身份证/车牌/银行卡跨检材聚合（`跨 N 检材` 一目了然），点一行下钻到提及记录；
+   - **时间线**：按小时/天/月分桶，看行为节奏；点柱条直接钻到该时段记录；
+   - **表**：24 张 typed 投影表（联系人、账号、消息、通话、短信、浏览搜索、Exif、应用、授权、蓝牙、网络流量、健康指标…），横向滚动看全部列。
+   引用一律回 `record.id` → `Goldeneyes://` 句柄，typed 表只是派生视图。
+
+> **M2 typed 层（v0.1.6）**：把火眼全解析结果按**真实表头签名**投影成 24 张结构化表（不按 app/category 硬编码），
+> 本案实测 370 叶 / 22,777 记录中 21,123 条进入 typed 表（92.7%；CSV 记录 99.7%），并生成 22,772 条 `citation`。
+> 详情见 [docs/plan-case-index.md §17](docs/plan-case-index.md)。
 
 ### 8.3 它是怎么接进去的
 

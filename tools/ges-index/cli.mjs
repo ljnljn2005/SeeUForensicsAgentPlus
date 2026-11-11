@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { buildIndex, IndexBuildError, TOOL, TOOL_VERSION } from './build.mjs';
-import { openIndex, findIndexes, tree, search, cite, statsOf, verify } from './query.mjs';
+import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records } from './query.mjs';
 import { SCHEMA_VERSION } from './parse.mjs';
 
 const out = (obj) => console.log(JSON.stringify(obj));
@@ -47,6 +47,11 @@ const HELP = `ges-index ${TOOL_VERSION}
   ges-index search -q <kw> [--eid 3] [--app WhatsApp] [--from 2025-04-01] [--to ...] [--limit 10]
   ges-index cite <recordId>
   ges-index stats
+  ges-index tables                              列出 typed 投影表与行数
+  ges-index table <name> [--eid 3] [--q kw] [--from ...] [--limit 20] [--offset 0]
+  ges-index entity [--kind phone] [--q 8525] [--eid 3] [--limit 20]   跨检材实体聚合/下钻
+  ges-index timeline [--eid 3] [--bucket day|hour|month] [--from ...] [--to ...]
+  ges-index records [--eid 3] [--app WhatsApp] [--category 通讯录] [--limit 20] [--offset 0]
   ges-index verify [--sample 20]      随机回火眼核对正文与基址
   ges-index list <dir>...             列出这些目录下已建库的案件
   ges-index version
@@ -94,6 +99,13 @@ async function main() {
     else if (cmd === 'search') result = search(db, { ...opts });
     else if (cmd === 'cite') result = cite(db, opts._[1]);
     else if (cmd === 'stats') result = statsOf(db);
+    else if (cmd === 'tables') result = { tables: typedTables(db) };
+    else if (cmd === 'table') {
+      if (!opts._[1]) { console.error('用法：ges-index table <name>'); process.exit(2); }
+      result = table(db, opts._[1], { ...opts });
+    } else if (cmd === 'entity') result = entity(db, { ...opts });
+    else if (cmd === 'timeline') result = timeline(db, { ...opts });
+    else if (cmd === 'records') result = records(db, { ...opts });
     else if (cmd === 'verify') result = await verify(db, opts);
     else { console.error(HELP); process.exit(2); }
   } finally {

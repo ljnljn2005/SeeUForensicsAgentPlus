@@ -1,6 +1,6 @@
 ---
 name: ges-case-index
-description: 查询火眼（GoldenEyes/GES）案件全解析结果的本地索引库（案件树、关键词检索、引用回查），不调用 ges.exe。用于快速摸清案件有哪些检材/应用/账号、找某个关键词出现在哪里、以及生成可核验的 Goldeneyes 句柄引用。
+description: 查询火眼（GoldenEyes/GES）案件全解析结果的本地索引库（案件树、关键词检索、结构化表、实体跨检材聚合、时间线、引用回查），不调用 ges.exe。用于摸清案件有哪些检材/应用/账号、查某个关键词或实体出现在哪里、按时间线看行为节奏、以及生成可核验的 Goldeneyes 句柄引用。
 ---
 
 # 火眼案件索引查询
@@ -51,6 +51,25 @@ curl -s -G "$API/cite" --data-urlencode "db=$DB" --data-urlencode "id=21697"
 # 5) 统计与抽样校验
 curl -s -G "$API/stats" --data-urlencode "db=$DB"
 curl -s -G "$API/verify" --data-urlencode "db=$DB" --data-urlencode "sample=10"
+
+# 6) 结构化表：先看有哪些表，再查某张表（联系人/通话/短信/浏览/Exif/应用/蓝牙/健康指标/消息…）
+curl -s -G "$API/tables" --data-urlencode "db=$DB"
+curl -s -G "$API/table" --data-urlencode "db=$DB" --data-urlencode "name=contact" --data-urlencode "q=陈" --data-urlencode "limit=20"
+#    可加过滤：--data-urlencode "eid=3" / "app=WhatsApp" / "subcat=..."；分页用 offset（响应里的 next）
+
+# 7) 实体跨检材聚合：phone/email/url/ip/wallet/身份证/车牌/银行卡…
+curl -s -G "$API/entity" --data-urlencode "db=$DB" --data-urlencode "kind=phone" --data-urlencode "limit=20"
+curl -s -G "$API/entity" --data-urlencode "db=$DB" --data-urlencode "q=85254877240"
+#    返回 {returned, kinds, crossEvidence, rows:[{kind,value,count,evidences,eids}]}；
+#    带 q 且唯一命中时 matched="mention"，mentions[] 给出 record/eid/app/cat/ts/line
+
+# 8) 时间线：按 hour/day/month 分桶，看行为节奏或某时段集中活动
+curl -s -G "$API/timeline" --data-urlencode "db=$DB" --data-urlencode "bucket=day" --data-urlencode "limit=60"
+#    可加 eid/app/from/to；返回 {bucket, rows:[{bucket,n,eids,apps}]}
+
+# 9) 记录列表（带关键词/筛选，用于对某一枝取证式浏览）
+curl -s -G "$API/records" --data-urlencode "db=$DB" --data-urlencode "q=转账" --data-urlencode "limit=20"
+#    返回 {query, engine:"fts5-trigram"|"like"|"none", returned,total,offset,next,rows[]}；行有 id → 用 /cite 取句柄
 ```
 
 输出约定：`truncated: true` + `next` 表示还有下一页（把 `next` 作为下一次的 `node`/`offset` 继续）；
@@ -59,7 +78,9 @@ curl -s -G "$API/verify" --data-urlencode "db=$DB" --data-urlencode "sample=10"
 ## 工作方式建议
 
 1. 先用 `/tree root` 看清案件全貌（几个检材、各有哪些应用、多少记录），再决定钻哪一枝；
-2. 找线索用 `/search`，找到候选后再 `/cite` 拿句柄，最后用 `/read`（火眼 `/case/` 路径）核对原文；
-3. 回答里引用时给双层方括号 + `Goldeneyes://` 句柄，并对 `citable=1` 的记录注明检材与时间；
-4. **不要**编造库里没有的记录；库里查不到就明确说"索引中未发现"，并说明索引的覆盖范围（哪些检材、哪些应用）；
-5. 索引库可能是旧版本（用户加了新检材但没点【建库 / 更新】）：遇到"应该存在却查不到"时，先看 `/list` 里的 `builtAt`，提醒用户更新索引。
+2. 找线索用 `/search` 或 `/records`，找到候选后再 `/cite` 拿句柄，最后用 `ges read`（火眼 `/case/` 路径）核对原文；
+3. 跨检材关联（同一手机号/邮箱/网址出现在多个检材）优先用 `/entity`：`crossEvidence>1` 说明跨检材命中；
+4. 行为节奏/时间集中性用 `/timeline`，再用 `/records` 带 `from`/`to` 看具体内容；
+5. 回答里引用时给双层方括号 + `Goldeneyes://` 句柄，并对 `citable=1` 的记录注明检材与时间；typed 表（contact/call_log/…）只是投影视图，引用一律回 `record.id` → `/cite`；
+6. **不要**编造库里没有的记录；库里查不到就明确说"索引中未发现"，并说明索引的覆盖范围（哪些检材、哪些应用）；
+7. 索引库可能是旧版本（用户加了新检材但没点【建库 / 更新】）：遇到"应该存在却查不到"时，先看 `/list` 里的 `builtAt`，提醒用户更新索引。

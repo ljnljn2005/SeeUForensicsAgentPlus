@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { basename, dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
-import { openIndex, findIndexes, tree, search, cite, statsOf, verify } from '../../tools/ges-index/query.mjs';
+import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records } from '../../tools/ges-index/query.mjs';
 
 const ROUTE = '/seeu-index';
 const jobs = new Map();
@@ -116,6 +116,28 @@ async function handle(req, res) {
       }
       if (path === '/cite') return send(res, 200, cite(db, url.searchParams.get('id')));
       if (path === '/stats') return send(res, 200, statsOf(db));
+      if (path === '/tables') return send(res, 200, { tables: typedTables(db) });
+      if (path === '/table') {
+        const name = url.searchParams.get('name') ?? '';
+        const opts = { limit: url.searchParams.get('limit') ?? 20, offset: url.searchParams.get('offset') ?? 0 };
+        for (const k of ['eid', 'app', 'account', 'subcat', 'q', 'from', 'to']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
+        return send(res, 200, table(db, name, opts));
+      }
+      if (path === '/entity') {
+        const opts = { limit: url.searchParams.get('limit') ?? 20 };
+        for (const k of ['kind', 'q', 'value', 'eid']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
+        return send(res, 200, entity(db, opts));
+      }
+      if (path === '/timeline') {
+        const opts = {};
+        for (const k of ['eid', 'app', 'bucket', 'from', 'to', 'limit']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
+        return send(res, 200, timeline(db, opts));
+      }
+      if (path === '/records') {
+        const opts = { limit: url.searchParams.get('limit') ?? 20, offset: url.searchParams.get('offset') ?? 0 };
+        for (const k of ['eid', 'app', 'account', 'category', 'artifact', 'from', 'to']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
+        return send(res, 200, records(db, opts));
+      }
       if (path === '/verify') return send(res, 200, await verify(db, { sample: url.searchParams.get('sample') ?? 20 }));
     } finally {
       db.close();

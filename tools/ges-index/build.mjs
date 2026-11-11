@@ -9,6 +9,7 @@ import {
   DDL, SCHEMA_VERSION, CASE_DATA_ROOT,
 } from './parse.mjs';
 import { listCases, status as gesStatus, openCase, globAll, readLeaf } from './ges.mjs';
+import { TYPED_TABLES, TYPED_DDL, projectCsvRow } from './typed.mjs';
 
 export const TOOL = 'ges-index';
 export const TOOL_VERSION = '0.1.0';
@@ -85,6 +86,7 @@ export async function buildIndex(opts = {}) {
   const progress = (p) => { try { onProgress(p); } catch { /* 进度回调不应影响建库 */ } };
   const startedAt = Date.now();
   const t0 = Date.now();
+  const nowIso = new Date().toISOString();
 
   progress({ phase: 'probe', message: '探测案件', elapsedMs: 0 });
   const cases = await listCases();
@@ -138,6 +140,7 @@ export async function buildIndex(opts = {}) {
 
   const db = new DatabaseSync(buildingPath);
   db.exec(DDL);
+  db.exec(TYPED_DDL);
   db.exec('pragma journal_mode=delete; pragma synchronous=off;');
   const meta = db.prepare('insert or replace into meta(k,v) values(?,?)');
   meta.run('tool', TOOL);
@@ -164,6 +167,14 @@ export async function buildIndex(opts = {}) {
   const insChat = db.prepare('insert into chat_meta(artifact_id,msg_count,sent_count,time_from,time_to,summary) values(?,?,?,?,?,?)');
   const insEntity = db.prepare('insert into entity(kind,value_norm,record_id,eid) values(?,?,?,?)');
   const insLog = db.prepare('insert or replace into ingest_log(leaf,kind,status,lines,records,ms,error,base_handle,citable) values(?,?,?,?,?,?,?,?,?)');
+  const typedInserts = new Map();
+  for (const [table, cols] of Object.entries(TYPED_TABLES)) {
+    const all = ['record_id', 'eid', 'app', 'account', 'subcat', ...cols];
+    typedInserts.set(table, db.prepare(`insert into ${table}(${all.join(',')}) values(${all.map(() => '?').join(',')})`));
+  }
+  const insCitation = db.prepare(`insert or replace into citation(record_id,artifact_id,eid,base_handle,node_id,line_no,citable,status,method,verified_at)
+    values(?,?,?,?,?,?,?,?,?,?)`);
+  const insColumnMap = db.prepare('insert or replace into column_map(app,category,kind,column,target_table,target_field,seen) values(?,?,?,?,?,?,?)');
   const insEv = db.prepare(`insert or replace into evidence(eid,name,holder,platform,type,timezone,md5,sha1,sha256,size_bytes,source_path,storage_path,created,updated,raw_json)
     values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
 
@@ -179,6 +190,9 @@ export async function buildIndex(opts = {}) {
   let recCount = 0;
   let msgCount = 0;
   let entCount = 0;
+  let typedRecords = 0;
+  let typedMisses = 0;
+  const typedByTable = {};
   const evidenceSeen = new Map();
 
   function insertCsv(leaf, c, fetched, artId) {
@@ -192,6 +206,18 @@ export async function buildIndex(opts = {}) {
         parsed.ts, parsed.actor, content, content, fieldsJson, null, 1, fetched.baseHandle);
       const recordId = Number(r.lastInsertRowid);
       insFts.run(recordId, content, fieldsJson);
+      if (fetched.baseHandle) insCitation.run(recordId, artId, c.eid, fetched.baseHandle, fetched.baseHandle.split('/').pop(), no, 1, 'ok', 'ingest', nowIso);
+      const proj = projectCsvRow(parsed.fields, c);
+      if (proj) {
+        const cols = TYPED_TABLES[proj.table];
+        typedInserts.get(proj.table).run(recordId, c.eid, c.app, c.account ?? null, c.subcat,
+          ...cols.map((col) => proj.row[col] ?? null));
+        typedRecords++;
+        typedByTable[proj.table] = (typedByTable[proj.table] ?? 0) + 1;
+        for (const [targetField, column] of proj.mapping) {
+          if (Object.prototype.hasOwnProperty.call(parsed.fields, column)) insColumnMap.run(c.app, c.category, 'csv', column, proj.table, targetField, 1);
+        }
+      } else typedMisses++;
       records++;
       if (ENTITY_TYPES.has(c.category)) {
         const val = (parsed.cells ?? []).find((v) => v && v.trim() !== '') ?? parsed.cells?.[0];
@@ -212,6 +238,7 @@ export async function buildIndex(opts = {}) {
         row.ts, row.speaker, row.body, row.text, null, row.originRecordId, 1, fetched.baseHandle);
       const recordId = Number(r.lastInsertRowid);
       insFts.run(recordId, row.text, '');
+      if (fetched.baseHandle) insCitation.run(recordId, artId, c.eid, fetched.baseHandle, fetched.baseHandle.split('/').pop(), row.no, 1, 'ok', 'ingest', nowIso);
       insMsg.run(recordId, artId, c.app, account, peer, row.ts, row.speaker ?? '', row.isLocal ?? 0,
         row.body, row.no, fetched.baseHandle, 1);
       records++;
@@ -311,7 +338,12 @@ export async function buildIndex(opts = {}) {
     chats: db.prepare('select count(*) n from chat_meta').get().n,
     citableArtifacts: db.prepare('select count(*) n from artifact where citable=1').get().n,
     nonCitableArtifacts: db.prepare('select count(*) n from artifact where citable=0').get().n,
+    citations: db.prepare('select count(*) n from citation').get().n,
+    typedRecords,
+    typedByTable,
   };
+  counts.recordsTotal = counts.records;
+  counts.typedCoverage = counts.records ? Math.round((1000 * typedRecords) / counts.records) / 1000 : 0;
   db.close();
 
   const coverageOk = counts.artifacts === leaves.length && errors.length === 0;
@@ -326,7 +358,9 @@ export async function buildIndex(opts = {}) {
     builtAt: new Date().toISOString(),
     durationMs: Date.now() - startedAt,
     leaves: { total: leaves.length, csv: csvLeaves.length, chat: chatLeaves.length, evidence: byEid.size, failed: errors.length },
-    counts, fingerprint, integrityOk, coverageOk, errors,
+    counts,
+    typed: { tables: Object.keys(TYPED_TABLES).length, records: typedRecords, misses: typedMisses, coverage: counts.typedCoverage },
+    fingerprint, integrityOk, coverageOk, errors,
   };
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
 

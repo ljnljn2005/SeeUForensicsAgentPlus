@@ -149,7 +149,7 @@ export function extractEntities(text) {
 
 export const ENTITY_TYPES = new Set(['IP地址', '快递单号', '手机号', '网址', '虚拟钱包', '身份证', '车牌号', '邮箱', '银行卡']);
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 3;
 
 export const DDL = `
 create table if not exists meta(k text primary key, v text);

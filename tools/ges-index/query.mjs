@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { CASE_DATA_ROOT } from './parse.mjs';
+import { TYPED_TABLES } from './typed.mjs';
 import { ges } from './ges.mjs';
 
 export const PAGE = 10;
@@ -208,6 +209,16 @@ export function search(db, opts = {}) {
   if (opts.category) { filters.push('r.category=?'); params.push(String(opts.category)); }
   if (opts.from) { filters.push('r.ts>=?'); params.push(String(opts.from)); }
   if (opts.to) { filters.push('r.ts<=?'); params.push(String(opts.to)); }
+  const kw = typeof opts.q === 'string' ? opts.q.trim() : '';
+  if (kw) {
+    if (kw.length >= 3) {
+      filters.push('r.id in (select rowid from record_fts where record_fts match ?)');
+      params.push(ftsQuery(kw));
+    } else {
+      filters.push('(r.text like ? or r.body like ?)');
+      params.push('%' + kw + '%', '%' + kw + '%');
+    }
+  }
   const where = filters.length ? ` and ${filters.join(' and ')}` : '';
   let engine = 'like';
   let rows = null;
@@ -249,6 +260,175 @@ export function cite(db, id) {
   };
 }
 
+
+// ---------- M2：typed 表 / 实体 / 时间线 / 记录分页 ----------
+
+const TYPED_LABELS = {
+  contact: '联系人', account_info: '账号信息', msg_csv: '消息(CSV)', chat_group: '群/频道/社群',
+  call_log: '通话记录', sms: '短信', web_visit: '浏览/搜索/书签', exif: '图片 Exif',
+  file_meta: '图片/视频元数据', app_install: '应用列表', app_usage: 'App 使用详情',
+  app_permission: '应用授权', sim_card: 'SIM 卡', wifi_record: 'Wi-Fi/热点', bt_device: '蓝牙设备',
+  net_usage: '网络流量', calendar_event: '日历', mini_program: '小程序', moment: '朋友圈',
+  favorite: '收藏', device_info: '设备信息', device_storage: '设备容量', entity_row: '实体分类',
+  health_metric: '健康指标',
+};
+
+/** 可投影查询的表清单 + 行数（给面板做下拉/概览）。 */
+export function typedTables(db) {
+  const out = [];
+  for (const name of Object.keys(TYPED_TABLES)) {
+    let n = 0;
+    try { n = db.prepare(`select count(*) n from ${name}`).get().n; } catch { continue; }
+    out.push({ table: name, label: TYPED_LABELS[name] ?? name, rows: n });
+  }
+  return out;
+}
+
+const TS_FIELD = { call_log: 'start_ts', msg_csv: 'ts', sms: 'ts', web_visit: 'ts', exif: 'taken_at', app_usage: 'ts', calendar_event: 'start_ts', device_storage: 'ts' };
+
+/** 分页查一张 typed 表。filters: eid/app/account/q/from/to/limit/offset。 */
+export function table(db, name, opts = {}) {
+  if (!TYPED_TABLES[name]) { const e = new Error(`未知表：${name}`); e.code = 'E_BAD_TABLE'; throw e; }
+  const cols = TYPED_TABLES[name];
+  const limit = Math.min(200, Number(opts.limit) || 20);
+  const offset = Math.max(0, Number(opts.offset) || 0);
+  const filters = [];
+  const params = [];
+  if (opts.eid) { filters.push('eid=?'); params.push(Number(opts.eid)); }
+  if (opts.app) { filters.push('app=?'); params.push(String(opts.app)); }
+  if (opts.account) { filters.push("ifnull(account,'')=?"); params.push(String(opts.account)); }
+  if (opts.subcat) { filters.push('subcat=?'); params.push(String(opts.subcat)); }
+  const tsCol = TS_FIELD[name] ?? 'ts';
+  if (opts.from && cols.includes(tsCol)) { filters.push(`${tsCol}>=?`); params.push(String(opts.from)); }
+  if (opts.to && cols.includes(tsCol)) { filters.push(`${tsCol}<=?`); params.push(String(opts.to)); }
+  const q = String(opts.q ?? '').trim();
+  if (q) {
+    const textCols = cols.filter((c) => !/_id$|^ts$|_at$|^lat$|^lon$/.test(c));
+    if (textCols.length) {
+      filters.push('(' + textCols.map((c) => `ifnull(${c},'')` + " like '%'||?||'%'").join(' or ') + ')');
+      for (let i = 0; i < textCols.length; i++) params.push(q);
+    }
+  }
+  const where = filters.length ? ' where ' + filters.join(' and ') : '';
+  const total = db.prepare(`select count(*) n from ${name}${where}`).get(...params).n;
+  const rows = db.prepare(`select * from ${name}${where} order by id limit ? offset ?`).all(...params, limit, offset);
+  return {
+    table: name, label: TYPED_LABELS[name] ?? name,
+    returned: rows.length, total, offset, next: offset + rows.length < total ? offset + rows.length : null,
+    columns: ['id', 'record_id', 'eid', 'app', 'account', 'subcat', ...cols],
+    rows: rows.map((r) => ({ ...r, text: undefined })),
+  };
+}
+
+/** 跨检材实体聚合：默认按 (kind,value) 聚合，带 eid 分布；带 value/q 时下钻到提及记录。 */
+export function entity(db, opts = {}) {
+  const limit = Math.min(200, Number(opts.limit) || 20);
+  const filters = [];
+  const params = [];
+  if (opts.kind) { filters.push('kind=?'); params.push(String(opts.kind)); }
+  if (opts.eid) { filters.push('eid=?'); params.push(Number(opts.eid)); }
+  const q = String(opts.q ?? opts.value ?? '').trim();
+  if (q) { filters.push("value_norm like '%'||?||'%'"); params.push(q); }
+  const where = filters.length ? ' where ' + filters.join(' and ') : '';
+
+  // 带 value/q 且命中唯一值 → 下钻
+  if (q) {
+    const top = db.prepare(`select kind, value_norm, count(*) n, count(distinct eid) eids, group_concat(distinct eid) eid_list
+      from entity${where} group by kind, value_norm order by n desc limit ?`).all(...params, limit);
+    if (top.length === 1) {
+      const t = top[0];
+      const mentions = db.prepare(`select e.id record_id, e.eid, r.app, r.category, r.ts, r.line_no, a.virtual_path path
+        from entity e join record r on r.id=e.record_id join artifact a on a.id=r.artifact_id
+        where e.kind=? and e.value_norm=? order by r.ts limit ?`).all(t.kind, t.value_norm, limit);
+      return {
+        query: q, matched: 'mention', kind: t.kind, value: t.value_norm, evidences: t.eids,
+        returned: mentions.length,
+        mentions: mentions.map((m) => ({
+          record: m.record_id, eid: m.eid, app: m.app, cat: m.category, ts: m.ts, line: m.line_no,
+          citeHint: `cite:${m.record_id}`,
+        })),
+      };
+    }
+    return { query: q, matched: 'aggregate', returned: top.length, rows: top.map((r) => ({ kind: r.kind, value: r.value_norm, count: r.n, evidences: r.eids, eids: r.eid_list.split(',').map(Number) })) };
+  }
+
+  const rows = db.prepare(`select kind, value_norm, count(*) n, count(distinct eid) eids, group_concat(distinct eid) eid_list
+    from entity${where} group by kind, value_norm order by n desc, eids desc limit ?`).all(...params, limit);
+  const kinds = db.prepare('select kind, count(*) n from entity group by kind order by n desc').all();
+  return {
+    returned: rows.length,
+    kinds,
+    crossEvidence: rows.filter((r) => r.eids > 1).length,
+    rows: rows.map((r) => ({ kind: r.kind, value: r.value_norm, count: r.n, evidences: r.eids, eids: r.eid_list.split(',').map(Number) })),
+  };
+}
+
+/** 时间线分桶统计：bucket = hour | day | month。 */
+export function timeline(db, opts = {}) {
+  const bucket = ['hour', 'day', 'month'].includes(String(opts.bucket)) ? String(opts.bucket) : 'day';
+  const len = bucket === 'hour' ? 13 : bucket === 'day' ? 10 : 7;
+  const filters = ["ts is not null", "ts <> ''"];
+  const params = [];
+  if (opts.eid) { filters.push('eid=?'); params.push(Number(opts.eid)); }
+  if (opts.app) { filters.push('app=?'); params.push(String(opts.app)); }
+  if (opts.from) { filters.push('ts>=?'); params.push(String(opts.from)); }
+  if (opts.to) { filters.push('ts<=?'); params.push(String(opts.to)); }
+  const limit = Math.min(400, Number(opts.limit) || 60);
+  const rows = db.prepare(`select substr(ts,1,${len}) bucket, count(*) n, count(distinct eid) eids, count(distinct app) apps
+    from record where ${filters.join(' and ')} group by bucket order by bucket desc limit ?`).all(...params, limit);
+  return { bucket, returned: rows.length, rows: rows.reverse() };
+}
+
+/** 记录分页（给面板「记录」视图与深链）。 */
+export function records(db, opts = {}) {
+  const limit = Math.min(200, Number(opts.limit) || 20);
+  const offset = Math.max(0, Number(opts.offset) || 0);
+  const filters = [];
+  const params = [];
+  if (opts.eid) { filters.push('r.eid=?'); params.push(Number(opts.eid)); }
+  if (opts.app) { filters.push('r.app=?'); params.push(String(opts.app)); }
+  if (opts.account) { filters.push("ifnull(r.account,'')=?"); params.push(String(opts.account)); }
+  if (opts.category) { filters.push('r.category=?'); params.push(String(opts.category)); }
+  if (opts.artifact) { filters.push('r.artifact_id=?'); params.push(Number(opts.artifact)); }
+  if (opts.from) { filters.push('r.ts>=?'); params.push(String(opts.from)); }
+  if (opts.to) { filters.push('r.ts<=?'); params.push(String(opts.to)); }
+  const kw = typeof opts.q === 'string' ? opts.q.trim() : '';
+  const where = filters.length ? ' where ' + filters.join(' and ') : '';
+  const select = 'select r.id, r.eid, r.app, r.account, r.category, r.subcat, r.line_no, r.ts, r.actor, substr(r.text,1,200) text from record r';
+  let engine = kw ? 'like' : 'none';
+  let where2 = where;
+  let params2 = [...params];
+  let rows = null;
+  if (kw) {
+    if (kw.length >= 3) {
+      try {
+        const ftsWhere = (filters.length ? ' where ' : ' where ') + filters.join(' and ') + (filters.length ? ' and ' : '') + ' r.id in (select rowid from record_fts where record_fts match ?)';
+        const total = db.prepare('select count(*) n from record r' + ftsWhere).get(...params, kw).n;
+        rows = db.prepare(select + ftsWhere + ' order by r.ts desc, r.id desc limit ? offset ?').all(...params, kw, limit, offset);
+        engine = 'fts5-trigram';
+        return {
+          query: kw, engine, returned: rows.length, total, offset,
+          next: offset + rows.length < total ? offset + rows.length : null,
+          rows: rows.map((r) => ({ id: r.id, eid: r.eid, app: r.app, account: r.account ?? '', cat: r.category, sub: r.subcat, line: r.line_no, ts: r.ts, actor: r.actor, text: clip(r.text, 180) })),
+        };
+      } catch {
+        rows = null;
+      }
+    }
+    const like = kw.replace(/[\\%_]/g, (m) => '\\' + m);
+    const likeFilter = "(r.text like '%'||?||'%' escape '\\' or r.body like '%'||?||'%' escape '\\')";
+    where2 = (filters.length ? ' where ' + filters.join(' and ') + ' and ' : ' where ') + likeFilter;
+    params2 = [...params, like, like];
+  }
+  const total = db.prepare('select count(*) n from record r' + where2).get(...params2).n;
+  rows = db.prepare(select + where2 + ' order by r.ts desc, r.id desc limit ? offset ?').all(...params2, limit, offset);
+  return {
+    query: kw || null, engine, returned: rows.length, total, offset,
+    next: offset + rows.length < total ? offset + rows.length : null,
+    rows: rows.map((r) => ({ id: r.id, eid: r.eid, app: r.app, account: r.account ?? '', cat: r.category, sub: r.subcat, line: r.line_no, ts: r.ts, actor: r.actor, text: clip(r.text, 180) })),
+  };
+}
+
 export function statsOf(db) {
   const { one } = helpers(db);
   return {
@@ -265,6 +445,9 @@ export function statsOf(db) {
     byApp: db.prepare('select app, count(*) artifacts, sum(record_count) records from artifact group by app order by artifacts desc').all(),
     errors: db.prepare("select leaf, error from ingest_log where status='error' limit 10").all(),
     noHandle: db.prepare('select eid, app, category, count(*) n from artifact where citable=0 group by eid, app, category').all(),
+    typed: typedTables(db),
+    entityKinds: db.prepare('select kind, count(*) n, count(distinct eid) eids from entity group by kind order by n desc').all(),
+    citations: one('select count(*) n from citation').n,
   };
 }
 

@@ -435,7 +435,7 @@ create table cross_file(id integer primary key, sha256 text, case_number text, e
 |---|---|---|---|
 | **M0 可行性 spike** ✅ 已完成 | 抓 1 个检材（eid3 全部叶子）→ 落 SQLite；测 read 分页吞吐、基址覆盖率、chat/CSV 解析正确性 | 0.5（实耗 ~2 h） | ✅ 139/139 叶、8,443 记录、0 失败、20/20 引用回查一致（详见 §13） |
 | **M1 建库器骨架** ✅ 已完成（2026-11-11） | 探测/枚举/抓取/`record`+`artifact`+`ingest_log`；`--rebuild` 原子替换；并发抓取 2–4 | 1.5（实耗 ~4 h） | ✅ 本案全量 370 叶、22,777 记录、0 失败、DB 52.8 MiB、242–329 s、`verify` 20/20（详见 §14） |
-| **M2 投影 + 实体 + 引用** | `column_map` 首批映射（通讯录/账号/Exif/通话/短信/微信/WhatsApp/Safari/基本信息 16 类）；`entity` 抽取；`citation` | 2 | typed 表覆盖 ≥ 90% 记录；实体命中可跨检材查询 |
+| **M2 投影 + 实体 + 引用** ✅ | `column_map` 严格按真实表头签名映射（24 张 typed 表）；`entity` 抽取与跨检材聚合；`citation` 每行一条 | ✅ 完成 | **22,123/22,777 = 92.7%**（CSV 记录 99.7%）；实体跨检材查询通过（见 §17） |
 | **M3 查询 CLI + 技能** ✅ | **会话经本地 API 查库 + 技能自动安装**（放弃 runtime patch 方案，见 §16） | 1 | ✅ 开发态端到端通过（API 200、技能落在默认根、离线查询 P50 ≤ 25 ms） |
 | **M4 桌面集成** ✅ | **改为 dsh 客户端插件**（侧栏/设置页面板 + 检索 + 树导航 + 建库进度），宿主插件暴露  本地路由 | 1 | ✅ 开发态与打包态 GUI 全程建库+检索（CDP 断言通过，见 §15） |
 | **M5 跨案 + 文档** | `crosscase.db` 同步与查询；文档（本计划转正式文档 + 用户手册）；回归用例 | 1 | 两案间同号/同哈希可查；文档含排障 |
@@ -693,3 +693,51 @@ M4 的规格原本写的是「外壳内加【更新索引】按钮」。实现�
 
 「技能已被会话加载」目前只有**静态证据**：文件在默认根 + `roots()` 源码确认 `<dshHome>/skills` 在列。
 没有做"新建会话 → 看系统提示里有没有该技能"的运行时断言（需要模型调用一次），作为 M3 的遗留验证项。
+
+## 17. M2 实测（typed 投影 + 实体 + 引用，2026-11-11 已通过）
+
+命令：`node tools/ges-index/cli.mjs build --case-dir "E:\forensics\W盘_2919d298-f083-4a81-9c12-bd4ca393bcc5" --rebuild`
+
+### 17.1 建库结果（schemaVersion 3）
+
+| 指标 | 数值 |
+| --- | --- |
+| 叶子 | 370（csv 337 / chat 33），failed 0 |
+| 记录 | 22,777（其中消息 1,594 走 `msg`，CSV 21,183） |
+| typed 投影 | **21,123** 行，24 张表 |
+| typed 覆盖 | **92.7%**（以全部记录为分母）；**99.72%**（以 CSV 记录为分母） |
+| 未投影 | 60 行：`检材信息` 5（按设计只进 `evidence`）、`实体分类` 空表 0 行、其余零星表头变体 |
+| citation | **22,772** 行（每个有基址的 record 一条，`method='ingest'`，`status='ok'`） |
+| column_map | 表头→typed 字段映射（严格按真实表头采集） |
+| 库大小 / 耗时 | **63.0 MiB** / **254 s**（并发 3） |
+
+typed 表行数（实测）：`health_metric` 6,200、`exif` 4,518、`msg_csv` 4,308、`bt_device` 2,005、`net_usage` 1,329、`contact` 745、`app_usage` 706、`app_install` 345、`app_permission` 219、`calendar_event` 191、`web_visit` 171、`file_meta` 116、`account_info` 52、`chat_group` 51、`device_info` 52、`sms` 39、`call_log` 33、`moment` 17、`device_storage` 8、`wifi_record` 6、`sim_card` 5、`mini_program` 5、`favorite` 2、`entity_row` 0。
+
+### 17.2 关键发现与修复
+
+1. **不能按 (app, category) 映射**：同一 category 在不同检材上表头不同（例：`苹果健康|未设置` 既有"指标序列"表头 `开始时间,结束时间,<指标>,来源名称,设备信息`，也有"数据来源"表头 `来源名称,创建时间,修改时间,删除时间,设备型号`）→ 改为**按表头签名**判断类型，24 张表按签名顺序匹配。
+2. **`苹果健康` 指标序列是最大未覆盖块**（6,200 行 ≈ 27% 记录）。首版漏掉，表现为覆盖率卡在 65.5%；补 `health_metric`（metric/value_text/start_ts/end_ts/source_name/device_text）后覆盖率升到 92.7%。
+3. **`column_map` 一直为空**：`mapping` 元组顺序是 `[targetField, sourceColumn]`，build 里按 `[column, targetField]` 解构 → `hasOwnProperty(fields, undefined)` 恒 false，静默不写。已修，现在映射可审计。
+4. **iOS 通讯录**表头是 `头像,名称,号码,归属地,分组,…`（不是 WhatsApp 那套 7 列），补签名分支 → `contact`。
+5. **`records()` 缺关键词过滤**：已补 `q`（≥3 字符 FTS5 trigram，1–2 字 LIKE 回退），返回 `engine` 字段。
+
+### 17.3 查询实测
+
+| 查询 | 结果 |
+| --- | --- |
+| `entity --q 85254877240` | 聚合 3 条：phone 6 次/跨 2 检材（eid 3,5）、email 4 次/跨 2 检材 |
+| `entity --kind phone` | 类别计数 url 5,690 / email 1,271 / phone 1,226；跨检材 15 条 |
+| `timeline --bucket day` | 86 个时间段；2025-05-15 287 条/2 检材/3 应用 |
+| `records --q 陳民浩` | engine `fts5-trigram`，250 条 |
+| `tables` | 24 张 typed 表（中文标签 + 行数） |
+
+### 17.4 UI 端到端（CDP，Electron 44.7.0 实测）
+
+面板新增四个标签页（树 / 检索 / 记录 / 实体 / 时间线 / 表）：记录视图「记录 22777 条 · 当前 1-30」、实体视图「实体类别 url 5690 / email 1271 / phone 1226，返回 30 条聚合 · 跨检材 15 条」、时间线「按天分桶 · 86 个时间段」、表视图 24 张表下拉 + 横向滚动表格；`errors: []`。
+
+### 17.5 遗留 → M3/M6
+
+- `entity_row` 仍为 0：`实体分类/*` 叶子在本案多为空表；等有实际命中数据再验。
+- `检材信息` 5 行按设计不投影（写 `evidence` 表）。
+- typed 表暂无独立时间索引（只有 `msg_csv.ts`、`contact.phone`、`entity_row(kind,value)`）；大库再加。
+- 面板「检索」视图行为未变；记录视图关键词已生效。
