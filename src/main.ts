@@ -22,6 +22,7 @@ import {
 import { DshHost, type HostState } from './host.js'
 import {
   describeLocalModelConfig,
+  diagnoseLocalGateway,
   localModelConfigFile,
   previewLocalModelPatch,
   probeableLocalModel,
@@ -547,6 +548,8 @@ function registerIpc(): void {
   ipcMain.handle('seeu:local-model:preview', (_event, input: unknown) => previewLocalModelPatch(input))
   ipcMain.handle('seeu:local-model:test', (_event, probe: { baseURL?: string; apiKey?: string }) =>
     testLocalGateway(probe ?? {}))
+  ipcMain.handle('seeu:local-model:diagnose', (_event, probe: { baseURL?: string; apiKey?: string; model?: string }) =>
+    diagnoseLocalGateway(probe ?? {}))
   ipcMain.on('seeu:local-model:restart', () => {
     logShell('local model: 用户从设置页请求重启')
     app.relaunch()

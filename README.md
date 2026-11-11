@@ -353,7 +353,7 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 
 **设置界面（推荐）**：菜单 `工具 → 本地模型设置…`（托盘菜单里也有）打开一个独立窗口，可以直接填网关地址、模型、上下文窗口，并且：
 
-- 【测试连接】由主进程直接请求 `<baseURL>/models`（走 Electron `net`，不受页面 CORS 限制，8 秒超时），会列出网关返回的模型 id；
+- 【测试连接与能力自检】由主进程直接请求网关（走 Electron `net`，不受页面 CORS 限制），一次跑三项并逐项给结果：① `GET <baseURL>/models`（地址/鉴权，列出模型 id）；② 一次非流式对话（`max_tokens: 16`，确认模型真能出字）；③ 一次带 `ping_tool` 函数定义的请求（确认网关/模型支持 OpenAI 工具调用——**这项不过，模型在本产品里只能聊天，不能查案件库、不能用技能**）。每项都带耗时；不支持工具的模型会明确提示「只能聊天」；
 - 表单每次改动都会在下方实时预览「将要生成的 patch 文本」，保存前就能看到 `retryPolicy`、`session-title-llm` 这些行；
 - 【保存并重启】写入 `<userData>\local-model.json` 后自动重启应用，重启后模型选择器里就能看到本地模型。
 
@@ -401,11 +401,13 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 node scripts/e2e/local-model-e2e.mjs     # 基础连通：SSE 文本回复
 node scripts/e2e/local-tools-e2e.mjs     # 工具调用：SSE 分片 tool_calls → 工具执行 → 回传 → 最终答复
 node scripts/e2e/local-retry-e2e.mjs     # 低并发重试：前 2 次 429 → 重试后成功
+node scripts/e2e/local-diagnose-check.mjs # 能力自检：支持工具的模型全绿，no-tool 模型工具项标红
 ```
 
 - 基础连通：`REPORT {"ok":true,"chatCalls":2,"gotReply":true,...,"errors":[]}`
 - 工具调用：`REPORT {"ok":true,"chatCalls":3,"gotReply":true,"toolResultSeen":true,"todoCard":true,"firstRequest":{"stream":true,"tools":27,"maxTokensField":"max_tokens","hasStreamOptions":false,"hasStore":false,"keys":"model,messages,stream,max_tokens,tools"},"errors":[]}` —— 27 个工具随请求下发，mock 用 OpenAI 流式规范分片返回 `todo_write` 调用，dsh 执行后把 `role:"tool"` 结果回传（第二轮请求 roles 末尾出现 `tool`），页面出现「任务 1 进行中」与最终答复。
 - 低并发重试：`REPORT {"ok":true,"chatCalls":3,"failTimes":2,"retried":true,"gotReply":true,"errors":[]}` —— 429 由 `retryPolicy.maxRetries: 3` 吸收，用户只看到一次正常回复。
+- 能力自检：`REPORT {"ok":true,"checks":{"firstOk":true,"toolsRowBad":true,"summaryMentionsChatOnly":true}...}` —— 支持工具的模型三项全绿（模型列表 / 基础对话 / 工具调用），`no-tool-model` 的工具项标红并提示「只能聊天，不能查案件库」。
 
 脚本都会用 `taskkill` 清理 Electron，结束后不留进程。
 

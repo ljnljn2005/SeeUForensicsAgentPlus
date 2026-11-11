@@ -72,6 +72,15 @@
   #status { min-height: 40px; border-radius: 8px; padding: 9px 12px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; line-height: 1.7; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
   #status.ok { border-color: rgba(52,211,153,.35); color: var(--ok); }
   #status.warn { border-color: rgba(251,191,36,.35); color: var(--warn); }
+  .diag { display: grid; gap: 6px; margin: 8px 0 4px; }
+  .diag .row { display: flex; gap: 8px; align-items: baseline; padding: 7px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; line-height: 1.6; }
+  .diag .row .dot { font-weight: 700; }
+  .diag .row.ok .dot { color: var(--ok); }
+  .diag .row.bad .dot { color: var(--err); }
+  .diag .row .label { min-width: 84px; color: var(--text); }
+  .diag .row .detail { color: var(--muted); flex: 1; word-break: break-all; }
+  .diag .row .ms { color: var(--muted); opacity: .7; }
+  .diag .sum { font-size: 12px; color: var(--muted); padding-left: 2px; }
   #status.err { border-color: rgba(248,113,113,.35); color: var(--err); }
   #probe { border-radius: 8px; padding: 8px 12px; background: var(--surface); border: 1px dashed var(--border); color: var(--dim); font-size: 11px; line-height: 1.7; word-break: break-all; }
   #probe.ok { border-color: rgba(52,211,153,.35); color: var(--ok); }
@@ -146,7 +155,7 @@
 
   <div class="actions">
     <button class="primary" id="btn-save">保存</button>
-    <button id="btn-test">测试连接</button>
+    <button id="btn-test">测试连接与能力自检</button>
     <button id="btn-probe">重新探测网关</button>
     <button id="btn-save-restart">保存并重启</button>
     <button id="btn-reload">重新读取</button>
@@ -154,12 +163,13 @@
   </div>
 
   <div id="probe" class="hint">启动探测：探测中…</div>
+  <div id="diag" class="diag" hidden></div>
   <div id="status">就绪。</div>
   <pre id="preview"></pre>
 
   <footer>
     常见问题：<br />
-    · 「测试连接」由外壳直接请求 <code>/v1/models</code>，不经过 dsh，失败通常是网关没起或端口不对。<br />
+    · 「测试连接与能力自检」由外壳依次请求 <code>/v1/models</code>、一次非流式对话、一次带 <code>ping_tool</code> 的工具调用请求，不经过 dsh；失败通常是网关没起、端口不对或模型不支持函数调用。<br />
     · 上下文窗口要按模型实际能力填；<strong>小于 48k 的模型</strong>还需要调小随包 preset 里的压缩余量（见 README §9.2）。<br />
     · 保存后必须重启应用：dsh 只在启动时读取 <code>local-model.patch.yml</code>。
   </footer>
@@ -235,6 +245,47 @@
     $('useAsDefault').checked = c.useAsDefault === true || c.defaultModel !== undefined
   }
 
+  /** 能力自检结果：模型列表 / 基础对话 / 工具调用逐项展示。 */
+  function renderDiag(res) {
+    const diagEl = document.getElementById('diag')
+    if (!res || !Array.isArray(res.items)) {
+      diagEl.hidden = true
+      return
+    }
+    diagEl.hidden = false
+    diagEl.textContent = ''
+    for (const item of res.items) {
+      const row = document.createElement('div')
+      row.className = 'row ' + (item.ok ? 'ok' : 'bad')
+      const dot = document.createElement('span')
+      dot.className = 'dot'
+      dot.textContent = item.ok ? '✓' : '✗'
+      const label = document.createElement('span')
+      label.className = 'label'
+      label.textContent = item.label || item.key
+      const detail = document.createElement('span')
+      detail.className = 'detail'
+      detail.textContent = item.detail || ''
+      row.append(dot, label, detail)
+      if (typeof item.ms === 'number') {
+        const ms = document.createElement('span')
+        ms.className = 'ms'
+        ms.textContent = item.ms + ' ms'
+        row.append(ms)
+      }
+      diagEl.append(row)
+    }
+    const sum = document.createElement('div')
+    sum.className = 'sum'
+    const tools = res.items.find((i) => i.key === 'tools')
+    sum.textContent = res.ok
+      ? '自检通过：网关可用于取证会话（含工具调用）。模型：' + (res.model || '(未指定)')
+      : tools && !tools.ok
+        ? '网关能对话，但工具调用不可用 —— 该模型在本产品里只能聊天，不能查案件库、不能用技能。'
+        : '自检未通过，按上面标红的一项排查。'
+    diagEl.append(sum)
+  }
+
   async function load() {
     if (!api) {
       setStatus('预加载桥不可用（window.seeu.localModel 缺失），请从桌面版菜单打开本页。', 'err')
@@ -287,13 +338,18 @@
   $('btn-test').addEventListener('click', async () => {
     const form = readForm()
     if (!form.baseURL) { setStatus('先填网关地址。', 'err'); return }
-    setStatus('正在请求 ' + form.baseURL.replace(/\/$/, '') + '/models …')
-    const res = await api.test({ baseURL: form.baseURL, apiKey: form.apiKey })
-    if (res.ok) {
-      const ids = (res.models || []).map((m) => m.id || m.name || m).filter(Boolean)
-      setStatus('连接成功（HTTP ' + res.status + '），网关模型：\n' + (ids.length ? ids.join('\n') : '(未返回模型列表)'), 'ok')
-    } else {
-      setStatus('连接失败：' + res.error, 'err')
+    const model = (form.models && form.models[0] && form.models[0].id) || undefined
+    setStatus('正在自检 ' + form.baseURL.replace(/\/$/, '') + '（模型列表 → 基础对话 → 工具调用，本地模型首 token 慢可能等十几秒）…')
+    $('btn-test').disabled = true
+    try {
+      const res = await api.diagnose({ baseURL: form.baseURL, apiKey: form.apiKey, model })
+      renderDiag(res)
+      setStatus(res.ok ? '自检通过。' : '自检发现问题，见下方逐项结果。', res.ok ? 'ok' : 'warn')
+    } catch (error) {
+      renderDiag(null)
+      setStatus('自检失败：' + (error && error.message ? error.message : String(error)), 'err')
+    } finally {
+      $('btn-test').disabled = false
     }
   })
   $('btn-probe').addEventListener('click', async () => {

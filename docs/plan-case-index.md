@@ -921,3 +921,34 @@ retry: {"ok":true,"chatCalls":3,"failTimes":2,"retried":true,"gotReply":true,"er
 **踩坑**：dsh 的 composer 是 Lexical `contenteditable`，`Input.insertText` 后必须读 `document.activeElement.innerText` 才能确认输入真的进了编辑器；首屏「预览版说明」卡会挡住 composer，需先点文本为「继续」的按钮（同一 profile 第二次启动不再出现，脚本要容忍 `dismiss: null`）。
 
 **遗留**：手工声明的 pi-ai 路由拿不到原生「系统/工具增量更新」（`dsh-llm-pi-ai/README.zh.md:268`），每轮会以 user 角色重申系统提示并重发完整工具列表——token 消耗比官方模型高，属于协议限制，暂不处理；真实网关（用户提供地址后）仍需一次人工联调。
+
+### 20.6 第 7 轮：网关能力自检（模型列表 / 基础对话 / 工具调用）
+
+**背景**：前三轮只证明「mock 网关能回话、能工具调用」。但用户接的是真实网关，常见失败形态是：`/models` 通、普通对话通，**工具调用不支持**——这种模型在取证会话里等于废的（查库、`present`、技能全靠工具）。用户无法从「能聊天」推断出这一点，所以把「能不能干活」做成设置页的一键自检。
+
+**实现**
+
+- `src/local-model.ts` 新增 `diagnoseLocalGateway({baseURL, apiKey, model, timeoutMs=20000})`：依次 ① `GET /models`；② `POST /chat/completions`（`stream:false`、`max_tokens:16`）；③ 再发一次带 `ping_tool` 函数定义的请求，看是否回 `tool_calls`。每项返回 `{key,label,ok,detail,ms}`，整体 `ok = 三项全过`。响应解析同时兼容 JSON 与「即使 `stream:false` 也回 SSE」的网关（逐行拼 `data:` chunk）。
+- IPC `seeu:local-model:diagnose`；preload 增 `localModel.diagnose()` 与 `LocalModelDiagnosis` 类型。
+- `renderer/local-model.html`：按钮改为【测试连接与能力自检】，结果区 `#diag` 逐行显示 `✓/✗ 标签 详情 耗时`，末行为结论；工具项失败时明确写「网关能对话，但工具调用不可用 —— 该模型在本产品里只能聊天，不能查案件库、不能用技能」。
+
+**验证**（`scripts/e2e/local-diagnose-check.mjs`：mock 网关 `:18087`，`mock-32b` 支持工具、`no-tool-model` 只回文本；在设置窗口里真实点按钮）：
+
+```
+{"ok":true,"chatCalls":4,
+ "supportedModel":{"status":"自检通过。","rows":[
+   {"ok":true,"text":"✓ 模型列表 2 个模型：mock-32b, no-tool-model 1499 ms"},
+   {"ok":true,"text":"✓ 基础对话 回复「ok」 9 ms"},
+   {"ok":true,"text":"✓ 工具调用 返回 ping_tool({\"value\":1}) 7 ms"},
+   {"ok":null,"text":"自检通过：网关可用于取证会话（含工具调用）。模型：mock-32b"}]},
+ "noToolModel":{"status":"自检发现问题，见下方逐项结果。","rows":[
+   {"ok":true,"text":"✓ 模型列表 2 个模型：mock-32b, no-tool-model 4 ms"},
+   {"ok":true,"text":"✓ 基础对话 回复「ok」 6 ms"},
+   {"ok":false,"text":"✗ 工具调用 未返回 tool_calls（该模型/网关可能不支持函数调用，会话里只能聊天、不能查库） 3 ms"},
+   {"ok":null,"text":"网关能对话，但工具调用不可用 —— 该模型在本产品里只能聊天，不能查案件库、不能用技能。"}]},
+ "checks":{"firstOk":true,"toolsRowBad":true,"summaryMentionsChatOnly":true},"errors":[]}
+```
+
+注意：`npm run test:e2e:diagnose` 需先 `npm run build`（改的是 `src/`/`renderer/`，esbuild 打 `dist/`）；e2e 里 `taskkill /F /IM electron.exe` 会清掉本机其它 Electron 开发实例，仅测试机使用。
+
+**遗留**：自检只测「非流式 + tool_choice 缺省」这一种形态；部分网关只在流式下支持工具调用（dsh 实际走流式），若真实网关出现「自检失败但会话可用」的情况，再加一项流式探测。

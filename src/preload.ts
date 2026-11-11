@@ -54,6 +54,21 @@ export interface LocalModelSaveResult {
   readonly error?: string
 }
 
+export interface LocalModelDiagnosisItem {
+  readonly key: string
+  readonly label: string
+  readonly ok: boolean
+  readonly detail: string
+  readonly ms?: number
+}
+
+export interface LocalModelDiagnosis {
+  readonly ok: boolean
+  readonly baseURL: string
+  readonly model?: string
+  readonly items: LocalModelDiagnosisItem[]
+}
+
 export interface LocalModelProbeResult {
   readonly ok: boolean
   readonly status?: number
@@ -81,6 +96,8 @@ const api = {
       ipcRenderer.invoke('seeu:local-model:preview', config) as Promise<{ ok: boolean; patch?: string; error?: string }>,
     test: (probe: { baseURL?: string; apiKey?: string }): Promise<LocalModelProbeResult> =>
       ipcRenderer.invoke('seeu:local-model:test', probe) as Promise<LocalModelProbeResult>,
+    diagnose: (probe: { baseURL?: string; apiKey?: string; model?: string }): Promise<LocalModelDiagnosis> =>
+      ipcRenderer.invoke('seeu:local-model:diagnose', probe) as Promise<LocalModelDiagnosis>,
     probe: (): Promise<LocalModelProbeState | null> =>
       ipcRenderer.invoke('seeu:local-model:probe') as Promise<LocalModelProbeState | null>,
     onProbe: (callback: (probe: LocalModelProbeState | null) => void): (() => void) => {

@@ -222,3 +222,240 @@ export async function testLocalGateway(probe: GatewayProbe): Promise<
     clearTimeout(timer)
   }
 }
+
+// ── 网关能力自检 ────────────────────────────────────────────────────────────
+
+export interface GatewayProbeInput extends GatewayProbe {
+  /** 参与自检的模型 id；不给就取 /models 的第一个。 */
+  readonly model?: string
+}
+
+export interface DiagnosisItem {
+  readonly key: 'models' | 'chat' | 'tools'
+  readonly label: string
+  readonly ok: boolean
+  readonly detail: string
+  readonly ms?: number
+}
+
+export interface GatewayDiagnosis {
+  readonly ok: boolean
+  readonly baseURL: string
+  readonly model?: string
+  readonly items: DiagnosisItem[]
+}
+
+interface CompletionJson {
+  choices?: Array<{
+    message?: {
+      content?: string | null
+      tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: string } }>
+    }
+  }>
+}
+
+/** 网关返回 JSON，或（少数网关即使 stream:false 也回 SSE）从 `data:` 行拼一个结果。 */
+function parseCompletionText(text: string): CompletionJson | undefined {
+  const trimmed = text.trim()
+  if (trimmed === '') return undefined
+  try {
+    return JSON.parse(trimmed) as CompletionJson
+  } catch {
+    // 继续尝试 SSE
+  }
+  const content: string[] = []
+  const toolCalls: Array<{ id?: string; function?: { name?: string; arguments?: string } }> = []
+  for (const line of trimmed.split(/\r?\n/)) {
+    if (!line.startsWith('data:')) continue
+    const payload = line.slice(5).trim()
+    if (payload === '' || payload === '[DONE]') continue
+    try {
+      const chunk = JSON.parse(payload) as {
+        choices?: Array<{
+          delta?: {
+            content?: string
+            tool_calls?: Array<{ index?: number; id?: string; function?: { name?: string; arguments?: string } }>
+          }
+        }>
+      }
+      for (const choice of chunk.choices ?? []) {
+        const delta = choice.delta
+        if (delta?.content !== undefined) content.push(delta.content)
+        for (const call of delta?.tool_calls ?? []) {
+          const slot = toolCalls[call.index ?? 0] ?? {}
+          toolCalls[call.index ?? 0] = {
+            id: call.id ?? slot.id,
+            function: {
+              name: call.function?.name ?? slot.function?.name,
+              arguments: (slot.function?.arguments ?? '') + (call.function?.arguments ?? ''),
+            },
+          }
+        }
+      }
+    } catch {
+      // 单个 chunk 坏掉不影响整体
+    }
+  }
+  if (content.length === 0 && toolCalls.length === 0) return undefined
+  return { choices: [{ message: { content: content.join(''), tool_calls: toolCalls } }] }
+}
+
+async function postCompletion(
+  url: string,
+  apiKey: string | undefined,
+  body: unknown,
+  timeoutMs: number,
+): Promise<{ ok: boolean; status: number; text: string; ms: number }> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const started = Date.now()
+  try {
+    const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json, text/event-stream' }
+    if (apiKey !== undefined && apiKey !== '') headers.authorization = `Bearer ${apiKey}`
+    const response = await net.fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    const text = await response.text()
+    return { ok: response.ok, status: response.status, text, ms: Date.now() - started }
+  } catch (error) {
+    const message = (error as Error).name === 'AbortError' ? `超时（${timeoutMs}ms）` : (error as Error).message
+    return { ok: false, status: 0, text: message, ms: Date.now() - started }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * 「测试连接与能力自检」：本地网关能不能用，不只看 `/models` 通不通。
+ *
+ * 1. `GET /models`：地址与鉴权；
+ * 2. `POST /chat/completions`（非流式、`max_tokens: 16`）：模型真能出字；
+ * 3. 同一端点带一个 `ping_tool` 函数调用：网关/模型是否支持 OpenAI 工具调用
+ *    —— 取证会话几乎每一步都依赖工具，这一项不过，模型只能聊天。
+ */
+export async function diagnoseLocalGateway(input: GatewayProbeInput): Promise<GatewayDiagnosis> {
+  const base = (input.baseURL ?? '').trim().replace(/\/+$/, '')
+  if (base === '') {
+    return { ok: false, baseURL: '', items: [{ key: 'models', label: '地址', ok: false, detail: '缺少 baseURL' }] }
+  }
+  const timeoutMs = input.timeoutMs ?? 20_000
+  const items: DiagnosisItem[] = []
+
+  // 1) /models
+  const modelsStarted = Date.now()
+  let models: Array<{ id?: string; name?: string }> = []
+  let model = input.model
+  try {
+    const headers: Record<string, string> = { accept: 'application/json' }
+    if (input.apiKey !== undefined && input.apiKey !== '') headers.authorization = `Bearer ${input.apiKey}`
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const response = await net.fetch(`${base}/models`, { method: 'GET', headers, signal: controller.signal })
+    clearTimeout(timer)
+    const text = await response.text()
+    if (!response.ok) {
+      items.push({ key: 'models', label: '模型列表', ok: false, detail: `HTTP ${response.status}：${text.slice(0, 200)}`, ms: Date.now() - modelsStarted })
+      return { ok: false, baseURL: base, items }
+    }
+    try {
+      const parsed = JSON.parse(text) as { data?: Array<{ id?: string; name?: string }> }
+      if (Array.isArray(parsed.data)) models = parsed.data
+    } catch {
+      // 非 JSON 也算连通：地址对了、鉴权过了
+    }
+    if (model === undefined || model === '') model = models[0]?.id
+    const names = models.map((m) => m.id ?? m.name ?? '?').slice(0, 6).join(', ')
+    items.push({
+      key: 'models',
+      label: '模型列表',
+      ok: true,
+      detail: models.length > 0 ? `${models.length} 个模型：${names}${models.length > 6 ? '…' : ''}` : 'HTTP 200（网关未返回模型清单）',
+      ms: Date.now() - modelsStarted,
+    })
+  } catch (error) {
+    const message = (error as Error).name === 'AbortError' ? `超时（${timeoutMs}ms）` : (error as Error).message
+    items.push({ key: 'models', label: '模型列表', ok: false, detail: message, ms: Date.now() - modelsStarted })
+    return { ok: false, baseURL: base, items }
+  }
+
+  // 2) 基础对话
+  const chat = await postCompletion(
+    `${base}/chat/completions`,
+    input.apiKey,
+    {
+      model,
+      messages: [{ role: 'user', content: '只回复：ok' }],
+      stream: false,
+      max_tokens: 16,
+    },
+    timeoutMs,
+  )
+  const chatJson = chat.ok ? parseCompletionText(chat.text) : undefined
+  const chatText = (chatJson?.choices?.[0]?.message?.content ?? '').trim()
+  items.push({
+    key: 'chat',
+    label: '基础对话',
+    ok: chat.ok && chatJson !== undefined,
+    detail: chat.ok
+      ? chatJson === undefined
+        ? `HTTP ${chat.status}，但响应不是可解析的 chat completion`
+        : `回复「${chatText.slice(0, 40) || '（空）'}」`
+      : `HTTP ${chat.status}：${chat.text.slice(0, 200)}`,
+    ms: chat.ms,
+  })
+  if (!chat.ok || chatJson === undefined) {
+    return { ok: false, baseURL: base, model, items }
+  }
+
+  // 3) 工具调用
+  const tool = await postCompletion(
+    `${base}/chat/completions`,
+    input.apiKey,
+    {
+      model,
+      messages: [{ role: 'user', content: '调用 ping_tool，参数 value 填 1，不要用文字回答。' }],
+      stream: false,
+      max_tokens: 128,
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'ping_tool',
+            description: '连通性测试工具：把 value 原样回显。',
+            parameters: {
+              type: 'object',
+              properties: { value: { type: 'number', description: '任意数字' } },
+              required: ['value'],
+              additionalProperties: false,
+            },
+          },
+        },
+      ],
+    },
+    timeoutMs,
+  )
+  const toolJson = tool.ok ? parseCompletionText(tool.text) : undefined
+  const toolCalls = toolJson?.choices?.[0]?.message?.tool_calls ?? []
+  const firstCall = toolCalls[0]?.function
+  items.push({
+    key: 'tools',
+    label: '工具调用',
+    ok: tool.ok && toolCalls.length > 0,
+    detail: !tool.ok
+      ? `HTTP ${tool.status}：${tool.text.slice(0, 200)}`
+      : toolCalls.length === 0
+        ? `未返回 tool_calls（该模型/网关可能不支持函数调用，会话里只能聊天、不能查库）`
+        : `返回 ${firstCall?.name ?? '?'}(${(firstCall?.arguments ?? '').slice(0, 80)})`,
+    ms: tool.ms,
+  })
+
+  return {
+    ok: items.every((item) => item.ok),
+    baseURL: base,
+    model,
+    items,
+  }
+}
