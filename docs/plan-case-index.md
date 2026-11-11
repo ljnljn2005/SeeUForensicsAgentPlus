@@ -1275,3 +1275,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 修了 `m2-ui-check.mjs` 探针：检索框改按 placeholder（含「关键词」）定位，避免新增筛选框后 `last input` 命中筛选框导致 `searchOk:false` 误报。
 
 遗留：检索筛选的 `app` 是精确匹配、日期按字符串比较（跨时区/非 ISO 时间可能不精确）；导出只覆盖当前页（20/30 行）；`[data-tool]` 工具体验在 mock 对话（无工具调用）里没被 theme-conv 覆盖。
+
+### 20.22 命中词高亮 + 浅色会话区回归
+
+1. **命中词高亮**（`plugins/seeu-case-index/client.js`）：新增模块级 `escapeRe` / `highlight(text, query)`，把片段按查询词切成 `<mark class="seeu-hl">`；检索结果用后端回传的 `result.query`，记录视图用 `applied.q`（含 `actor：` 前缀也在高亮范围内）。样式走注入的 `CSS_TEXT`：`background: color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color) 26%, transparent)`，深浅主题自动跟随。
+2. **浅色会话区**：`scripts/e2e/theme-conv-check.mjs` 支持 `--theme=dark|light`（或 `SEEU_E2E_THEME`），浅色时把 `body` / `documentElement` 的 `data-ds-dark-theme` 摘掉再采样；新增断言 `themeApplied`（暗色必须带属性，浅色不能带且 `body` 底色是 `rgb(245, 247, 250)`），截图分 `conv-theme-dark.png` / `conv-theme-light.png`。
+
+验证：
+
+- `npm run test:e2e:theme-conv` → 暗色 `{"theme":"dark","ok":true,…,"themeApplied":true,"errors":[]}`（气泡 `color(srgb 0.133 0.827 0.933 / 0.12)`、圆角 16、行高 23.8；正文 14px/24.92；composer 圆角 16）；
+- `--theme=light` → `{"theme":"light","ok":true,…,"themeApplied":true,"styles":{"bodyBg":"rgb(245, 247, 250)","darkAttr":false,…}}`，气泡强调色换成浅色盘 `#0E7490`（`color(srgb 0.055 0.455 0.565 / 0.12)`）；
+- `npm run test:e2e:search` → 新增 `highlights:{"count":10,"sample":["加密","加密","加密"]}`、`highlightOk:true`（其余断言不变：base 20 条 → 筛选 eid 3 → 12 条全匹配 → 清单 4,596 字符）；
+- `node scripts/e2e/m2-ui-check.mjs` → `m2ok:true / errors:[]`；`npm test` 38/38；`npm run check:overlay` OK。
+
+遗留：高亮只覆盖检索/记录两个视图（树与表视图是短标签/表格单元，暂不高亮）；`<mark>` 依赖 Chromium 默认语义，若官方样式表给 `mark` 加了底色仍会被我们的 class 覆盖。

@@ -11,6 +11,8 @@ const root = process.cwd()
 const CDP_PORT = Number(process.env.SEEU_E2E_CDP ?? 9351)
 const MOCK_PORT = Number(process.env.SEEU_E2E_MOCK ?? 18080)
 const MODEL_ID = 'mock-14b'
+// 主题：dark（默认）或 light；light 时把 body/root 的 data-ds-dark-theme 摘掉，验证浅色 token + 会话区规则也生效
+const THEME = (process.argv.find((a) => a.startsWith('--theme=')) ?? '').split('=')[1] || process.env.SEEU_E2E_THEME || 'dark'
 const REPLY = 'MOCK-OK：本地网关已连通，模型是 ' + MODEL_ID
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -158,6 +160,16 @@ for (let i = 0; i < 90; i += 1) {
 }
 console.log('[e2e] ui:', JSON.stringify(ui))
 
+// 切主题：dsh 的浅色是「没有 data-ds-dark-theme 属性」，暗色是 body 上带该属性
+const themeSwitch = await ev('(() => {' +
+  'if (' + JSON.stringify(THEME) + " === \'light\') {" +
+  ' document.body.removeAttribute(\'data-ds-dark-theme\'); document.documentElement.removeAttribute(\'data-ds-dark-theme\')' +
+  ' } else { document.body.setAttribute(\'data-ds-dark-theme\', \'\') }' +
+  ' return { theme: ' + JSON.stringify(THEME) + ", dark: document.body.hasAttribute('data-ds-dark-theme') }" +
+  '})()')
+console.log('[e2e] theme:', JSON.stringify(themeSwitch))
+await sleep(600)
+
 // 关掉「预览版说明」提示卡（它会挡住 composer）
 const dismissed = await ev(`(() => {
   const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 8 && r.height > 8 }
@@ -255,6 +267,8 @@ const styles = await ev(`(() => {
     composer: composer ? { radius: px(cs(composer).borderTopLeftRadius), border: cs(composer).borderTopColor } : null,
     toolCards: document.querySelectorAll('[data-tool]').length,
     flowItems: document.querySelectorAll('[data-chat-flow-kind]').length,
+    bodyBg: cs(document.body).backgroundColor,
+    darkAttr: document.body.hasAttribute('data-ds-dark-theme'),
   }
 })()`)
 
@@ -278,6 +292,8 @@ const checks = {
   markdownLine: (styles?.markdown?.line ?? 0) >= 24,
   composerRadius: (styles?.composer?.radius ?? 0) >= 10,
   flowItems: (styles?.flowItems ?? 0) >= 2,
+  // 主题确实切过去了：暗色带 data-ds-dark-theme；浅色不带，且底色是浅灰 #F5F7FA
+  themeApplied: THEME === 'light' ? (styles?.darkAttr === false && /245|246|247|250/.test(String(styles?.bodyBg || ''))) : styles?.darkAttr === true,
 }
 
 await send('Page.enable')
@@ -287,11 +303,12 @@ let shotPath = null
 if (shotData) {
   const { writeFileSync, mkdirSync } = await import('node:fs')
   mkdirSync('.dev/shots', { recursive: true })
-  shotPath = '.dev/shots/conv-theme.png'
+  shotPath = '.dev/shots/conv-theme-' + THEME + '.png'
   writeFileSync(shotPath, Buffer.from(shotData, 'base64'))
 }
 
 const summary = {
+  theme: THEME,
   ok: got && Object.values(checks).every(Boolean) && consoleErrors.length === 0,
   gotReply: got,
   checks,

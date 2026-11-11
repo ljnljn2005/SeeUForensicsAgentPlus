@@ -118,6 +118,7 @@ window.__ModuleLoader__.load({
 .seeu-row { display: flex; align-items: baseline; gap: 8px; min-height: 30px; padding: 5px 8px; border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(34, 211, 238, 0.10)); border-radius: var(--dsw-radius-sm, 6px); font-size: 12.5px; }
 .seeu-row.is-clickable { cursor: pointer; }
 .seeu-row.is-clickable:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(34, 211, 238, 0.09)); }
+.seeu-hl { background: color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE) 26%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
 .seeu-row-time { flex: none; color: var(--dsw-alias-label-tertiary, #8397B0); font-family: var(--dsh-font-family-code-default, ui-monospace, Consolas, monospace); font-size: 11px; white-space: nowrap; }
 .seeu-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 12px; border: 1px dashed var(--dsw-alias-border-l2, rgba(148, 163, 184, 0.18)); border-radius: var(--dsw-radius-md, 8px); background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, #131E33) 60%, transparent); color: var(--dsw-alias-label-tertiary, #8397B0); font-size: 12px; text-align: center; }
 .seeu-empty-title { color: var(--dsw-alias-label-secondary, #A9BBD1); font-size: 12.5px; font-weight: 600; }
@@ -196,6 +197,19 @@ window.__ModuleLoader__.load({
       }
       if (obj?.from || obj?.to) parts.push(`时间 ${obj.from || '…'} ~ ${obj.to || '…'}`);
       return parts.length ? parts.join(' · ') : '无';
+    };
+
+    /** 关键词命中高亮：把 snippet 按查询词切开，命中片段包 <mark class="seeu-hl">（样式跟主题强调色走）。 */
+    const escapeRe = (text) => String(text ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const highlight = (text, query) => {
+      const value = String(text ?? '');
+      const q = String(query ?? '').trim();
+      if (!q) return value;
+      let re = null;
+      try { re = new RegExp('(' + escapeRe(q) + ')', 'gi'); } catch { return value; }
+      const parts = value.split(re);
+      if (parts.length <= 1) return value;
+      return parts.map((part, i) => (i % 2 === 1 ? h('mark', { key: i, className: 'seeu-hl' }, part) : part));
     };
 
     /** 逐条回查 /cite，拼成可粘贴进报告的 Markdown 引用清单（只返回文本，不写剪贴板）。 */
@@ -435,7 +449,7 @@ window.__ModuleLoader__.load({
               h('span', { style: { ...S.tag, flex: 'none' } }, `${r.eid}·${r.app}`),
               h('span', { className: 'seeu-row-time', style: S.rowTime }, r.ts ?? ''),
               h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, r.cat ?? ''),
-              h('span', { style: S.ellipsis }, `${r.actor ? `${r.actor}：` : ''}${r.text ?? ''}`),
+              h('span', { style: S.ellipsis }, highlight(`${r.actor ? `${r.actor}：` : ''}${r.text ?? ''}`, applied.q)),
               h('span', { style: { flex: 'none', color: C_ACC, fontSize: 11 } }, '引用 ›')))),
           h('div', { style: { ...S.row, marginTop: 8 } },
             data.offset > 0 ? actionButton('上一页', () => setOffset(Math.max(0, data.offset - PAGE))) : null,
@@ -1338,7 +1352,7 @@ window.__ModuleLoader__.load({
                   },
                     h('span', { style: { ...S.tag, flex: 'none' } }, `${r.eid}·${r.app}`),
                     h('span', { style: S.rowTime }, r.ts ?? ''),
-                    h('span', { style: S.ellipsis }, r.snip))))
+                    h('span', { style: S.ellipsis }, highlight(r.snip, result.query)))))
                 : h(EmptyState, { title: '没有命中', text: '换个关键词再试；≥3 字走 FTS5 全文索引，2 字自动退化为 LIKE。' }))
               : (db ? h(EmptyState, { title: '还没有检索', text: '输入关键词后回车或点「检索」；结果行可点开引用句柄。' }) : null)) : null,
 

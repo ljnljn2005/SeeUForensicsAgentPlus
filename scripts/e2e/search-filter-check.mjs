@@ -149,6 +149,9 @@ try {
 
   const base = await readSearchRows()
   report.baseRows = base.length
+  // 命中词高亮：结果片段里应有 <mark class="seeu-hl">，且内容就是查询词
+  report.highlights = await evaluate('(() => { const ms = [...document.querySelectorAll(\'mark.seeu-hl\')]; return { count: ms.length, sample: ms.slice(0, 3).map((m) => m.textContent) } })()')
+  report.highlightOk = (report.highlights?.count ?? 0) > 0 && (report.highlights?.sample ?? []).every((t) => String(t).includes("加密"))
   if (!base.length) throw new Error('关键词检索没有结果，无法继续')
   const eid = base[0].eid
   report.filterEid = eid
@@ -191,7 +194,7 @@ try {
   })()`)
 
   report.ok = report.panelOpened && report.scanned && report.tabOpened && report.queryFilled &&
-    report.searched && report.baseRows > 0 && report.filterApplied && report.filteredRows > 0 &&
+    report.searched && report.baseRows > 0 && report.highlightOk && report.filterApplied && report.filteredRows > 0 &&
     report.filteredAllMatch && report.filterNarrowed && report.copyNoteShown &&
     report.clipboard.len > 0 && report.clipboard.hasHeader && report.clipboard.hasCite &&
     report.afterClear === '' && errors.length === 0
