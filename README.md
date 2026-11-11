@@ -56,16 +56,24 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.1.6**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.1.7**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 769 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,526,064 B（330/330 个 `@deepseek-ai` 包齐全，19,638 entries，含 `plugins/seeu-case-index/**`、`tools/ges-index/**`） |
-| `release/SeeUForensicsAgentPlus-0.1.6-x64.exe`（NSIS 安装包） | 211,888,816 B |
-| `release/SeeUForensicsAgentPlus-0.1.6-x64-portable.exe` | 189,488,673 B |
+| `release/win-unpacked/resources/app.asar` | 168,558,803 B（330/330 个 `@deepseek-ai` 包齐全，19,639 entries，含 `plugins/seeu-case-index/**`、`tools/ges-index/**`） |
+| `release/SeeUForensicsAgentPlus-0.1.7-x64.exe`（NSIS 安装包） | 211,895,076 B |
+| `release/SeeUForensicsAgentPlus-0.1.7-x64-portable.exe` | 189,498,334 B |
 
-实测冷启动到 dsh UI：目录版 4100 ms；portable 首次 44.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+实测冷启动到 dsh UI：目录版 4071 ms；portable 首次 42.4s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+
+> **v0.1.7 改了什么**
+>
+> 1. **M5 跨案中央库**：新增 `tools/ges-index/cross.mjs` 与 `<dsh 工作目录>\indexes\crosscase.db`；每个案件库按"按案删了重写"幂等同步，汇总实体（kind+归一化值）、提及（每实体每案最多 5 条、带 `Goldeneyes://` 句柄）与镜像哈希。
+> 2. **跨案查询**：`/seeu-index/cross/{list,sync,entity,top,files,stats}` 接口 + CLI `xcase sync/list/top/entity/files/stats`（`npm run index:xcase:*`）；建库完成后自动同步该案。
+> 3. **面板第 7 个标签「跨案」**：统计概览、案件清单、【同步全部案件】（显示新增/更新案数）、重合实体 Top（minCases/kind 可调）、实体值查询按案件分组展示提及并可回查该案引用。
+> 4. **技能升级**：`ges-case-index` SKILL.md 增加第 10 段跨案命令与"跨案命中属线索级、引用分别落各案句柄"的规则。
+> 5. 双案夹具实测：`sharedEntities 3999`、Top 首行 `url … 2 案 508 次`、`phone 85254877240` 跨 2 案 12 次；打包态跨案面板 `m5ok: true`、`errors: []`。
 
 > **v0.1.6 改了什么**
 >
@@ -282,6 +290,25 @@ patch 又必须在启动前静态写好 —— 所以任何写死绝对路径的
 
 面板里选过的案件目录会写进 `dsh-home\index-state.json`，外壳下次启动自动把它拼进 `SEEU_INDEX_SEARCH_DIRS`，
 所以**第二次开应用就能直接看到上次的库**，不用再选目录。
+
+### 8.6 跨案碰撞（M5，v0.1.7 起）
+
+面板第 7 个标签「跨案」，把多个案件的索引库汇总到一个**中央库**：
+
+- 位置：`<dsh 工作目录>\indexes\crosscase.db`（外壳注入 `SEEU_CROSS_DB`，可用环境变量覆盖）；
+- 同步：每建好一个案件库会自动同步该案；也可以点【同步全部案件】重新扫描 `SEEU_INDEX_SEARCH_DIRS` 下的所有库；
+- 能看什么：跨案重合实体 Top（同一手机号 / 邮箱 / URL 出现在 ≥2 个案件）、按实体值查询各案的提及（含 `recordId`、`Goldeneyes://` 句柄、行号、所在检材与应用）；同哈希镜像（`sha256`）能查出现在哪些案件；
+- 接口：`GET /seeu-index/cross/{list,entity,top,files,stats}`、`POST /seeu-index/cross/sync`（都不需要 `db` 参数）；CLI 等价命令：
+
+```bash
+npm run index:xcase:sync    # 扫描默认目录并同步
+npm run index:xcase:stats   # 案件数 / 实体数 / 跨案重合数
+npm run index:xcase:top     # 跨 >=2 案的重合实体
+npm run index:xcase:list    # 已同步案件清单
+node tools/ges-index/cli.mjs xcase entity --value 85254877240
+```
+
+注意：跨案结果是**线索级**信息，不是证据引用；写报告时要落到各案自己的 `base_handle`（面板里点提及行可直接取该案引用）。同步语义与排障见 `docs/plan-case-index.md` §18（按案删了重写、不自动清理已移除的案件、SQLITE_BUSY 等待 1–2 秒重试）。
 
 ## 9. 许可与来源
 

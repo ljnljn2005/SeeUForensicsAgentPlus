@@ -303,7 +303,7 @@ node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-un
 
 ## 6. 体积现状
 
-以 2026-11-11 **v0.1.6** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验 + 案件索引插件 + M2 typed 层）为准。
+以 2026-11-11 **v0.1.7** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验 + 案件索引插件 + M2 typed 层 + M5 跨案库）为准。
 更早的 Electron 44.11.0 首轮产物已作废，不引用其数字。
 
 `npm run package:dir` 产物：
@@ -311,21 +311,21 @@ node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-un
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 | 234.9 MiB | Electron 主程序（含 rcedit 写入的图标/版本资源） |
-| `release/win-unpacked/resources/app.asar` | 168,526,064 | 160.7 MiB | JS + 资源 + node_modules 生产依赖 + 索引插件 + `tools/ges-index`（19,638 个 asar 条目，`@deepseek-ai` 330/330） |
+| `release/win-unpacked/resources/app.asar` | 168,558,803 | 160.7 MiB | JS + 资源 + node_modules 生产依赖 + 索引插件 + `tools/ges-index`（19,639 个 asar 条目，`@deepseek-ai` 330/330） |
 | `release/win-unpacked/`（整个目录） | — | 769 MiB | 含 Electron 运行时、locales、`app.asar.unpacked` 原生模块（`du -sm`） |
 
 `npm run package:win` 额外产出（同一轮）：
 
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
-| `release/SeeUForensicsAgentPlus-0.1.6-x64.exe` | 211,888,816 | 202.1 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
-| `release/SeeUForensicsAgentPlus-0.1.6-x64.exe.blockmap` | 220,719 | 215.6 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
-| `release/SeeUForensicsAgentPlus-0.1.6-x64-portable.exe` | 189,488,673 | 180.7 MiB | 免安装单文件（自解压运行） |
+| `release/SeeUForensicsAgentPlus-0.1.7-x64.exe` | 211,895,076 | 202.1 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
+| `release/SeeUForensicsAgentPlus-0.1.7-x64.exe.blockmap` | 221,194 | 216.0 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
+| `release/SeeUForensicsAgentPlus-0.1.7-x64-portable.exe` | 189,498,334 | 180.7 MiB | 免安装单文件（自解压运行） |
 
 即：安装包约 **202 MiB**、portable 约 **181 MiB**，解包目录约 **769 MiB**。
 
 > v0.1.0（缺 21 个 peer 包，启动即崩）、v0.1.1（overlay 是定稿前的工具面）与 v0.1.2
-> （工具面还有 21 项，含插件管理/市场）以及 v0.1.3（无索引插件）均已作废，对外只发 v0.1.4；各版本 asar 体积差异
+> （工具面还有 21 项，含插件管理/市场）、v0.1.3（无索引插件）、v0.1.4（无 M3 会话查库）、v0.1.5（无 M2 typed 层）、v0.1.6（无 M5 跨案）均已作废，对外只发 v0.1.7；各版本 asar 体积差异
 > 来自补包与取证预设内容。
 
 体积构成大头：Electron 运行时本体（exe + DLL/pak/icudtl）、`app.asar` 中
@@ -562,3 +562,22 @@ asar 自检（19,638 entries）命中：`plugins/seeu-case-index/{index.js,clien
 
 > 注意：MSYS Bash 里给 `SEEU_UI_EXE` 传 `$PWD/...` 会变成 `/d/...` 路径，Node `spawn` 会 ENOENT；
 > 必须用带盘符的 Windows 路径（`D:\...\SeeUForensicsAgentPlus.exe`）。
+
+### v0.1.7 回归验证（M5 跨案中央库，2026-11-11）
+
+目录版：`{"ok": true, "elapsedMs": 4071, "url": "http://127.0.0.1:51801/", "title": "DeepSeek Harness"}`
+
+portable：`{"ok": true, "elapsedMs": 42420, "url": "http://127.0.0.1:56068/"}`（首次 42.4s，含 ~800MB 解包）。
+
+asar 自检（19,639 entries）命中：`plugins/seeu-case-index/{index.js,client.js}`、`tools/ges-index/{cross,typed,query,build}.mjs`、
+`resources/forensics/skills/ges-case-index/SKILL.md`（7,023 B，含 `/cross/top`）。
+
+面板接口（dev，双案夹具）：`cross/list` → cases 2 / sharedEntities 3999 / images 10；`POST cross/sync` → 200（2 案各 4,407 实体 / 6,526 提及 / 5 镜像）；`cross/top?minCases=2` → 首行 `url https://hk01.app.link/AFu7F8I2MO] 2 案 508 次`；`cross/entity?value=85254877240` → `caseCount 2, hits 12`。
+
+打包态 UI 端到端（`SEEU_UI_EXE=release/win-unpacked/SeeUForensicsAgentPlus.exe node .probe/m5-ui-check.mjs`）：
+七个标签（树/检索/记录/实体/时间线/表/跨案）均渲染，跨案页显示 案件 2 / 实体 8814 / 跨案重合实体 3999 / 镜像 10，
+同步按钮回「同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）」，实体查询显示 `phone 85254877240 跨 2 案 · 2 检材 · 提及 12 次` 与各案 `Goldeneyes://` 句柄；
+`m5ok: true`、`errors: []`。
+
+> 测试用的第二案是把真实库复制后改 `meta.case_number` 的夹具（`Documents\SeeUForensicsWorkspace\caseB-test`）；
+> 验证完已删除夹具与 `indexes/crosscase.db`，交付版首次使用时重新同步即可。

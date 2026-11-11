@@ -13,3 +13,4 @@ Thumbs.db
 # 本地覆盖（可选）
 .env
 .env.local
+/indexes/

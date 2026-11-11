@@ -438,7 +438,7 @@ create table cross_file(id integer primary key, sha256 text, case_number text, e
 | **M2 投影 + 实体 + 引用** ✅ | `column_map` 严格按真实表头签名映射（24 张 typed 表）；`entity` 抽取与跨检材聚合；`citation` 每行一条 | ✅ 完成 | **22,123/22,777 = 92.7%**（CSV 记录 99.7%）；实体跨检材查询通过（见 §17） |
 | **M3 查询 CLI + 技能** ✅ | **会话经本地 API 查库 + 技能自动安装**（放弃 runtime patch 方案，见 §16） | 1 | ✅ 开发态端到端通过（API 200、技能落在默认根、离线查询 P50 ≤ 25 ms） |
 | **M4 桌面集成** ✅ | **改为 dsh 客户端插件**（侧栏/设置页面板 + 检索 + 树导航 + 建库进度），宿主插件暴露  本地路由 | 1 | ✅ 开发态与打包态 GUI 全程建库+检索（CDP 断言通过，见 §15） |
-| **M5 跨案 + 文档** | `crosscase.db` 同步与查询；文档（本计划转正式文档 + 用户手册）；回归用例 | 1 | 两案间同号/同哈希可查；文档含排障 |
+| **M5 跨案 + 文档** ✅ | `crosscase.db` 同步与查询；文档（本计划转正式文档 + 用户手册）；回归用例 | 1 | 两案间同号/同哈希可查；文档含排障（见 §18） |
 | **M6 OCR 开关（可选）** | `--ocr off\|auto\|force`、取图→识别→`ocr_result`、设置页开关、准确率抽检 | 1 | `off` 不增加建库耗时；`auto` 抽检 20 张准确率 ≥ 90%；OCR 文本一律 `citable=0` |
 
 合计约 **8 人天**（M6 可延后；不含 OCR 引擎随包体积与火眼侧配合）。建议做完 M0 再决定是否继续（M0 能提前暴露行号对齐/吞吐问题）。
@@ -741,3 +741,53 @@ typed 表行数（实测）：`health_metric` 6,200、`exif` 4,518、`msg_csv` 4
 - `检材信息` 5 行按设计不投影（写 `evidence` 表）。
 - typed 表暂无独立时间索引（只有 `msg_csv.ts`、`contact.phone`、`entity_row(kind,value)`）；大库再加。
 - 面板「检索」视图行为未变；记录视图关键词已生效。
+
+## 18. M5 实测（跨案中央库，2026-11-11 已通过）
+
+### 18.1 交付物
+
+| 文件 | 作用 |
+| --- | --- |
+| `tools/ges-index/cross.mjs` | 中央库 schema（`schema_meta/case_ref/cross_entity/cross_mention/cross_image`）、`syncCase`/`syncAll`、`listCases`/`findEntity`/`topShared`/`findImage`/`crossStats` |
+| `tools/ges-index/cli.mjs` | 新增 `xcase sync/list/top/entity/files/stats` 子命令（`npm run index:xcase:*`） |
+| `plugins/seeu-case-index/index.js` | 路由 `/seeu-index/cross/{list,sync,entity,top,files,stats}`；建库完成后自动 `syncOneCase`（`job.cross` 字段回报结果） |
+| `plugins/seeu-case-index/client.js` | 面板第 7 个标签「跨案」（统计 / 案件清单 / 同步全部 / 重合实体 Top / 实体查询） |
+| `src/host.ts` | 向 dsh 子进程注入 `SEEU_WORKSPACE`、`SEEU_CROSS_DB`，bash 里的技能与 CLI 都能直接找到中央库 |
+| `resources/forensics/skills/ges-case-index/SKILL.md` | 第 10 段跨案命令 + 工作方式第 7 条（跨案命中属线索级，引用分别落各案句柄） |
+
+中央库位置：`<dsh 工作目录>/indexes/crosscase.db`（`SEEU_CROSS_DB` 可覆盖，`xcase --out` 可临时改）。
+本案实测：`C:\Users\ASUS\Documents\SeeUForensicsWorkspace\indexes\crosscase.db`。
+
+### 18.2 同步语义
+
+- 一次同步 = 找到所有「已建库案件」（`findIndexes`，目录自身 + 向下两层）→ 逐个在**同一事务**里删除该案旧行、再写入：实体按 `(kind, value_norm, eid)` 聚合进 `cross_entity`（`hits` 次数）；每个聚合最多留 **5 条** `cross_mention`（`snippet` ≤ 200 字）；`evidence.sha256/md5` 写入 `cross_image`；最后 upsert `case_ref`（案号/案名/库路径/记录数/typed 覆盖率/同步时间）。
+- 幂等：重复同步同一案结果一致（先删后写），可以随时点【同步全部案件】。
+- **不会**自动清理「已删除的案件」——`case_ref` 与派生行会残留，需要手动删 `crosscase.db` 重新同步（见 18.4 排障）。
+- 建库路径（面板【建库 / 更新】）成功后会**自动**同步该案，不需要再点一次【同步全部案件】。
+
+### 18.3 验证（Windows x64 / Electron 44.7.0）
+
+双案夹具：真实案件库 + 复制并把 `meta.case_number` 改为 `TEST-B-0001`、`case_name` 改为「测试案B」的副本（`.probe/xcase/caseA|caseB`）：
+
+| 命令 / 接口 | 结果 |
+| --- | --- |
+| `xcase sync`（CLI） | 2 案各 entities 4,407 / mentions 6,526 / images 5 |
+| `xcase stats` | `{cases:2, entities:8814, sharedEntities:3999, images:10, kinds:[url 3031, phone 509, email 459]}` |
+| `xcase top --min-cases 2` | url `https://hk01.app.link/AFu7F8I2MO]` 508 次跨 2 案；phone `85254974406` 424 次；email `85254974406@s.whatsapp.net` 406 次 |
+| `xcase entity --value 85254877240` | `caseCount 2`、`hits 12`，按案件分组返回提及（含 `recordId`、`Goldeneyes://…` 句柄、`citable`） |
+| 面板接口（dev，2 案） | `GET /seeu-index/cross/list` → cases 2 / sharedEntities 3999；`POST /cross/sync` → 200 且回 2 案统计；`GET /cross/top?minCases=2` → 3 行 caseCount 2；`GET /cross/entity?value=85254877240` → caseCount 2 |
+| 面板接口（dev，仅真实案） | `cross/list` → cases 1 / entities 4407 / images 5；`cross/sync` 200，自动发现 `index-state.json` 里的 `E:\forensics\W盘_…` |
+
+### 18.4 排障
+
+1. **面板显示「尚未同步」/ cases 0**：先确认目标案件库存在（`<案件目录>\.seeu-index\case-index.db`），再点【同步全部案件】；接口里 `GET /seeu-index/list` 能列出索引说明发现路径没问题。
+2. **中央库位置不对**：面板顶部会显示 `crossPath`；默认 `<dsh 工作目录>/indexes/crosscase.db`。可用环境变量 `SEEU_CROSS_DB` 固定到别处（外壳会注入，CLI 也认）。
+3. **同一案重复出现 / 旧案残留**：同步是"按案删了重写"，但不会删案件本身；要清干净就关掉应用、删除 `crosscase.db`，再点【同步全部案件】。
+4. **数据库被占用（SQLITE_BUSY）**：中央库开了 WAL + `busy_timeout 5000`；若刚点过同步，等 1–2 秒重试。
+5. **镜像（sha256）查不到**：只有 `evidence` 表里有哈希的检材才会进 `cross_image`；火眼没算哈希的检材查不到属正常。
+
+### 18.5 遗留
+
+- 跨案只做"实体 + 镜像哈希"，没有跨案时间线、没有语义相似度（按用户此前决策先做关键词/实体）。
+- `cross_image` 目前按 `(case_number, eid)` 去重，同一镜像在一案里多次出现只记一行（符合"同一镜像在哪几案出现"的用法）。
+- 案件删除不自动同步清理（见 18.2/18.4）。

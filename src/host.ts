@@ -203,6 +203,9 @@ export class DshHost extends EventEmitter {
       SEEU_INDEX_STATE_FILE: join(this.homeDir, 'index-state.json'),
       // 会话内直接查库：bash 工具继承本进程环境，技能里用 $SEEU_INDEX_API 拼 URL。
       SEEU_INDEX_API: `http://127.0.0.1:${port}/seeu-index`,
+      // 跨案中央库固定在 dsh 工作目录（= 用户设置的案件/工作目录）下的 indexes/crosscase.db。
+      SEEU_WORKSPACE: this.workspace,
+      SEEU_CROSS_DB: join(this.workspace, 'indexes', 'crosscase.db'),
       // dsh 用户级技能根（外壳启动前把随包技能复制到这里）。
       SEEU_SKILLS_DIR: join(this.homeDir, 'skills'),
       // 桌面版不接收远端访问；CLI 已绑定 loopback，这里再收敛一次。

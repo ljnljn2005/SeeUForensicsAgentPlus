@@ -5,6 +5,7 @@ import { basename, dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
 import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records } from '../../tools/ges-index/query.mjs';
+import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
 
 const ROUTE = '/seeu-index';
 const jobs = new Map();
@@ -19,6 +20,26 @@ function safeDb(param) {
   }
   if (!existsSync(abs) || !statSync(abs).isFile()) throw Object.assign(new Error('索引库不存在'), { status: 404 });
   return abs;
+}
+
+/** 跨案中央库位置：SEEU_CROSS_DB 优先，否则 <工作区>/indexes/crosscase.db。 */
+function crossPath() {
+  if (process.env.SEEU_CROSS_DB) return resolve(process.env.SEEU_CROSS_DB);
+  const ws = process.env.SEEU_WORKSPACE || process.cwd();
+  return crossDbPath(resolve(ws));
+}
+
+/** 把一个建好/更新的案件库同步进中央库（失败只记日志，不影响主流程）。 */
+function syncOneCase(dbPath) {
+  try {
+    const xdb = openCross(crossPath());
+    try {
+      const caseDb = new (require('node:sqlite').DatabaseSync)(dbPath, { readOnly: true });
+      try { return syncCase(xdb, caseDb, { dbPath }); } finally { caseDb.close(); }
+    } finally { xdb.close(); }
+  } catch (error) {
+    return { ok: false, error: error?.message ?? String(error) };
+  }
 }
 
 function defaultDirs() {
@@ -72,6 +93,7 @@ function startBuild(args) {
     job.phase = 'done';
     job.percent = 100;
     job.result = result;
+    job.cross = syncOneCase(result.db);
     job.elapsedMs = Date.now() - job.startedAt;
   }).catch((error) => {
     job.status = 'failed';
@@ -103,6 +125,41 @@ async function handle(req, res) {
       rememberDirs(indexes.map((i) => i.caseDir));
       return send(res, 200, { indexes });
     }
+    // ---------- 跨案中央库（M5） ----------
+    if (path.startsWith('/cross/')) {
+      const xdb = openCross(crossPath());
+      try {
+        if (path === '/cross/list') {
+          return send(res, 200, { crossPath: crossPath(), stats: crossStats(xdb), cases: listCases(xdb) });
+        }
+        if (req.method === 'POST' && path === '/cross/sync') {
+          const dirs = [...new Set([...defaultDirs()])];
+          const indexes = findIndexes(dirs);
+          const results = syncAll(xdb, indexes);
+          xdb.prepare("insert or replace into schema_meta(k, v) values('lastSync', ?)").run(new Date().toISOString());
+          return send(res, 200, { crossPath: crossPath(), indexes: indexes.length, cases: results });
+        }
+        if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+        if (path === '/cross/entity') {
+          const opts = { minCases: url.searchParams.get('minCases') ?? 1, limit: url.searchParams.get('limit') ?? 30 };
+          for (const k of ['kind', 'value', 'q']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
+          return send(res, 200, findEntity(xdb, opts));
+        }
+        if (path === '/cross/top') {
+          const opts = { minCases: url.searchParams.get('minCases') ?? 2, limit: url.searchParams.get('limit') ?? 30 };
+          if (url.searchParams.get('kind')) opts.kind = url.searchParams.get('kind');
+          return send(res, 200, topShared(xdb, opts));
+        }
+        if (path === '/cross/files') {
+          return send(res, 200, findImage(xdb, { sha256: url.searchParams.get('sha256'), md5: url.searchParams.get('md5') }));
+        }
+        if (path === '/cross/stats') return send(res, 200, crossStats(xdb));
+      } finally {
+        xdb.close();
+      }
+      return send(res, 404, { error: `未知跨案接口 ${path}` });
+    }
+
     if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
 
     const dbPath = safeDb(url.searchParams.get('db'));

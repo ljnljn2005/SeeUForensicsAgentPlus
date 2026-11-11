@@ -17,6 +17,7 @@ description: 查询火眼（GoldenEyes/GES）案件全解析结果的本地索�
 
 - `$SEEU_INDEX_API`：索引服务基地址，形如 `http://127.0.0.1:<port>/seeu-index`
 - `$SEEU_INDEX_SEARCH_DIRS`：默认扫描目录（`;` 分隔，通常含 dsh 工作目录与 `<DSH_HOME>/indexes`）
+- `$SEEU_CROSS_DB`：跨案中央库路径（默认 `<工作目录>/indexes/crosscase.db`），跨案查询不需要 `db` 参数
 
 先确认服务可用（没有输出就说明桌面版的索引插件没起来，直接告诉用户去开「取证索引」面板）：
 
@@ -70,6 +71,15 @@ curl -s -G "$API/timeline" --data-urlencode "db=$DB" --data-urlencode "bucket=da
 # 9) 记录列表（带关键词/筛选，用于对某一枝取证式浏览）
 curl -s -G "$API/records" --data-urlencode "db=$DB" --data-urlencode "q=转账" --data-urlencode "limit=20"
 #    返回 {query, engine:"fts5-trigram"|"like"|"none", returned,total,offset,next,rows[]}；行有 id → 用 /cite 取句柄
+# 10) 跨案中央库（M5）：多个案件库汇总后的重合实体 / 镜像哈希
+#   注意：跨案接口不需要 db 参数，走 $SEEU_INDEX_API/cross/*
+curl -s "$SEEU_INDEX_API/cross/list"                       # 已同步案件、统计、lastSync
+curl -s -X POST "$SEEU_INDEX_API/cross/sync"               # 扫描默认目录并同步全部案件
+curl -s -G "$SEEU_INDEX_API/cross/top" --data-urlencode "minCases=2" --data-urlencode "limit=20"
+#    → rows[] {kind,valueText,caseCount,evidenceCount,hits}：同一手机号/邮箱/网址在多个案件出现
+curl -s -G "$SEEU_INDEX_API/cross/entity" --data-urlencode "value=85254877240"
+#    → cases[] {caseNumber,caseName,eids,mentions[{recordId,eid,app,category,ts,baseHandle,citable,snippet}]}
+curl -s -G "$SEEU_INDEX_API/cross/files" --data-urlencode "sha256=<64位十六进制>"
 ```
 
 输出约定：`truncated: true` + `next` 表示还有下一页（把 `next` 作为下一次的 `node`/`offset` 继续）；
@@ -83,4 +93,5 @@ curl -s -G "$API/records" --data-urlencode "db=$DB" --data-urlencode "q=转账" 
 4. 行为节奏/时间集中性用 `/timeline`，再用 `/records` 带 `from`/`to` 看具体内容；
 5. 回答里引用时给双层方括号 + `Goldeneyes://` 句柄，并对 `citable=1` 的记录注明检材与时间；typed 表（contact/call_log/…）只是投影视图，引用一律回 `record.id` → `/cite`；
 6. **不要**编造库里没有的记录；库里查不到就明确说"索引中未发现"，并说明索引的覆盖范围（哪些检材、哪些应用）；
-7. 索引库可能是旧版本（用户加了新检材但没点【建库 / 更新】）：遇到"应该存在却查不到"时，先看 `/list` 里的 `builtAt`，提醒用户更新索引。
+7. 跨案件关联（"本案出现过的号码/邮箱是否也出现在别的案子"）用 `/cross/top` 与 `/cross/entity`；`caseCount>=2` 才是跨案命中，属线索级信息，引用时要分别落到各案 `mentions[].baseHandle`；
+8. 索引库可能是旧版本（用户加了新检材但没点【建库 / 更新】）：遇到"应该存在却查不到"时，先看 `/list` 里的 `builtAt`，提醒用户更新索引。

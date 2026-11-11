@@ -47,6 +47,9 @@ window.__ModuleLoader__.load({
       trClick: { cursor: 'pointer' },
       barTrack: { flex: 1, minWidth: 60, height: 10, borderRadius: 5, background: 'color-mix(in srgb, currentColor 12%, transparent)' },
       barFill: { height: 10, borderRadius: 5, background: '#247bbf' },
+      statRow: { display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'baseline', fontSize: 12 },
+      statItem: { display: 'inline-flex', alignItems: 'baseline', gap: 3 },
+      statNum: { fontSize: 14, fontWeight: 600 },
     };
 
     const fmtBytes = (n) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MiB` : n > 1024 ? `${(n / 1024).toFixed(0)} KiB` : `${n} B`);
@@ -60,6 +63,7 @@ window.__ModuleLoader__.load({
       ['entity', '实体'],
       ['timeline', '时间线'],
       ['tables', '表'],
+      ['cross', '跨案'],
     ];
     const BUCKETS = [
       ['hour', '按小时'],
@@ -108,12 +112,16 @@ window.__ModuleLoader__.load({
       const run = useCallback(async () => {
         const mine = ++seq.current;
         setState((s) => ({ loading: true, error: '', data: s.data }));
+        let data = null;
         try {
-          const data = await loader();
+          data = await loader();
           if (mine === seq.current) setState({ loading: false, error: '', data });
         } catch (e) {
+          data = null;
           if (mine === seq.current) setState({ loading: false, error: String(e.message ?? e), data: null });
         }
+        // 返回值给调用方（如“同步后刷新并对比案件数”）用；旧调用方忽略即可。
+        return mine === seq.current ? data : null;
       }, deps);
       useEffect(() => { void run(); }, [run]);
       return { loading: state.loading, error: state.error, data: state.data, reload: run };
@@ -374,6 +382,187 @@ window.__ModuleLoader__.load({
             h('span', { style: S.muted }, '点一行看引用句柄（record_id 为空的行不可引用）。'))) : null);
     }
 
+    // ---------- 视图：跨案（中央库概览 / 同步 / 重合实体 Top / 实体值查询） ----------
+    const CROSS_KINDS = [
+      ['', '全部'],
+      ['phone', 'phone'],
+      ['email', 'email'],
+      ['url', 'url'],
+    ];
+    const fmtTime = (v) => {
+      if (!v) return '—';
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString();
+    };
+
+    function CrossCaseView({ onCite, onDetail }) {
+      const list = useLoad(() => api('/cross/list', {}), []);
+      const [minDraft, setMinDraft] = useState('2');
+      const [minCases, setMinCases] = useState('2');
+      const [kind, setKind] = useState('');
+      const top = useLoad(() => api('/cross/top', { minCases, kind, limit: 30 }), [minCases, kind]);
+      const [syncing, setSyncing] = useState(false);
+      const [note, setNote] = useState('');
+      const [syncError, setSyncError] = useState('');
+      const [valueInput, setValueInput] = useState('');
+      const [hit, setHit] = useState({ value: '', kind: '' });
+      const found = useLoad(() => (hit.value ? api('/cross/entity', { value: hit.value, kind: hit.kind, minCases: 1, limit: 30 }) : Promise.resolve(null)), [hit]);
+
+      const stats = list.data?.stats ?? null;
+      const cases = list.data?.cases ?? [];
+      const kindOptions = useMemo(() => {
+        const extra = (stats?.kinds ?? [])
+          .map((k) => String(k.kind ?? ''))
+          .filter((k) => k && !CROSS_KINDS.some(([v]) => v === k));
+        return [...CROSS_KINDS, ...extra.map((k) => [k, k])];
+      }, [stats]);
+      const dbByCase = useMemo(() => {
+        const m = new Map();
+        for (const c of cases) if (c.caseNumber && c.dbPath) m.set(c.caseNumber, c.dbPath);
+        return m;
+      }, [cases]);
+
+      const doSync = useCallback(async () => {
+        if (syncing) return;
+        setSyncing(true);
+        setNote('');
+        setSyncError('');
+        const before = stats?.cases ?? 0;
+        try {
+          const res = await post('/cross/sync', {});
+          const processed = (res.cases ?? []).length;
+          const fresh = await list.reload();
+          const after = fresh?.stats?.cases ?? before;
+          const added = Math.max(0, after - before);
+          const updated = Math.max(0, processed - added);
+          setNote(processed
+            ? `同步完成：扫描索引 ${res.indexes ?? '?'} 个，处理 ${processed} 案（新增 ${added}、更新 ${updated}）；现共 ${after} 案。`
+            : `同步完成：扫描索引 ${res.indexes ?? 0} 个，没有可同步的案件索引（先建库）。`);
+        } catch (e) {
+          setSyncError(String(e.message ?? e));
+        } finally {
+          setSyncing(false);
+        }
+      }, [syncing, stats, list]);
+
+      const query = () => {
+        const v = valueInput.trim();
+        setHit(v ? { value: v, kind: '' } : { value: '', kind: '' });
+      };
+      const openMention = useCallback((caseNumber, m) => {
+        const target = dbByCase.get(caseNumber);
+        if (target && m.recordId !== null && m.recordId !== undefined) { onCite(m.recordId, target); return; }
+        // 该案索引不在本机：用跨案库里的 base_handle / snippet 直接渲染引用详情样式。
+        onDetail({
+          citation: m.baseHandle || null,
+          path: `${caseNumber ?? ''}${m.app ? ` / ${m.app}` : ''}`,
+          line: m.lineNo,
+          ts: m.ts,
+          text: m.snippet ?? '',
+        });
+      }, [dbByCase, onCite, onDetail]);
+
+      const topRows = top.data?.rows ?? [];
+      const foundRows = found.data?.rows ?? [];
+      return h('div', { style: S.card },
+        // ---- 概览 + 同步 ----
+        h('div', { style: S.panel },
+          h('div', { style: S.row },
+            h('span', { style: { fontSize: 13, fontWeight: 600 } }, '跨案概览'),
+            h('span', { style: { ...S.muted, marginLeft: 'auto', ...S.ellipsis } }, `跨案库：${list.data?.crossPath ?? '…'}`),
+            actionButton(syncing ? '同步中…' : '同步全部案件', doSync, { primary: true, disabled: syncing })),
+          list.error ? h('div', { style: S.err }, `跨案库读取失败：${list.error}`) : null,
+          syncError ? h('div', { style: S.err }, `同步失败：${syncError}`) : null,
+          note ? h('div', { style: { ...S.muted, color: '#247bbf' } }, note) : null,
+          list.loading && !list.data ? emptyHint('加载跨案库…') : null,
+          stats ? h('div', { style: S.statRow },
+            h('span', { style: S.statItem }, h('span', { style: S.muted }, '案件'), h('span', { style: S.statNum }, String(stats.cases ?? 0))),
+            h('span', { style: S.statItem }, h('span', { style: S.muted }, '实体'), h('span', { style: S.statNum }, String(stats.entities ?? 0))),
+            h('span', { style: S.statItem }, h('span', { style: S.muted }, '跨案重合实体'), h('span', { style: S.statNum }, String(stats.sharedEntities ?? 0))),
+            h('span', { style: S.statItem }, h('span', { style: S.muted }, '镜像'), h('span', { style: S.statNum }, String(stats.images ?? 0))),
+            h('span', { style: S.muted }, `最近同步：${fmtTime(stats.lastSync)}`)) : null,
+          !list.loading && !list.error && !cases.length ? emptyHint('跨案库还没有案件：点「同步全部案件」把本机索引汇总进来。') : null,
+          cases.length ? h('div', null,
+            h('div', { style: S.muted }, `案件 ${cases.length} 个（案名 / 案号 / 记录数 / 同步时间）`),
+            h('div', { style: S.list }, cases.map((c) => h('div', { key: c.caseNumber, style: { ...S.item, cursor: 'default' }, title: c.caseDir ?? '' },
+              h('span', { style: { fontWeight: 600 } }, c.caseName || c.caseNumber || '(未命名案件)'),
+              h('span', { style: S.muted }, c.caseNumber ?? ''),
+              h('span', { style: S.muted }, `${c.records ?? 0} 记录`),
+              h('span', { style: { ...S.muted, marginLeft: 'auto' } }, fmtTime(c.syncedAt)))))) : null),
+        // ---- 重合实体 Top ----
+        h('div', { style: S.panel },
+          h('div', { style: S.row },
+            h('span', { style: { fontSize: 13, fontWeight: 600 } }, '重合实体 Top'),
+            h('span', { style: S.muted }, 'minCases'),
+            narrowInput(minDraft, setMinDraft, '≥ 案数', { width: 56, onEnter: () => setMinCases(minDraft.trim() || '2') }),
+            actionButton('刷新', () => setMinCases(minDraft.trim() || '2')),
+            h('span', { style: S.muted }, '类型'),
+            h('select', {
+              style: { ...S.filter, width: 'auto', minWidth: 88, cursor: 'pointer' },
+              value: kind,
+              onChange: (e) => setKind(e.target.value),
+            }, kindOptions.map(([v, l]) => h('option', { key: v || 'all', value: v }, l)))),
+          top.error ? h('div', { style: S.err }, `重合实体读取失败：${top.error}`) : null,
+          top.loading && !top.data ? emptyHint('加载重合实体…') : null,
+          top.data && !topRows.length
+            ? emptyHint(stats && stats.entities === 0
+              ? '跨案库还没有实体数据：点「同步全部案件」先汇总。'
+              : `没有跨 ≥${top.data.minCases ?? minCases} 案的实体：把 minCases 调低或换类型再试。`)
+            : null,
+          topRows.length ? h('div', null,
+            h('div', { style: S.muted }, `共 ${top.data?.returned ?? topRows.length} 条 · 点一行看各案提及（base_handle / recordId）`),
+            h('div', { style: S.tableWrap }, h('table', { style: S.table },
+              h('thead', null, h('tr', null,
+                ['类型', '值', '案件数', '提及次数'].map((c) => h('th', { key: c, style: S.th }, c)))),
+              h('tbody', null, topRows.map((r) => h('tr', {
+                key: `${r.kind}|${r.valueNorm}`,
+                style: S.trClick,
+                title: '点一下查该实体在不同案件的提及',
+                onClick: () => { setValueInput(r.valueNorm); setHit({ value: r.valueNorm, kind: r.kind }); },
+              },
+                h('td', { style: S.td }, r.kind),
+                h('td', { style: { ...S.td, maxWidth: 260 } }, r.valueText || r.valueNorm),
+                h('td', { style: S.td }, String(r.caseCount ?? '')),
+                h('td', { style: S.td }, String(r.hits ?? '')))))))) : null),
+        // ---- 实体值查询 ----
+        h('div', { style: S.panel },
+          h('div', { style: S.row },
+            h('span', { style: { fontSize: 13, fontWeight: 600 } }, '实体值查询'),
+            narrowInput(valueInput, setValueInput, '实体值，如 85254877240（回车查询）', { width: 220, onEnter: query }),
+            actionButton('查询', query),
+            hit.value ? actionButton('清空', () => { setValueInput(''); setHit({ value: '', kind: '' }); }) : null),
+          found.error ? h('div', { style: S.err }, `实体查询失败：${found.error}`) : null,
+          found.loading && !found.data ? emptyHint('查询中…') : null,
+          !hit.value ? emptyHint('输入实体值（手机号 / 邮箱 / URL 等）后回车或点「查询」；也可点上面 Top 表的一行。') : null,
+          hit.value && found.data && !foundRows.length ? emptyHint(`没有命中实体「${hit.value}」：值是归一化后精确匹配，检查是否完整；也可用 Top 表下钻。`) : null,
+          foundRows.length ? h('div', { style: S.card }, foundRows.map((row) => h('div', { key: `${row.kind}|${row.value}`, style: S.card },
+            h('div', { style: S.row },
+              h('span', { style: S.tag }, row.kind),
+              h('span', { style: { ...S.mono, wordBreak: 'break-all' } }, row.value),
+              h('span', { style: S.muted }, `跨 ${row.caseCount} 案 · ${row.evidenceCount ?? '-'} 检材 · 提及 ${row.hits ?? 0} 次`),
+              row.lastTs ? h('span', { style: S.muted }, `最近 ${row.lastTs}`) : null),
+            (row.cases ?? []).map((g) => h('div', { key: `${row.kind}|${g.caseNumber}`, style: { ...S.card, borderLeft: '2px solid color-mix(in srgb, #247bbf 45%, transparent)', paddingLeft: 8 } },
+              h('div', { style: S.row },
+                h('span', { style: { fontWeight: 600 } }, g.caseName || g.caseNumber),
+                h('span', { style: S.muted }, g.caseNumber ?? ''),
+                (g.eids ?? []).length ? h('span', { style: S.muted }, `eid ${g.eids.join(', ')}`) : null,
+                dbByCase.get(g.caseNumber) ? h('span', { style: S.tag }, '可回查引用') : h('span', { style: { ...S.tag, opacity: 0.7 } }, '索引不在本机')),
+              (g.mentions ?? []).length
+                ? h('div', { style: { ...S.list, maxHeight: 200 } }, (g.mentions ?? []).map((m, i) => h('div', {
+                  key: `${m.recordId ?? 'x'}|${m.lineNo ?? i}|${i}`,
+                  style: S.item,
+                  title: `${m.citable === 0 ? '不可引用：' : ''}点一下看引用句柄（base_handle）`,
+                  onClick: () => openMention(g.caseNumber, m),
+                },
+                  h('span', { style: { ...S.muted, minWidth: 64 } }, `E${m.eid ?? '?'}${m.app ? `·${m.app}` : ''}`),
+                  h('span', { style: { ...S.muted, minWidth: 118 } }, m.ts ?? ''),
+                  h('span', { style: { ...S.muted, minWidth: 54 } }, m.lineNo != null ? `第 ${m.lineNo} 行` : ''),
+                  h('span', { style: S.ellipsis }, m.snippet ?? ''),
+                  m.recordId != null ? h('span', { style: S.tag }, `#${m.recordId}`) : null,
+                  m.baseHandle ? h('span', { style: { ...S.mono, fontSize: 10, opacity: 0.72 } }, m.baseHandle) : null)))
+                : emptyHint('（该案提及只保留最近 8 条，可能被截断）')))))) : null));
+    }
+
     function Panel() {
       const [dir, setDir] = useState(() => localStorage.getItem('seeu.indexDir') ?? '');
       const [indexes, setIndexes] = useState([]);
@@ -489,13 +678,17 @@ window.__ModuleLoader__.load({
         loadNode(db, target);
       }, [crumbs, db, loadNode]);
 
-      const showCite = useCallback(async (recordId) => {
-        if (!db || recordId === null || recordId === undefined) return;
+      const showCite = useCallback(async (recordId, targetDb) => {
+        const useDb = targetDb ?? db;
+        if (!useDb || recordId === null || recordId === undefined) return;
         setBusy('cite');
-        try { setDetail(await api('/cite', { db, id: recordId })); }
+        try { setDetail(await api('/cite', { db: useDb, id: recordId })); }
         catch (e) { setError(String(e.message ?? e)); }
         finally { setBusy(''); }
       }, [db]);
+
+      // 跨案视图在“该案索引不在本机”时，直接用跨案库字段拼出同样式的引用详情。
+      const showDetail = useCallback((next) => setDetail(next ?? null), []);
 
       const openRecords = useCallback((seed) => {
         setRecordSeed(seed ?? null);
@@ -520,7 +713,7 @@ window.__ModuleLoader__.load({
       return h('div', { style: S.wrap },
         h('div', null,
           h('div', { style: { fontSize: 15, fontWeight: 600 } }, '取证案件索引'),
-          h('div', { style: S.muted }, '把火眼案件的全解析结果建成只读索引库（SQLite），支持树导航、关键词检索、记录 / 实体 / 时间线 / 表视图；引用可回查 Goldeneyes 句柄。')),
+          h('div', { style: S.muted }, '把火眼案件的全解析结果建成只读索引库（SQLite），支持树导航、关键词检索、记录 / 实体 / 时间线 / 表 视图与跨案碰撞；引用可回查 Goldeneyes 句柄。')),
 
         h('div', { style: S.panel },
           h('div', { style: S.row },
@@ -606,7 +799,8 @@ window.__ModuleLoader__.load({
           tab === 'records' ? (db ? h(RecordsView, { db, seed: recordSeed, onCite: showCite }) : noDbHint) : null,
           tab === 'entity' ? (db ? h(EntityView, { db, onCite: showCite }) : noDbHint) : null,
           tab === 'timeline' ? (db ? h(TimelineView, { db, onDrill: openRecords }) : noDbHint) : null,
-          tab === 'tables' ? (db ? h(TablesView, { db, onCite: showCite }) : noDbHint) : null),
+          tab === 'tables' ? (db ? h(TablesView, { db, onCite: showCite }) : noDbHint) : null,
+          tab === 'cross' ? h(CrossCaseView, { onCite: showCite, onDetail: showDetail }) : null),
 
         detailPanel);
     }

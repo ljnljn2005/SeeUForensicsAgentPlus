@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { buildIndex, IndexBuildError, TOOL, TOOL_VERSION } from './build.mjs';
 import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records } from './query.mjs';
 import { SCHEMA_VERSION } from './parse.mjs';
+import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, topShared } from './cross.mjs';
 
 const out = (obj) => console.log(JSON.stringify(obj));
 
@@ -53,6 +54,14 @@ const HELP = `ges-index ${TOOL_VERSION}
   ges-index timeline [--eid 3] [--bucket day|hour|month] [--from ...] [--to ...]
   ges-index records [--eid 3] [--app WhatsApp] [--category 通讯录] [--limit 20] [--offset 0]
   ges-index verify [--sample 20]      随机回火眼核对正文与基址
+
+跨案（中央库 <workspace>\\indexes\\crosscase.db，--workspace / --out / SEEU_CROSS_DB 可覆盖）：
+  ges-index xcase sync [dir...]       扫描这些目录下的案件库并同步进中央库（不给目录=工作区 + dsh-home\indexes）
+  ges-index xcase list                已同步的案件清单
+  ges-index xcase top [--min-cases 2] [--kind phone]      跨案重合实体排行
+  ges-index xcase entity [--value 85254877240] [--kind phone] [--q 8525] [--min-cases 1]
+  ges-index xcase files --sha256 <hex> | --md5 <hex>      同一镜像哈希出现在哪些案件
+  ges-index xcase stats
   ges-index list <dir>...             列出这些目录下已建库的案件
   ges-index version
 
@@ -89,6 +98,29 @@ async function main() {
   if (cmd === 'list') {
     const dirs = opts._.slice(1).filter((d) => !d.startsWith('-'));
     return out({ dirs, indexes: findIndexes(dirs.length ? dirs : [process.cwd()]) });
+  }
+
+  if (cmd === 'xcase') {
+    const sub = opts._[1] ?? 'list';
+    const workspace = opts.workspace ? resolve(String(opts.workspace)) : (process.env.SEEU_WORKSPACE ? resolve(process.env.SEEU_WORKSPACE) : process.cwd());
+    const crossPath = opts.out ? resolve(String(opts.out)) : (process.env.SEEU_CROSS_DB ? resolve(process.env.SEEU_CROSS_DB) : crossDbPath(workspace));
+    const xdb = openCross(crossPath);
+    try {
+      let result;
+      if (sub === 'sync' || sub === 'build') {
+        const dirs = opts._.slice(2).filter((d) => typeof d === 'string' && !d.startsWith('-'));
+        const scan = dirs.length ? dirs : [workspace];
+        const indexes = findIndexes(scan);
+        result = { crossPath, scanned: scan, indexes: indexes.length, cases: syncAll(xdb, indexes) };
+        xdb.prepare("insert or replace into schema_meta(k, v) values('lastSync', ?)").run(new Date().toISOString());
+      } else if (sub === 'list') result = { crossPath, cases: listCases(xdb) };
+      else if (sub === 'entity') result = findEntity(xdb, { kind: opts.kind, value: opts.value ?? opts._[2], q: opts.q, minCases: Number(opts['min-cases']) || 1, limit: opts.limit });
+      else if (sub === 'top') result = topShared(xdb, { minCases: Number(opts['min-cases']) || 2, kind: opts.kind, limit: opts.limit });
+      else if (sub === 'files') result = findImage(xdb, { sha256: opts.sha256, md5: opts.md5 });
+      else if (sub === 'stats') result = crossStats(xdb);
+      else { console.error(HELP); process.exit(2); }
+      return out(result);
+    } finally { xdb.close(); }
   }
 
   const dbPath = resolveDb(opts);
