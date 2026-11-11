@@ -1013,6 +1013,9 @@ window.__ModuleLoader__.load({
       const [filters, setFilters] = useState({ eid: '', app: '', from: '', to: '' });
       // 检索筛选用的检材下拉：从 /evidences 拿「eid + 名称 + 平台」，用户不用记 eid
       const [evList, setEvList] = useState([]);
+      // 会话上下文（<DSH_HOME>/AGENTS.md）里案件概览的注入状态：让「模型已经知道检材」可见
+      const [briefInfo, setBriefInfo] = useState(null);
+      const [briefNote, setBriefNote] = useState('');
       useEffect(() => {
         let alive = true;
         if (!db) { setEvList([]); return undefined; }
@@ -1026,6 +1029,40 @@ window.__ModuleLoader__.load({
         })();
         return () => { alive = false; };
       }, [db]);
+
+      useEffect(() => {
+        let alive = true;
+        (async () => {
+          try {
+            const body = await api('/brief', { db });
+            if (alive) setBriefInfo(body);
+          } catch {
+            if (alive) setBriefInfo(null);
+          }
+        })();
+        return () => { alive = false; };
+      }, [db]);
+
+      const refreshBrief = async () => {
+        setBriefNote('刷新中…');
+        try {
+          const body = await post('/brief', {});
+          setBriefInfo({ state: body.state, current: briefInfo?.current ?? null });
+          setBriefNote('已刷新');
+        } catch (e) {
+          setBriefNote(`刷新失败：${String(e.message ?? e)}`);
+        }
+      };
+
+      const briefText = () => {
+        const st = briefInfo?.state;
+        if (!st) return '会话语境：读取注入状态失败（不影响检索）';
+        if (st.ok === null) return '会话语境：尚未注入（启动后会自动写入 AGENTS.md）';
+        if (!st.ok) return `会话语境：注入失败 —— ${st.error ?? '未知错误'}`;
+        const when = st.at ? new Date(st.at).toLocaleTimeString('zh-CN', { hour12: false }) : '';
+        const inside = briefInfo?.current ? (briefInfo.current.included ? '含本库' : '不含本库') : '';
+        return `会话语境：已注入 ${st.cases} 个案件概览${inside ? `（${inside}）` : ''} · ${when} · 新会话会自动带上检材清单`;
+      };
 
       // 检索结果行显示检材名称（而不是只有 eid）：研判时看到的是文件名，不是数字
       const evLabel = (eid) => {
@@ -1362,6 +1399,13 @@ window.__ModuleLoader__.load({
             actionButton(busy === 'overview' ? '导出中…' : '复制案件概览', copyOverview, { disabled: busy === 'overview' }),
             h('span', { style: S.muted }, '给研判报告/交接用的 Markdown：案件信息 + 检材清单（名称/持有人/平台/记录数/备注）'),
             overviewNote ? h('span', { style: { color: C_ACC, fontSize: 11.5 } }, overviewNote) : null)
+          : null,
+        db
+          ? h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 11.5 } },
+            h('span', { style: { color: briefInfo?.state?.ok ? '#34D399' : briefInfo?.state?.ok === false ? '#F87171' : '#FBBF24', fontSize: 10 } }, '●'),
+            h('span', { style: { color: C_FG3 } }, briefText()),
+            actionButton('刷新会话概览', refreshBrief, {}),
+            briefNote ? h('span', { style: { color: C_ACC } }, briefNote) : null)
           : null,
         view && view.needsRebuild
           ? h('div', { style: S.noticeWarn }, `索引库 schema v${view.schemaVersion ?? '?'} 与当前工具 v${view.currentSchemaVersion ?? '?'} 不一致：建议点「建库 / 更新」重建，旧库可能缺字段或查不到新类别。`)

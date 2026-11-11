@@ -140,6 +140,16 @@ report.treeRoot = /检材 5/.test(text) && /文件 370/.test(text)
 // v0.1.8：树根每个检材要显示火眼里的名称与备注
 report.evNames = /CHAN_MH_mobile\.zip/.test(text) && /LEUNG_YL_mobile\.zip/.test(text)
 report.evRemark = text.includes('伤人案')
+// 会话上下文注入状态（AGENTS.md 里的案件概览）要能在面板上看到
+report.briefVisible = /会话语境/.test(text) && /已注入/.test(text)
+report.briefText = (text.match(/会话语境[^\n]{0,120}/) || [''])[0]
+// 刷新按钮要真的能重写 AGENTS.md
+report.briefRefreshClick = await clickText('刷新会话概览', 'button')
+await sleep(2500)
+report.briefRefreshText = (await bodyText()).match(/已刷新|刷新失败[^\n]{0,60}/)
+  ? (await bodyText()).match(/已刷新|刷新失败[^\n]{0,60}/)[0]
+  : ''
+report.briefRefreshOk = /已刷新/.test(report.briefRefreshText)
 report.rootText = text.slice(text.indexOf('取证案件索引'), text.indexOf('取证案件索引') + 900)
 report.drill3 = await clickText('检材 3', 'div')
 await sleep(6000)
@@ -179,7 +189,7 @@ report.timelineText = text.slice(text.indexOf('时间线'), text.indexOf('时间
 report.tabTablesClick = await openTab('表')
 text = await bodyText()
 report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
-report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10
+report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true
 
 // ---------- 浅色主题回归（SEEU_E2E_THEME=light；暗色为默认） ----------
 if (process.env.SEEU_E2E_THEME === 'light') {

@@ -127,6 +127,25 @@ async function handle(req, res) {
       refreshBrief(indexes);
       return send(res, 200, { indexes });
     }
+    // ---------- 会话上下文里的案件概览（AGENTS.md 注入状态） ----------
+    if (path === '/brief') {
+      if (req.method === 'POST') {
+        const result = refreshBrief();
+        return send(res, 200, { result, state: briefState });
+      }
+      const dbParam = url.searchParams.get('db') ?? '';
+      let current = null;
+      if (dbParam) {
+        try {
+          const abs = safeDb(dbParam);
+          const list = findIndexes(briefDirs());
+          current = { dbPath: abs, included: list.some((i) => resolve(i.dbPath) === abs) };
+        } catch {
+          current = null;
+        }
+      }
+      return send(res, 200, { state: briefState, current, dshHome: process.env.DSH_HOME ?? null });
+    }
     // ---------- 跨案中央库（M5） ----------
     if (path.startsWith('/cross/')) {
       const xdb = openCross(crossPath());
@@ -222,6 +241,8 @@ const BRIEF_NAME = 'SEEU-CASE-BRIEF.md';
 const BRIEF_MARKER = '<!-- seeu-case-brief';
 const BRIEF_END = '<!-- /seeu-case-brief -->';
 let briefSig = '';
+// 最近一次注入结果（面板可见，便于确认「会话里确实带上了案件概览」）
+const briefState = { at: null, ok: null, path: null, cases: 0, chars: 0, error: null };
 
 function briefDirs() {
   const dirs = [...defaultDirs()];
@@ -327,8 +348,10 @@ export function writeCaseBrief(indexes) {
     const block = briefText(list);
     const bytes = writeBriefFile(target, block);
     briefSig = sig;
+    Object.assign(briefState, { at: new Date().toISOString(), ok: true, path: target, cases: list.length, chars: block.length, error: null });
     return { ok: true, path: target, cases: list.length, chars: block.length, bytes };
   } catch (error) {
+    Object.assign(briefState, { at: new Date().toISOString(), ok: false, error: error?.message ?? String(error) });
     return { ok: false, error: error?.message ?? String(error) };
   }
 }
