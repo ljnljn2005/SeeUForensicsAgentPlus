@@ -404,7 +404,13 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 
 ### 9.3 验证
 
-三个端到端脚本各自起 mock OpenAI 网关 + 真 Electron，用 CDP 操作界面，不需要真实网关：
+纯函数（配置归一化 / patch 生成 / 路径分类 / CSV 与 chat 解析 / typed 表头投影）用 `node --test` 覆盖，不需要 Electron：
+
+```bash
+npm test                                  # 31 个单元测试（本地模型配置、解析层、typed 投影）
+```
+
+端到端脚本各自起 mock OpenAI 网关 + 真 Electron，用 CDP 操作界面，不需要真实网关：
 
 ```bash
 node scripts/e2e/local-model-e2e.mjs     # 基础连通：SSE 文本回复

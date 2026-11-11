@@ -49,7 +49,8 @@
     "shot": "node scripts/e2e/shot.mjs",
     "test:e2e:diagnose": "node scripts/e2e/local-diagnose-check.mjs",
     "test:e2e:loading": "node scripts/e2e/loading-check.mjs",
-    "test:e2e:panel-empty": "node scripts/e2e/panel-empty-check.mjs"
+    "test:e2e:panel-empty": "node scripts/e2e/panel-empty-check.mjs",
+    "test": "node --test"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.1.0",

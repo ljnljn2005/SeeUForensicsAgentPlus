@@ -1075,3 +1075,25 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `node --check plugins/seeu-case-index/client.js` → SYNTAX-OK。
 
 **遗留**：面板只提示不一致，不提供「一键重建」（建库 3–5 分钟，需用户确认案件目录可写）；`/stats` 已带 `meta.schema_version`，CLI 侧可用 `index:stats` 查看。
+
+### 20.12 第 13 轮：纯函数单元测试（校准 KNOWN_CATS）
+
+**动机**：这十几轮的改动大多靠「起 Electron + CDP」验证，慢且脆；而最容易悄悄错的其实是纯函数——本地模型 patch 生成、路径分类、CSV/chat 解析、typed 表头投影。一旦回归，表现出来是「模型连上了但工具跑不动」「某类数据没入库」，排查成本高。
+
+**实现**
+
+- 新增 `tests/`（`node --test`，零依赖）：`local-model.test.mjs`（13 例）、`parse.test.mjs`（12 例）、`typed.test.mjs`（6 例），`npm test` → `node --test tests/*.test.mjs`。
+- 覆盖点：默认值与自定义值（超时/重试/标题/上下文）、单模型写法、非法路由名回退、缺 baseURL/非 http(s)/缺模型三类报错、未启用时无 patch/env、patch 用 YAML 解析后校验行与字段、`useAsDefault` 追加 `agent-default-model`、headers 转义、`localModelEnv` 占位 key；路径分类（账号层、chat.txt、非检材根）、CSV 引号/缺列、chat 摘要两种写法与空发言人、原文记录ID、实体抽取与超长跳过；typed 表头签名 24 张表的代表签名、不识别表头返回 `null`、mapping 是 `[targetField, sourceColumn]`、DDL 覆盖所有表与列。
+- 顺带修一个真实缺陷：`parse.mjs` 的 `KNOWN_CATS` 缺 `图片消息/视频消息/语音消息/文件传输记录/手机联系人/群组列表/群组成员/社群列表/社群成员/频道列表/频道消息/其他消息/App使用详情/会话状态/分组标签/收藏/数据来源/健康数据描述` 等类别——这些目录出现在路径第二段时会被误判成「账号」，进而把类别塞进 `account` 列。补齐后单测锁定行为。
+
+**验证**
+
+```
+ℹ tests 31
+ℹ pass 31
+ℹ fail 0
+```
+
+- 补齐 `KNOWN_CATS` 后全案重建（370 叶、266 s）：`records 22777`、`typedRecords 21123`、`coverage 0.927`、`misses 60`、`fingerprint 30e13fe6…` **与改动前完全一致** ⇒ 本案件里没有路径因这次补齐而改分类（只是把潜在的误判风险关掉）。
+
+**遗留**：`query.mjs`（tree/search/cite）与 `build.mjs` 仍靠 e2e 覆盖，未做单测——它们依赖 sqlite 与真实库，更值得做的是「用小型夹具库跑查询快照」，留待后续。
