@@ -1,6 +1,6 @@
 # 火眼「全解析结果」入库 · dsh 只查库 —— 实施计划 v4
 
-> 状态：待评审（v4，2026-11-11）
+> 状态：待评审（v4.1，2026-11-11；已并入你对 4 个问题的确认：标记/笔记入库、OCR 开关、只读只提示、跨案库放 dsh 工作目录）
 > 前置共识（v3 起沿用）：**我们不训练、不运行分析模型**。分析者是火眼；dsh 侧只做"查询派生数据库"。
 > v4 相对 v3 的唯一变化：**入库对象从「AI 研判报告」改为「火眼对检材的全解析结果」**（`/case/检材分析数据/**`），AI 研判目录（案件画像 / 检材画像 / 人物画像 / 线索挖掘）不再入库。
 
@@ -15,6 +15,7 @@
 3. **dsh 会话只挂一个约 50 行的小技能** `ges-case-index`，它调 `ges-index query …`；**不给 dsh 任何 `ges.exe` 权限，数据库只读打开**。
 4. 建库是**一次性离线动作**：桌面版点【更新索引】→ 进度条 → 完成。重新点就**整库覆盖**（先建临时库、校验、留一份旧版备份、原子替换），符合你说的"有更新就重新覆盖"。
 5. 关键词检索用 SQLite FTS5（trigram）+ `LIKE` 回退（实测 trigram 对 2 字中文查询无效，必须回退），不依赖火眼的向量索引（本案 `ges search` 当前不可用：缺 `res/vector_search/tree.pkl`）。
+6. `标记数据/`、`笔记数据/` 一并入库，但只作**导航表**（`citable=0`，保留火眼的 `原文记录ID`）；图片/视频默认只入元数据，**OCR 是开关**（默认关）。
 
 ---
 
@@ -29,6 +30,10 @@
 | 5 | 会话侧 **DB 只读 + 完全不给 ges.exe** | 查询进程 `--readonly` 打开；dsh 侧无 `ges` 二进制、无 shell 网络插件 |
 | 6 | 4 个官方 skill **不放进我们的安装位置** | 不随包；我们的新 skill 是自研的 `ges-case-index`（行为契约在 §7） |
 | 7（v4 新） | 要**全解析结果**，不要 AI 研判结论 | 入库范围 = `检材分析数据/**` + `关联分析/**`；`AI研判/**` 不入 |
+| 8（v4.1 确认） | `标记数据/`、`笔记数据/` **要入** | 入导航表，`citable=0`，保留 `原文记录ID`（见 §5、§6.2） |
+| 9（v4.1 确认） | 图片/视频：元数据默认，**OCR 做成开关** | 默认只入元数据；`--ocr=off\|auto\|force`（默认 off），需要时再跑（见 §7.4） |
+| 10（v4.1 确认） | 案件目录只读 → **提示用户** | 建库前探测写权限；不可写弹提示，不静默回退（见 §8.2） |
+| 11（v4.1 确认） | 跨案库放 **dsh 工作目录** | `<dsh 工作目录>\indexes\crosscase.db`（默认 `Documents\SeeUForensicsWorkspace\indexes\`） |
 
 ---
 
@@ -56,7 +61,12 @@
 ├── 实体分类/                        # 9 类：IP地址/快递单号/手机号/网址/虚拟钱包/身份证/车牌号/邮箱/银行卡，
 │                                    #   每类一个 data.csv
 └── 检材信息/data.csv                # 26 列元数据（含 MD5/SHA1/SHA256/SHA512/SM3/CRC64、时区、大小）
+
+/case/标记数据/<标记名称>/…          # 如 嫌疑/可疑；其下沿用 持有人/检材/应用/会话 目录，chat.txt / data.csv
+/case/笔记数据/<笔记名称_ID>/        # 笔记.md（标题/备注/检材/关联记录数）+ chat.txt（选中的聊天）+ data.csv（其他记录）
 ```
+
+**图片/视频**：`基本信息/图片/{屏幕快照,应用,相机胶卷}/data.csv`、`基本信息/视频/…` 都只有元数据 CSV，二进制不在 `/case/` 导出，因此"只入元数据"与"OCR 开关"互不影响：OCR 需要时另行从 `/evidence_mounts/` 或 `ges copy` 取原图。
 
 ### 2.3 叶子形态（决定解析器怎么写）
 
@@ -78,6 +88,9 @@
 
 1. `ges search`（向量语义搜索）当前报错：`res/vector_search/tree.pkl` 不存在，需要在 GES 里"完成案件向量入库"。→ 我们的检索不依赖它。
 2. `/case/关联分析/` 的部分表带"禁止根据本页行号生成角标"横幅 → 入库时逐文件读横幅/首行判定 `citable`，不要靠目录名猜。
+3. **标记/笔记的引用坐标不在 CLI 里**：使用说明要求用 GES 工具 `get_context(path, 原文记录ID)` 取"经过校验的 节点ID#原文件行号"；`ges` CLI 没有 `get_context`（`ges context` 只是 `status` 的别名，见 `ges help`）。→ 这两类数据入库后 `citable=0`，保留 `origin_record_id`，将来对接 GES 工具服务后再补校验。
+4. 标记/笔记文件的**行号、搜索结果序号不是原文行号**（说明原文），严禁据此拼 `Goldeneyes://` URI；我们只把它们当导航。
+5. 标记/笔记在**本案为空**（`/case/标记数据/`、`/case/笔记数据/` 各只有一个 `使用说明.md`），入库器必须容忍"只有说明文件"的情况（跳过 `使用说明.md`，记 0 条）。
 
 ---
 
@@ -194,6 +207,27 @@ create table app_install(...);     -- 应用列表/应用授权日志
 create table device_info(...);     -- 设备信息/设备容量/SIM/Wi-Fi/蓝牙/热点/网络使用/日历/健康
 create table file_meta(...);       -- 图片/视频目录条目（无二进制）
 
+-- 标记数据（导航表，citable=0；本案为空）
+create table mark_category(id integer primary key, name text,      -- 嫌疑 / 可疑 …
+  record_count integer, updated_at text);
+create table mark_record(id integer primary key, mark_category_id integer, 
+  virtual_path text, eid integer, app text, holder text, account text, peer text,
+  origin_record_id text,      -- 火眼「原文记录ID」；引用需 get_context 校验
+  ts text, actor text, body text, fields_json text, record_id integer);
+
+-- 笔记数据（导航表，citable=0；本案为空）
+create table note(id integer primary key, note_dir text unique, note_name text, note_id text,
+  title text, remark text, evidence_refs text, related_count integer, updated_at text);
+create table note_record(id integer primary key, note_id integer, virtual_path text,
+  origin_record_id text, ts text, actor text, body text, fields_json text, record_id integer);
+
+-- OCR（可选开关，默认 off；见 §7.4）
+create table ocr_result(id integer primary key, image_artifact_id integer, eid integer,
+  image_virtual_path text, engine text, lang text, confidence real,
+  text text, ts text, base_handle text, line_no integer, citable integer default 0,
+  created_at text, error text);
+create virtual table ocr_fts using fts5(text, content='', tokenize='trigram');
+
 -- 溯源与审计
 create table citation(id integer primary key, record_id integer, base_handle text,
   node_id text, line_no integer, citable integer, status text, -- ok | derived | missing
@@ -225,8 +259,8 @@ create index entity_lookup on entity(kind, value_norm);
 ## 6. 建库器：`ges-index build`
 
 ```
-ges-index build --case <case_number|--case-dir <dir>> [--scope all|parsed|related]
-                [--rebuild|--update] [--concurrency 3] [--json]
+ges-index build --case <case_number|--case-dir <dir>> [--scope all|parsed|related|marks|notes]
+                [--rebuild|--update] [--concurrency 3] [--ocr off|auto|force] [--json]
 ```
 
 步骤：
@@ -235,10 +269,12 @@ ges-index build --case <case_number|--case-dir <dir>> [--scope all|parsed|relate
    - `ges case ls --json` 找案 → `ges case open <case_number>` 拿 `cid`（整数）；
    - `ges status --json` 拿 `routes`、`skills_dir`、`evidence_mounts`；
    - 逐检材读 `检材分析数据/未指定持有人/<eid>/检材信息/data.csv` 得元数据（哈希、时区、大小）。
+   - **可写性探测**：试写 `<case_dir>\.seeu-index\.probe`；不可写 → 返回 `E_CASE_DIR_READONLY`，由桌面版弹提示（§8.2），**不静默回退**。
 2. **叶子全集枚举**
    - `ges glob` 多模式：`**/data.csv`、`**/chat.txt`、`**/*` 中的二进制目录单独枚举；
    - 与 `ls` 递归交叉校验（**覆盖率验收：artifact 数 == 枚举数**）；
-   - 只枚举 `/case/检材分析数据/**`（+ 可选 `/case/关联分析/**`），**不碰 `/case/AI研判/**`**。
+   - 只枚举 `/case/检材分析数据/**`（+ 可选 `/case/关联分析/**`、`/case/标记数据/**`、`/case/笔记数据/**`），**不碰 `/case/AI研判/**`**；
+   - 标记/笔记：跳过 `使用说明.md`，其余按 `chat.txt`/`data.csv` 解析；这两类 `citable=0`，`origin_record_id` 原样保留（聊天行前缀 `〔原文记录ID：数字〕` 或 CSV 的 `原文记录ID` 列）。
 3. **逐叶抓取 + 解析**
    - `ges read <path> --offset N --limit 200` 分页直到 `next_offset == null`；
    - 解析首行基址 → `artifact.base_handle/node_id`；CSV 表头 → 列名；chat `[摘要]` → `chat_meta`；
@@ -250,7 +286,8 @@ ges-index build --case <case_number|--case-dir <dir>> [--scope all|parsed|relate
 5. **校验**
    - `pragma integrity_check`、`foreign_key_check`；
    - 叶覆盖率 100%、基址覆盖率 ≥ 95%（CSV+chat）、每叶行数与 `read` 报的 total 一致；
-   - 抽 20 条随机引用回查：`ges read base_handle 的路径 --offset line-1 --limit 1`，内容与 DB 一致 → **验收 20/20**。
+   - 抽 20 条随机引用回查：`ges read base_handle 的路径 --offset line-1 --limit 1`，内容与 DB 一致 → **验收 20/20**；
+   - 标记/笔记为空（本案）时记 0 条且不报错；`--ocr off` 时 `ocr_result` 必须为 0 行。
 6. **原子替换**
    - 写 `<case_dir>\.seeu-index\tmp\case-index.db` → 成功后 `case-index.db.bak`（保留 1 份）→ `fs.renameSync` 替换；
    - 落 `manifest.json`：指纹（检材集合 + 各 `检材信息.更新时间` + 叶子数）、统计、耗时、工具版本、失败清单。
@@ -273,6 +310,9 @@ ges-index build --case <case_number|--case-dir <dir>> [--scope all|parsed|relate
 | `query entity <kind> <value>` | 实体命中记录（跨检材） | 同一手机号/钱包的所有出现 |
 | `query timeline --from --to [--eid] [--app]` | 时间线（合并所有带 ts 的表） | 案发时间窗 |
 | `query stats` | DB 版本/指纹/建库耗时 | 判断是否需要重建 |
+| `query marks [-q <kw>]` | 标记记录（`citable=0`，含 `origin_record_id`） | "有没有被标为可疑的记录" |
+| `query notes [--id <note_id>]` | 笔记表与笔记选中记录（`citable=0`） | 看侦查员自己的整理 |
+| `query ocr -q <kw> [--min-confidence 0.6]` | OCR 文本检索（仅在开启 OCR 后有数据） | 截图/照片里的文字 |
 
 输出上限：**单次 ≤ 2 KB / ≤ 60 行**，超出给 `{"truncated":true,"next_cursor":"…"}`；每条结果必须含 `record_id` 与 `cite` 提示，不返回整表。
 
@@ -280,9 +320,9 @@ ges-index build --case <case_number|--case-dir <dir>> [--scope all|parsed|relate
 
 要点：
 - **何时用**：当前工作目录是已建库的案件目录（`<case_dir>\.seeu-index\case-index.db` 存在）。
-- **怎么用**：只允许 6 个 `ges-index query` 命令，输入输出都是 JSON；先 `overview` 再 `search`，不要凭猜测写路径。
+- **怎么用**：只允许 9 个 `ges-index query` 命令（见 §7.1），输入输出都是 JSON；先 `overview` 再 `search`，不要凭猜测写路径。
 - **引用铁律**：只有 `cite` 返回 `citable=1` 才能写角标；`citable=0`（关联分析等派生数据）只能作为线索描述，并注明"派生数据，无溯源句柄"；禁止编造 `Goldeneyes://` 基址。
-- **边界**：DB 是火眼解析结果的快照，不含 AI 结论、不含原始文件字节；需要原始文件或深度分析时明确告诉用户"需要回火眼操作"。
+- **边界**：DB 是火眼解析结果的快照，不含 AI 结论、不含原始文件字节；需要原始文件或深度分析时明确告诉用户"需要回火眼操作"。`query marks` / `query notes` 返回的是导航数据（`citable=0`），只能用于引导用户回火眼核对，**不得当作可引用原文**。
 - **禁止**：不执行 `ges`、不改 DB、不联网。
 
 ### 7.3 token 账
@@ -292,6 +332,18 @@ ges-index build --case <case_number|--case-dir <dir>> [--scope all|parsed|relate
 | 旧方式：会话里去读 4 个官方 skill + 现场 `ges read` 几十个 CSV | 约 20k token（4 个 skill 全量 72 KB）+ 每次读文件 1–5k |
 | 新方式：`ges-case-index` skill 常驻 | 约 800 token |
 | 每次查询 | 约 300–600 token（≤2 KB JSON） |
+| 标记/笔记/OCR 额外能力 | 仍走同一 skill，命令数 6→9，常驻约 +150 token |
+
+### 7.4 OCR 开关（默认关闭）
+
+- **开关位置**：桌面版设置页「索引 → 图片文字识别（OCR）」；CLI `--ocr off|auto|force`，默认 `off`。
+- **`off`**：只入图片/视频元数据（`file_meta`），0 耗时。
+- **`auto`**：只对"元数据里带文字线索的图片"跑（如截图/相机胶卷/应用图片），单案限 2,000 张、单张 ≤ 30 s、总预算 20 分钟，超预算停止并记 `ingest_log`。
+- **`force`**：不设上限，用户明确知道耗时。
+- **取图路径**：`/case/` 只有元数据 CSV，二进制要走 `/evidence_mounts/eid-N/…` 或 `ges copy`；copy 到临时目录后 OCR，临时文件用完即删（不入库、不留副本）。
+- **引擎**：优先 Windows 内置 OCR（`Windows.Media.Ocr`，中文需系统语言包），回退 Tesseract（随包放 `resources/ocr/tesseract.exe`，体积约 40 MB，按需可选安装包）。引擎名与语言写入 `ocr_result.engine/lang`。
+- **引用**：OCR 文本是**派生内容**，`citable=0`；如需引用，引用原图（`base_handle` + 行号）并注明"文字由 OCR 识别，需人工核对"。skill 里禁止把 OCR 文本当原文直接角标。
+- **验收**：`auto` 模式下本案截图样本 OCR 字符准确率抽检 ≥ 90%（人工 20 张）；`off` 模式建库时间不增加。
 
 ---
 
@@ -305,6 +357,9 @@ ges-index build --case <case_number|--case-dir <dir>> [--scope all|parsed|relate
 3. **DB 位置与权限**：`<case_dir>\.seeu-index\`；dsh 查询进程以只读打开；`.seeu-index` 在文件系统里对 dsh 沙箱只读（若沙箱不允许，则退化为"通过 `ges-index` 子进程查询"）。
 4. **不污染案件目录**：只创建 `.seeu-index\` 一个隐藏目录，内含 `case-index.db`、`case-index.db.bak`、`manifest.json`、`logs/`；不写火眼其它目录。
 5. **无火眼时降级**：`ges` 不可用 → 按钮置灰 + 提示"未检测到火眼客户端"；已有 DB 仍可查询。
+6. **案件目录只读时的提示**（按你的选择：提示，不静默回退）：建库前试写 `.seeu-index\.probe`，失败弹对话框——「案件目录不可写：`E:\…`。请选择：① 处理只读/权限后重试；② 手动改用 `%APPDATA%\SeeUForensicsAgentPlus\indexes\<案号>\`」。只有用户选②才回退，并记进 `case-dirs.json`，该案后续沿用。
+7. **OCR 开关**：设置页 checkbox（默认关）+ 建库前可临时切换；对应 `--ocr off|auto|force`（§7.4）。
+8. **跨案库**：`<dsh 工作目录>\indexes\crosscase.db`（按你的选择），建库成功后自动增量同步；`ges-index xcase sync` 可手动补跑。
 
 ---
 
@@ -337,8 +392,9 @@ create table cross_file(id integer primary key, sha256 text, case_number text, e
 | **M3 查询 CLI + 技能** | 8 个 query 子命令 + `ges-case-index` SKILL.md + token 预算测试 | 1 | 单查询 P50 < 100 ms；输出 ≤ 2 KB；技能说明 ≤ 60 行 |
 | **M4 桌面集成** | 【更新索引】按钮、进度、设置案件目录、只读查询进程 | 1 | 从 0 到可查询全程 GUI 完成；取消/失败不损坏旧库 |
 | **M5 跨案 + 文档** | `crosscase.db` 同步与查询；文档（本计划转正式文档 + 用户手册）；回归用例 | 1 | 两案间同号/同哈希可查；文档含排障 |
+| **M6 OCR 开关（可选）** | `--ocr off\|auto\|force`、取图→识别→`ocr_result`、设置页开关、准确率抽检 | 1 | `off` 不增加建库耗时；`auto` 抽检 20 张准确率 ≥ 90%；OCR 文本一律 `citable=0` |
 
-合计约 **7 人天**（不含火眼侧配合）。建议做完 M0 再决定是否继续（M0 能提前暴露行号对齐/吞吐问题）。
+合计约 **8 人天**（M6 可延后；不含 OCR 引擎随包体积与火眼侧配合）。建议做完 M0 再决定是否继续（M0 能提前暴露行号对齐/吞吐问题）。
 
 ---
 
@@ -359,12 +415,19 @@ create table cross_file(id integer primary key, sha256 text, case_number text, e
 
 ---
 
-## 12. 待你确认（4 条）
+## 12. 决策确认（v4.1）与剩余小问题
 
-1. **入库范围**：默认 = `检材分析数据/**` + `关联分析/**`（citable=0）。`标记数据/`（人工标记）与 `笔记数据/`（火眼笔记）要不要也入库？我倾向"入，但只作导航表"。
-2. **图片/视频**：只入元数据（文件名/时间/来源路径），不做 OCR/缩略图，可接受吗？
-3. **DB 位置**：`<案件目录>\.seeu-index\` 已按你的决策；如果某些比赛机器案件目录只读，是否允许回退到 `%APPDATA%\SeeUForensicsAgentPlus\indexes\<case_number>\`？
-4. **跨案库**：`<workspace>\indexes\crosscase.db` 是否就放在 dsh 工作目录下？还是你希望放到桌面版数据目录（`%APPDATA%`）？
+**已确认，按此实现：**
+
+1. `标记数据/`、`笔记数据/` **入库**（导航表，`citable=0`，保留 `原文记录ID`；本案这两目录为空，只有 `使用说明.md`）。
+2. 图片/视频**默认只入元数据**；**OCR 做成开关**（默认关，`off|auto|force`），需要时再跑。
+3. 案件目录只读 → **弹提示**（不静默回退）。
+4. 跨案库放 **dsh 工作目录**：`<dsh 工作目录>\indexes\crosscase.db`。
+
+**还剩两个实现细节（不阻塞 M0–M2，可边做边定）：**
+
+1. OCR 引擎：先试 Windows 内置 OCR（无需安装，但中文要系统语言包）；若比赛机器普遍缺语言包，是否允许安装包体积 +40 MB 随包带 Tesseract？
+2. 只读提示的按钮：就按「①处理权限后重试 ②手动改到 `%APPDATA%\…`」两条给，还是只提示一句"目录不可写，请处理后重试"（不给回退按钮）？
 
 ---
 
