@@ -16,6 +16,10 @@ files:
   - dist/**
   - renderer/**
   - resources/**
+  # 案件索引 dsh 插件（宿主 + 客户端 bundle）与它依赖的建库/查询模块。
+  # 走 overlay 的 insert 行按相对路径加载，所以必须原样进 asar（可被 dsh 直接 import）。
+  - plugins/**
+  - tools/ges-index/**
   - build/icon.ico
   - build/tray.ico
   - build/icon.png

@@ -1,0 +1,134 @@
+// 宿主端：把「建库 + 查库」暴露成 Web UI 可调用的本地 HTTP 路由（前缀 /seeu-index）。
+// 桌面外壳把本包装进 web profile，Web 客户端插件（client.js）在设置页里给界面。
+import { existsSync, statSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
+import { openIndex, findIndexes, tree, search, cite, statsOf, verify } from '../../tools/ges-index/query.mjs';
+
+const ROUTE = '/seeu-index';
+const jobs = new Map();
+const MAX_JOBS = 20;
+
+/** 只接受形如 <...>/.seeu-index/case-index.db 且存在的库文件。 */
+function safeDb(param) {
+  if (!param) throw Object.assign(new Error('缺少 db 参数'), { status: 400 });
+  const abs = resolve(param);
+  if (!abs.endsWith('.db') || basename(dirname(abs)) !== '.seeu-index') {
+    throw Object.assign(new Error('db 必须是 <案件目录>/.seeu-index/case-index.db'), { status: 403 });
+  }
+  if (!existsSync(abs) || !statSync(abs).isFile()) throw Object.assign(new Error('索引库不存在'), { status: 404 });
+  return abs;
+}
+
+function defaultDirs() {
+  const env = process.env.SEEU_INDEX_SEARCH_DIRS ?? '';
+  return env.split(';').map((s) => s.trim()).filter(Boolean);
+}
+
+function send(res, status, body) {
+  const text = JSON.stringify(body);
+  res.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    // 同源调用；显式允许本机其它端口的调试读取（不涉及凭据）
+    'access-control-allow-origin': '*',
+  });
+  res.end(text);
+}
+
+async function readBody(req) {
+  const chunks = [];
+  let size = 0;
+  for await (const c of req) {
+    size += c.length;
+    if (size > 64 * 1024) throw Object.assign(new Error('请求体过大'), { status: 413 });
+    chunks.push(c);
+  }
+  const text = Buffer.concat(chunks).toString('utf8');
+  return text ? JSON.parse(text) : {};
+}
+
+function startBuild(args) {
+  const dir = resolve(String(args.dir ?? ''));
+  if (!existsSync(dir)) throw Object.assign(new Error(`案件目录不存在：${dir}`), { status: 404 });
+  const job = { id: randomUUID(), dir, status: 'running', phase: 'probe', completed: 0, total: 0, percent: 0, startedAt: Date.now() };
+  jobs.set(job.id, job);
+  while (jobs.size > MAX_JOBS) jobs.delete(jobs.keys().next().value);
+  buildIndex({
+    caseDir: dir,
+    concurrency: Number(args.concurrency) || 3,
+    rebuild: args.rebuild !== false,
+    onProgress: (p) => {
+      job.phase = p.phase ?? job.phase;
+      if (typeof p.completed === 'number') job.completed = p.completed;
+      if (typeof p.total === 'number') job.total = p.total;
+      if (typeof p.percent === 'number') job.percent = p.percent;
+      if (p.message) job.message = p.message;
+    },
+    log: () => {},
+  }).then((result) => {
+    job.status = 'done';
+    job.phase = 'done';
+    job.percent = 100;
+    job.result = result;
+    job.elapsedMs = Date.now() - job.startedAt;
+  }).catch((error) => {
+    job.status = 'failed';
+    job.code = error instanceof IndexBuildError ? error.code : (error?.code ?? 'E_UNKNOWN');
+    job.error = error?.message ?? String(error);
+    job.elapsedMs = Date.now() - job.startedAt;
+  });
+  return { jobId: job.id, dir };
+}
+
+async function handle(req, res) {
+  const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+  const path = url.pathname.slice(ROUTE.length) || '/';
+  try {
+    if (req.method === 'POST' && path === '/build') {
+      return send(res, 200, startBuild(await readBody(req)));
+    }
+    if (req.method === 'GET' && path === '/build') {
+      const job = jobs.get(url.searchParams.get('job') ?? '');
+      if (!job) return send(res, 404, { error: 'job 不存在' });
+      return send(res, 200, job);
+    }
+    if (req.method === 'GET' && path === '/list') {
+      const dirs = [...url.searchParams.getAll('dir'), ...defaultDirs()];
+      return send(res, 200, { indexes: findIndexes([...new Set(dirs)]) });
+    }
+    if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+
+    const dbPath = safeDb(url.searchParams.get('db'));
+    const db = openIndex(dbPath);
+    try {
+      if (path === '/tree') return send(res, 200, tree(db, url.searchParams.get('node') || 'root'));
+      if (path === '/search') {
+        const opts = { q: url.searchParams.get('q'), limit: url.searchParams.get('limit') };
+        for (const k of ['eid', 'app', 'account', 'category', 'from', 'to']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
+        return send(res, 200, search(db, opts));
+      }
+      if (path === '/cite') return send(res, 200, cite(db, url.searchParams.get('id')));
+      if (path === '/stats') return send(res, 200, statsOf(db));
+      if (path === '/verify') return send(res, 200, await verify(db, { sample: url.searchParams.get('sample') ?? 20 }));
+    } finally {
+      db.close();
+    }
+    return send(res, 404, { error: `未知接口 ${path}` });
+  } catch (error) {
+    return send(res, error?.status ?? 500, { error: error?.message ?? String(error), code: error?.code });
+  }
+}
+
+/**
+ * Cordis 宿主插件入口。
+ * @param {import('@deepseek-ai/cordis').Context} ctx - 宿主上下文。
+ */
+export function apply(ctx) {
+  ctx.inject(['webServer'], (webCtx) => {
+    webCtx.effect(() => webCtx.webServer.register({ kind: 'prefix', path: ROUTE, handler: handle }), 'seeu-case-index: /seeu-index 路由');
+  });
+}
+
+export const name = 'seeu-case-index';

@@ -258,9 +258,45 @@ md5sum resources/forensics/cordis.patch.yml .probe/asar-check/resources/forensic
 另外，**打包期间不要改被 `files` 白名单收进去的文件**（`src/`、`resources/`、`build/`、
 `renderer/`、`package.json`）；改 `docs/`、根 README 这类不进包的文件是安全的。
 
+### 5.3 dsh 插件与 `tools/` 白名单（v0.1.4 起）
+
+案件索引面板是**两个 dsh 插件半**（宿主 `plugins/seeu-case-index/index.js` + 客户端 `client.js`），
+它们不是从 npm 安装的，而是随包进 asar、由 overlay 的一行 `insert` 直接加载：
+
+```yaml
+# resources/forensics/cordis.patch.yml 末尾
+- insert:
+    - id: seeu-case-index
+      name: ../../plugins/seeu-case-index/index.js   # 相对 overlay 文件（= 应用根）
+```
+
+因此打包必须满足三件事：
+
+1. **白名单放行**：`electron-builder.yml` 的 `files` 含 `plugins/**` 与 `tools/ges-index/**`
+   （插件宿主端 `import '../../tools/ges-index/build.mjs'`，即 `app.asar/tools/...`）。
+2. **路径两态同形**：overlay 在开发态是 `<仓库>/resources/forensics/cordis.patch.yml`，
+   打包态是 `app.asar/resources/forensics/cordis.patch.yml`；`../../` 都指向应用根，
+   所以 `name` 不用改、也不用 pnpm 安装。
+3. **不能写目录**：`insert.name` 必须是入口文件。Node ESM 对目录导入报
+   `ERR_UNSUPPORTED_DIR_IMPORT`（dsh 只会把路径转成 `pathToFileURL`，不会帮你找 `index.js`）。
+
+自检（打完 `package:dir` 后一行命令确认插件确实在包里）：
+
+```bash
+node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-unpacked/resources/app.asar').map(p=>p.replace(/\\\\/g,'/').replace(/^\\/+/,''));console.log(['plugins/seeu-case-index/index.js','plugins/seeu-case-index/client.js','tools/ges-index/build.mjs','tools/ges-index/query.mjs','resources/forensics/cordis.patch.yml'].filter(p=>!l.includes(p)))"
+```
+
+输出 `[]` 即齐全（注意 `listPackage()` 返回的路径以反斜杠开头，比较前要先归一化）。
+
+打包态还得验「插件真的被 dsh 加载」：用 CDP 端到端脚本
+`.probe/ui-check.mjs`（`SEEU_UI_EXE=<打包 exe>` 切到打包态），
+它会断言侧栏出现「取证索引」、面板自动扫描到案件、树能钻到「检材 3」、检索能出结果。
+只验进程起来（`verify-launch.mjs`）是不够的——插件加载失败不影响窗口起 UI。
+
+
 ## 6. 体积现状
 
-以 2026-11-11 **v0.1.3** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验接入之后）为准。
+以 2026-11-11 **v0.1.4** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验 + 案件索引插件）为准。
 更早的 Electron 44.11.0 首轮产物已作废，不引用其数字。
 
 `npm run package:dir` 产物：
@@ -268,21 +304,21 @@ md5sum resources/forensics/cordis.patch.yml .probe/asar-check/resources/forensic
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 | 234.9 MiB | Electron 主程序（含 rcedit 写入的图标/版本资源） |
-| `release/win-unpacked/resources/app.asar` | 168,376,348 | 160.6 MiB | JS + 资源 + node_modules 生产依赖（19,621 个 asar 条目，`@deepseek-ai` 330/330） |
+| `release/win-unpacked/resources/app.asar` | 168,454,873 | 160.7 MiB | JS + 资源 + node_modules 生产依赖 + 索引插件（19,635 个 asar 条目，`@deepseek-ai` 330/330） |
 | `release/win-unpacked/`（整个目录） | — | 769 MiB | 含 Electron 运行时、locales、`app.asar.unpacked` 原生模块（`du -sm`） |
 
 `npm run package:win` 额外产出（同一轮）：
 
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
-| `release/SeeUForensicsAgentPlus-0.1.3-x64.exe` | 211,854,228 | 202.0 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
+| `release/SeeUForensicsAgentPlus-0.1.4-x64.exe` | 211,873,901 | 202.1 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
 | `release/SeeUForensicsAgentPlus-0.1.3-x64.exe.blockmap` | 220,782 | 215.6 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
-| `release/SeeUForensicsAgentPlus-0.1.3-x64-portable.exe` | 189,442,160 | 180.7 MiB | 免安装单文件（自解压运行） |
+| `release/SeeUForensicsAgentPlus-0.1.4-x64-portable.exe` | 189,550,148 | 180.7 MiB | 免安装单文件（自解压运行） |
 
 即：安装包约 **202 MiB**、portable 约 **181 MiB**，解包目录约 **769 MiB**。
 
 > v0.1.0（缺 21 个 peer 包，启动即崩）、v0.1.1（overlay 是定稿前的工具面）与 v0.1.2
-> （工具面还有 21 项，含插件管理/市场）均已作废，对外只发 v0.1.3；各版本 asar 体积差异
+> （工具面还有 21 项，含插件管理/市场）以及 v0.1.3（无索引插件）均已作废，对外只发 v0.1.4；各版本 asar 体积差异
 > 来自补包与取证预设内容。
 
 体积构成大头：Electron 运行时本体（exe + DLL/pak/icudtl）、`app.asar` 中
@@ -453,3 +489,24 @@ taskkill //IM SeeUForensicsAgentPlus.exe //F
 
 - `%APPDATA%\SeeUForensicsAgentPlus\logs\shell.log`（主进程外壳日志）
 - `%APPDATA%\SeeUForensicsAgentPlus\logs\dsh-host-YYYY-MM-DD.log`（dsh 子进程 stdout/stderr）
+
+### v0.1.4 回归验证（案件索引插件进包，2026-11-11）
+
+与 v0.1.3 相比新增 `plugins/**` 与 `tools/ges-index/**` 进 asar（19,621 → 19,635 条目），并验证插件能在 asar 内被 dsh 加载。
+
+```json
+// release/win-unpacked/SeeUForensicsAgentPlus.exe
+{ "ok": true, "elapsedMs": 4072, "url": "http://127.0.0.1:50568/", "title": "DeepSeek Harness" }
+// release/SeeUForensicsAgentPlus-0.1.4-x64-portable.exe（首次含 ~800MB 解包）
+{ "ok": true, "elapsedMs": 43943, "url": "http://127.0.0.1:59037/", "title": "DeepSeek Harness" }
+```
+
+面板端到端（打包态，`SEEU_UI_EXE=<exe> node .probe/ui-check.mjs`，CDP 驱动真实 UI）：
+
+```json
+{ "sidebar": true, "scanFoundCase": true, "treeRoot": true,
+  "drilledApps": true, "searchOk": true, "errors": [] }
+```
+
+即：侧栏出现「取证索引」→ 点开自动扫到 `W盘 / 2919d298-…`（52.8 MiB）→ 树根 370 文件 / 22,777 记录 →
+钻到「检材 3」拿到 8 个应用 → 检索「加密」走 `LIKE` 回退出 20 条命中。开发态同一脚本结果相同。

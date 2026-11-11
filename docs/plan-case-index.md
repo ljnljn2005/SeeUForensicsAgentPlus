@@ -437,7 +437,7 @@ create table cross_file(id integer primary key, sha256 text, case_number text, e
 | **M1 建库器骨架** ✅ 已完成（2026-11-11） | 探测/枚举/抓取/`record`+`artifact`+`ingest_log`；`--rebuild` 原子替换；并发抓取 2–4 | 1.5（实耗 ~4 h） | ✅ 本案全量 370 叶、22,777 记录、0 失败、DB 52.8 MiB、242–329 s、`verify` 20/20（详见 §14） |
 | **M2 投影 + 实体 + 引用** | `column_map` 首批映射（通讯录/账号/Exif/通话/短信/微信/WhatsApp/Safari/基本信息 16 类）；`entity` 抽取；`citation` | 2 | typed 表覆盖 ≥ 90% 记录；实体命中可跨检材查询 |
 | **M3 查询 CLI + 技能** | 8 个 query 子命令 + `ges-case-index` SKILL.md + token 预算测试 | 1 | 单查询 P50 < 100 ms；输出 ≤ 2 KB；技能说明 ≤ 60 行 |
-| **M4 桌面集成** | 【更新索引】按钮、进度、设置案件目录、只读查询进程 | 1 | 从 0 到可查询全程 GUI 完成；取消/失败不损坏旧库 |
+| **M4 桌面集成** ✅ | **改为 dsh 客户端插件**（侧栏/设置页面板 + 检索 + 树导航 + 建库进度），宿主插件暴露  本地路由 | 1 | ✅ 开发态与打包态 GUI 全程建库+检索（CDP 断言通过，见 §15） |
 | **M5 跨案 + 文档** | `crosscase.db` 同步与查询；文档（本计划转正式文档 + 用户手册）；回归用例 | 1 | 两案间同号/同哈希可查；文档含排障 |
 | **M6 OCR 开关（可选）** | `--ocr off\|auto\|force`、取图→识别→`ocr_result`、设置页开关、准确率抽检 | 1 | `off` 不增加建库耗时；`auto` 抽检 20 张准确率 ≥ 90%；OCR 文本一律 `citable=0` |
 
@@ -615,3 +615,43 @@ ges search "…" → ERROR：res/vector_search/tree.pkl 不存在（未做向量
 - dsh 技能 `resources/forensics/skills/ges-case-index/SKILL.md`（M3，约 50 行、常驻 ~800 token）。
 - 桌面【更新索引】按钮与进度条（M4）。
 
+
+## 15. M4 实测（桌面插件形态，2026-11-11）
+
+M4 的规格原本写的是「外壳内加【更新索引】按钮」。实现时改成 **dsh 客户端插件**：面板直接长在 dsh Web UI 里，
+外壳（Electron）只负责把插件和模块打进包、把 dsh 起来，不再自己画索引界面。这样开发/打包两态一致，也不破坏 dsh 的界面结构。
+
+### 15.1 交付形态
+
+| 位置 | 内容 |
+| --- | --- |
+| `plugins/seeu-case-index/index.js` | 宿主半：`webServer.register({kind:'prefix', path:'/seeu-index'})`，提供 `/list` `/build` `/tree` `/search` `/cite` `/stats` `/verify`；`/build` 异步任务 + 轮询进度；`safeDb()` 限 `.seeu-index/*.db` |
+| `plugins/seeu-case-index/client.js` | 客户端半：`window.__ModuleLoader__.load({id:'@seeu/case-index'})`，React 面板（建库/更新、进度条、扫描、树导航、检索、引用详情），注册 `settings.section` + `sidebar.panellist` + `main` 三槽 |
+| `resources/forensics/cordis.patch.yml` | 末尾 `- insert: [{ id: seeu-case-index, name: ../../plugins/seeu-case-index/index.js }]`（相对 overlay 文件 → 开发=仓库根、打包=asar 根） |
+| `electron-builder.yml` | `files` 白名单加 `plugins/**` 与 `tools/ges-index/**`，插件与模块随包进 asar |
+| `tools/ges-index/{build,query}.mjs` | 建库/查询库（宿主端直接 `import`，不经子进程，也不需要 pnpm 安装插件） |
+
+### 15.2 关键决策与坑
+
+1. **不做 profile 安装**（最初的 `ensureProfile()` 方案已删除）：cpSync 从 asar 读文件风险大，且多一层可漂移状态；overlay 相对路径 insert 在开发/打包两态同形，零安装。
+2. **`insert.name` 不能写目录**：Node ESM 对目录导入报 `ERR_UNSUPPORTED_DIR_IMPORT`，必须指到入口文件（`dsh-app-boot/lib/index.js:4717-4726` 会把它转成 `pathToFileURL`）。
+3. **客户端 bundle 必须自带 ModuleLoader 包装**，`id` 必须等于包名，否则白屏；可用 `require` 只有白名单（react 等），样式只能注入 `<style>`。
+4. **不要注册 `sidebar`/`rightbar` 顶层槽**（单占位会被替换掉整列），用 `sidebar.panellist` + `main` 两条注册。
+5. **自建路由无鉴权**：`webServer.register` 的路由不走 `admit()`，只靠 loopback；因此 `safeDb()` 只允许 `.seeu-index` 下的库文件，避免变成任意文件读取口。
+6. **dsh 客户端会剥 URL token**：首屏 `?token=` 换成签名 cookie 后就 302 到无 token 地址；自检脚本必须自己接 `set-cookie`，不能跟随重定向。
+7. **“启动崩溃”是假象**：`dist/` 陈旧 + 在旧产物上复现，重建后正常；但记住本机 shell 自带 `ELECTRON_RUN_AS_NODE=1`，跑 Electron 前必须 `unset`。
+
+### 15.3 验证（Windows x64 / Electron 44.7.0）
+
+- 开发态与打包态（`release/win-unpacked`，asar 内）各跑一次 CDP 端到端脚本 `.probe/ui-check.mjs`
+  （`SEEU_UI_EXE=<exe>` 切打包态），断言：侧栏出现「取证索引」→ 点开面板 → 自动扫描出案件 → 树根统计
+  （370 文件 / 22,777 记录 / 1,594 消息 / 8,185 实体）→ 钻到「检材 3」（139 文件 / 8,582 行，应用层 8 项）→
+  检索「加密」（2 字中文走 LIKE 回退，20 命中）。两态 `errors: []`。
+- asar 自检：19,635 entries，`plugins/seeu-case-index/{index,client}.js`、`tools/ges-index/*.mjs`、overlay 都在包内。
+- 面板自动扫描的目录来自 `SEEU_INDEX_SEARCH_DIRS`（`<dsh 工作目录>` 与 `<DSH_HOME>/indexes`，`;` 分隔）。
+
+### 15.4 M4 之后
+
+- **M3（会话内查库）** 仍未做：`resources/forensics/skills/ges-case-index/SKILL.md` 需要 `skill-filesystem` 的 `customSkillDirs` 指向真实绝对路径，
+  而 overlay 是静态文件、开发/打包两态路径不同 → 计划由外壳在启动时生成一份 runtime patch（`%APPDATA%\SeeUForensicsAgentPlus\runtime\skills.patch.yml`）拼进 `--patch`。
+- 面板检索当前 limit 20；跨案库（M5）尚未接面板。

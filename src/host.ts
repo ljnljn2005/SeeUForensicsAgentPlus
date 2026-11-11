@@ -13,7 +13,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { appendFileSync, createWriteStream, existsSync, mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { dshCliEntry, dshHome, forensicsPatchPath, hostLogFile, workspaceDir } from './paths.js'
 import { DESKTOP_MARKER_ENV, PRODUCT_NAME } from './brand.js'
 
@@ -163,6 +163,8 @@ export class DshHost extends EventEmitter {
       DSH_HOME: this.homeDir,
       [DESKTOP_MARKER_ENV]: '1',
       DSH_CLIENT_VERSION: PRODUCT_NAME,
+      // 案件索引插件扫描"已建库案件"的默认目录（Web UI 里可再手工输入）。
+      SEEU_INDEX_SEARCH_DIRS: [this.workspace, join(this.homeDir, 'indexes')].join(';'),
       // 桌面版不接收远端访问；CLI 已绑定 loopback，这里再收敛一次。
       NO_COLOR: '1',
     }

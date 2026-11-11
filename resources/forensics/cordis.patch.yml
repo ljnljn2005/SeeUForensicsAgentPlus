@@ -223,3 +223,12 @@
           allowParallelInProgress: true
       - id: present
         name: '@deepseek-ai/dsh-tool-present'
+
+# ── 案件索引插件（新增行，id 见 plugins/seeu-case-index）────────────────────
+# 相对路径以本文件所在目录（resources/forensics/）为基准，app-boot 会转成 file: URL：
+#   开发态 → <仓库根>/plugins/seeu-case-index/index.js
+#   打包态 → <app.asar>/plugins/seeu-case-index/index.js
+# 必须指到入口文件；Node ESM 不接受目录导入（ERR_UNSUPPORTED_DIR_IMPORT）。
+- insert:
+    - id: seeu-case-index
+      name: ../../plugins/seeu-case-index/index.js

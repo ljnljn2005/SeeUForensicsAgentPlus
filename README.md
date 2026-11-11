@@ -56,16 +56,28 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.1.3**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.1.4**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 769 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,376,348 B（330/330 个 `@deepseek-ai` 包齐全） |
-| `release/SeeUForensicsAgentPlus-0.1.3-x64.exe`（NSIS 安装包） | 211,854,228 B |
-| `release/SeeUForensicsAgentPlus-0.1.3-x64-portable.exe` | 189,442,160 B |
+| `release/win-unpacked/resources/app.asar` | 168,454,873 B（330/330 个 `@deepseek-ai` 包齐全，含 `plugins/seeu-case-index/**`） |
+| `release/SeeUForensicsAgentPlus-0.1.4-x64.exe`（NSIS 安装包） | 211,873,901 B |
+| `release/SeeUForensicsAgentPlus-0.1.4-x64-portable.exe` | 189,550,148 B |
 
-实测冷启动到 dsh UI：目录版 3638 ms；portable 首次 44.4s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+实测冷启动到 dsh UI：目录版 4072 ms；portable 首次 43.9s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+
+> **v0.1.4 改了什么**
+>
+> 1. **案件索引面板**：新增 dsh 客户端插件 `plugins/seeu-case-index/`，在 dsh Web UI 的
+>    左侧栏（`sidebar.panellist`）与设置页（`settings.section`）各有一个「取证索引」入口：
+>    填案件目录 → 【建库 / 更新】（带进度条）→ 树状导航 + 关键词检索 + 引用详情，
+>    全流程不用开命令行（详见 §8）。
+> 2. **宿主插件路由**：`/seeu-index/{list,build,tree,search,cite,stats,verify}` 跑在 dsh
+>    自己的 webServer 上（仅 loopback，只允许读 `.seeu-index` 下的库文件）。
+> 3. **注册方式**：`resources/forensics/cordis.patch.yml` 末尾一行 `- insert:` 指相对路径
+>    `../../plugins/seeu-case-index/index.js`，开发态/打包态（asar 内）同一条路径都能解析，
+>    不需要 pnpm 安装插件；`electron-builder.yml` 白名单补 `plugins/**` 与 `tools/ges-index/**`。
 
 > **v0.1.3 改了什么**
 >
@@ -89,8 +101,8 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 > 3. 新增 `scripts/kill-app.mjs`：验证/打包前清理残留实例，避免单实例锁导致
 >    新实例静默退出（`exit 0`）。
 >
-> 历史包袱：v0.1.0 缺 21 个 peer 包（启动即崩），v0.1.1 / v0.1.2 是工具面收窄前的版本，
-> 均已作废。**请统一使用 0.1.3 的产物。**
+> 历史包袱：v0.1.0 缺 21 个 peer 包（启动即崩），v0.1.1 / v0.1.2 / v0.1.3 是索引面板
+> 之前的版本，均已作废。**请统一使用 0.1.4 的产物。**
 
 ## 3. 目录结构
 
@@ -164,23 +176,58 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 - **打包体积**：asar 约 168MB（含完整 dsh 运行时与原生依赖）；后续可按需裁剪 test/example 文件与未用到的本地组件（libreoffice/sherpa 等）。
 - **更新通道**：未接入，`electron-builder.yml` 里 `publish: null`；要接官方 nightly 通道需另配 feed 与签名（见 `docs/packaging.md`）。
 
-## 8. 案件索引工具（tools/ges-index）
+## 8. 案件索引面板（dsh 客户端插件）
 
 火眼（GoldenEyes/GES）本身会产出「全解析结果」（`/case/检材分析数据/**` 下的 `data.csv` / `chat.txt`）。
-`tools/ges-index` 把这些结果一次性抓成本地 SQLite 索引，后续 dsh 会话**只查库**、不调 `ges.exe`，
-按树状渐进式披露逐层钻取，并给可回火眼核验的 `Goldeneyes://` 引用：
+本工程把「建库 + 手工检索」做成了一个 **dsh 客户端插件**：在 dsh Web UI 里点按钮建库，再用树状导航 + 关键词检索翻库；
+后续 dsh 会话也只查这个库，不再调用 `ges.exe`。
+
+### 8.1 在哪里
+
+启动桌面版后，dsh Web UI 里有两处入口（同一个面板）：
+
+- **左侧栏底部的「取证索引」图标**（`sidebar.panellist`）——点开就是检索面板，可与会话并排；
+- **设置页 →「取证索引」一节**（`settings.section`）。
+
+### 8.2 怎么用
+
+1. **建库 / 更新**：填案件目录（火眼案件目录，`case-index.db` 会写进其下的 `.seeu-index\`），点【建库 / 更新】。
+   进度条实时显示 探测 → 枚举 → 抓取 i/N（百分比、已用时间、预计剩余）→ 校验 → 替换；可取消，失败不会破坏旧库。
+   校验（`integrity_check` + 覆盖率 + 基址率）通过后才原子替换，并写 `manifest.json`（指纹/统计/耗时/失败清单）。
+2. **扫描已有索引**：面板打开时自动扫描上次用的案件目录（`localStorage.seeu.indexDir`）以及 dsh 工作目录下的 `indexes/`；
+   也可手填目录再点【扫描已有索引】。
+3. **树状导航**：案件 → 检材 N → 应用 → 账号 → 类别 → 文件 → 记录 → 引用，每层只显示摘要与计数，逐层点开。
+4. **关键词检索**：输入后回车（≥3 字符走 FTS5 trigram，1–2 字中文自动退回 `LIKE`），命中行显示 `检材·应用 / 时间 / 片段`；
+   点结果可看引用详情（`Goldeneyes://…` 句柄 + 可复制的 `ges read` 核验命令）。
+
+### 8.3 它是怎么接进去的
+
+- 插件源码：`plugins/seeu-case-index/`（宿主 `index.js` + 客户端 `client.js` + `package.json`），**不需要 pnpm 安装**。
+- 宿主端 `ctx.inject(['webServer'], …)` + `webServer.register({ kind:'prefix', path:'/seeu-index' })` 暴露本地 HTTP 接口：
+  `/list`（扫描已有索引）、`/build`（异步建库 + 轮询进度）、`/tree`、`/search`、`/cite`、`/stats`、`/verify`。
+  路由只接受 `.seeu-index` 目录下的 `.db`（防任意路径读取），只监听 127.0.0.1。
+- 客户端 `client.js` 用 `window.__ModuleLoader__.load({ id: '@seeu/case-index', factory })` 包装，只依赖白名单内的 `react`，
+  注册 `settings.section` / `sidebar.panellist` / `main` 三处槽位。
+- 注册方式：`resources/forensics/cordis.patch.yml` 末尾一行 `- insert: [{ id: seeu-case-index, name: ../../plugins/seeu-case-index/index.js }]`。
+  相对路径以 overlay 文件为基准（`resources/forensics/` = 应用根）：开发态解析到仓库根，打包态解析到 `app.asar` 根，两态同形。
+- 打包：`electron-builder.yml` 的 `files` 白名单含 `plugins/**` 与 `tools/ges-index/**`，二者都进 `app.asar`，可被 dsh 直接 ESM import。
+
+### 8.4 命令行等价操作（`tools/ges-index`）
+
+面板背后是同一套模块，命令行也能跑（便于批处理 / 排障）：
 
 ```bash
-npm run index:build -- --case-dir "E:\forensics\W盘_2919d298-…"   # 建库（本案 370 叶约 4–6 分钟，DB 约 53 MiB）
-npm run index:tree -- "ev:3"                                     # root → ev → app → acc → cat → art → cite
-npm run index:stats
-npm run index:verify -- --sample 20                              # 随机回火眼核对正文与基址
+npm run index:build  -- --case-dir "E:\\forensics\\W盘_2919d298-…"   # 建库（本案 370 叶约 4–6 分钟，DB 约 53 MiB）
+npm run index:list   -- "E:\\forensics"                             # 扫描某个父目录下所有案件索引
+npm run index:tree   -- --db "<案件目录>\\.seeu-index\\case-index.db" "ev:3"
+npm run index:search -- --db "…\\case-index.db" -q 加密
+npm run index:verify -- --db "…\\case-index.db" --sample 20          # 随机回火眼核对正文与基址
 ```
 
 - 只读火眼：仅调用 `case ls / case open / status / glob / read`；唯一写入是 `<案件目录>\.seeu-index\`。
-- 索引库 `case-index.db` 带 `manifest.json`（指纹/统计/耗时/失败清单），校验通过才原子替换旧库。
-- 本案实测：370/370 叶、22,777 条记录、1,594 条消息、8,185 个实体、0 失败、引用回查 20/20 一致。
-- 设计、schema、里程碑与实测明细见 `docs/plan-case-index.md`；用法见 `tools/ges-index/README.md`。
+- 本案实测：370/370 叶、22,777 条记录、1,594 条消息、8,185 个实体、0 失败、建库 242–329 s、引用回查 20/20 一致。
+- 设计、schema、里程碑与实测明细见 `docs/plan-case-index.md`；工具用法见 `tools/ges-index/README.md`。
+- 已知限制：建库需要本机有火眼（`ges.exe`，可用 `SEEU_GES_EXE` 指定）且案件已打开；会话内自动查库（M3 技能）尚未接入，当前先用面板检索。
 
 ## 9. 许可与来源
 

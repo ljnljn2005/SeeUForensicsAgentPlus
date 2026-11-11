@@ -1,0 +1,5 @@
+# 用 dsh.bundle.patch 方式安装时（dsh plugin add / profiles bundles）走这条；
+# 桌面版当前改为 overlay 直接 insert 相对路径，不依赖 profile 安装。
+- insert:
+    - id: seeu-case-index
+      name: ./index.js
