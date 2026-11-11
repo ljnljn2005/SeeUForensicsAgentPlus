@@ -33,6 +33,20 @@ export function csvLine(cells) {
 }
 
 /**
+ * 任意列（typed 表等）→ CSV 文本：columns 是表头，rows 里按列名取值。
+ * @param {string[]} columns
+ * @param {Array<Record<string, unknown>>} rows
+ * @param {{ bom?: boolean }} [opts]
+ */
+export function genericCsv(columns, rows, opts = {}) {
+  const header = columns ?? [];
+  const lines = [csvLine(header)];
+  for (const r of rows ?? []) lines.push(csvLine(header.map((c) => r[c])));
+  const bom = opts.bom === false ? '' : '\uFEFF';
+  return bom + lines.join('\r\n') + '\r\n';
+}
+
+/**
  * 记录行 → CSV 文本。
  * @param {Array<Record<string, unknown>>} rows - `records()` 返回的行（id/eid/ev/app/account/cat/sub/ts/line/text）。
  * @param {{ bom?: boolean, header?: string[] }} [opts]

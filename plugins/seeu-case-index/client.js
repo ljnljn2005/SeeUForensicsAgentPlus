@@ -188,6 +188,22 @@ window.__ModuleLoader__.load({
     };
 
     /** 把筛选条件拼成一行中文，供清单抬头使用。 */
+    // CSV 文本落盘：Electron 桥（见 src/preload.ts 的 saveExport）优先，web 预览回退成浏览器下载。
+    async function saveCsvText(name, text) {
+      const bridge = window.seeu && typeof window.seeu.saveExport === 'function' ? window.seeu : null;
+      if (bridge) {
+        const saved = await bridge.saveExport(name, text);
+        return saved ?? { ok: false, error: '保存失败' };
+      }
+      const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return { ok: true, path: name, downloaded: true };
+    }
+
     const describeFilters = (obj, labels = {}) => {
       const parts = [];
       for (const [key, label] of Object.entries(labels)) {
@@ -862,6 +878,8 @@ window.__ModuleLoader__.load({
       const [offset, setOffset] = useState(0);
       const [copying, setCopying] = useState(false);
       const [note, setNote] = useState('');
+      const [exporting, setExporting] = useState(false);
+      const [exportNote, setExportNote] = useState('');
       const detail = useLoad(() => (name ? api('/table', { db, name, ...applied, limit: TABLE_PAGE, offset }) : Promise.resolve(null)), [db, name, applied, offset]);
       const pick = (table) => { setName(table); setOffset(0); };
       const apply = () => { setApplied({ ...draft }); setOffset(0); };
@@ -898,6 +916,36 @@ window.__ModuleLoader__.load({
           setCopying(false);
         }
       };
+      // 把当前筛选的整张 typed 表导出成 CSV（含表头；Excel 直接打开）
+      const exportCsv = async () => {
+        if (exporting || !db || !name) return;
+        setExporting(true);
+        setExportNote('');
+        try {
+          const qs = new URLSearchParams({ db, name });
+          for (const [k, v] of Object.entries(applied)) if (v !== '' && v != null) qs.set(k, String(v));
+          qs.set('max', '20000');
+          const res = await fetch('/seeu-index/export/table.csv?' + qs.toString());
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const raw = await res.text();
+          const text = raw.startsWith('\uFEFF') ? raw : '\uFEFF' + raw;
+          const rowsOut = Number(res.headers.get('x-seeu-rows') ?? 0);
+          const totalOut = Number(res.headers.get('x-seeu-total') ?? rowsOut);
+          const now = new Date();
+          const pad = (n) => String(n).padStart(2, '0');
+          const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+          const saved = await saveCsvText('表导出-' + (detail.data?.label || name) + '-' + stamp + '.csv', text);
+          if (saved.ok) {
+            setExportNote('已导出 ' + rowsOut + ' 行' + (totalOut > rowsOut ? '（共 ' + totalOut + ' 行，单次最多 20000 行）' : '') + (saved.downloaded ? '：' + saved.path : '到 ' + saved.path));
+          } else {
+            setExportNote('导出失败：' + (saved.error ?? '未知错误'));
+          }
+        } catch (e) {
+          setExportNote('导出失败：' + String(e.message ?? e));
+        } finally {
+          setExporting(false);
+        }
+      };
       if (list.error) return h('div', { style: S.card }, h('div', { style: S.noticeErr }, `表清单读取失败：${list.error}`));
       if (list.loading && !list.data) return h('div', { style: S.card }, h(Skeleton, { n: 5 }));
       if (!tables.length) return h('div', { style: S.card }, h(EmptyState, { title: '该库没有 typed 数据', text: 'table 清单为空：先点「建库 / 更新」重建索引，再回来查看联系人、短信、账号等结构化表。' }));
@@ -928,8 +976,10 @@ window.__ModuleLoader__.load({
             h('span', { style: S.muted }, `当前 ${data.offset + 1}-${data.offset + data.returned}`),
             detail.loading ? h('span', { style: S.muted }, '更新中…') : null,
             h('span', { style: { ...S.muted, marginLeft: 'auto' } }, '点一行看引用句柄（record_id 为空的行不可引用）'),
-            actionButton(copying ? '复制中…' : '复制本页引用清单', copyPage, { disabled: copying })),
+            actionButton(copying ? '复制中…' : '复制本页引用清单', copyPage, { disabled: copying }),
+            actionButton(exporting ? '导出中…' : '导出 CSV', exportCsv, { disabled: exporting })),
           note ? h('div', { style: S.noticeInfo }, note) : null,
+          exportNote ? h('div', { style: S.noticeInfo }, exportNote) : null,
           h('div', { className: 'seeu-table-wrap seeu-scroll', style: S.tableWrap }, h('table', { className: 'seeu-table', style: S.table },
             h('thead', null, h('tr', null, cols.map((c) => h('th', { key: c, style: S.th }, c)))),
             h('tbody', null, rows.map((r, i) => h('tr', {

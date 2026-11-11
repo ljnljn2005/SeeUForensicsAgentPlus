@@ -1699,4 +1699,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 面板：`RecordsView` 头部多【导出 CSV】：按当前 `applied` 筛选拼 query → `fetch` 取 CSV → 有 Electron 桥就落盘并在下方显示「已导出 N 行（共 M 条，单次最多 20000 行）到 <路径>」，web 预览（无桥）回退成 `Blob` + `<a download>`。
 - 坑：**`fetch` 的 `Response.text()` 会吃掉 BOM**（`TextDecoder` 默认忽略 BOM），第一版实测 `csvFile.bom:false`、Excel 打开中文可能乱码；在客户端保存前补回 `'\uFEFF'` 前缀即修复（实测 4,608,566 B、`bom:true`、20,000 行）。
 - 验证：`npm test` **54/54**；`export-check`（`.dev/exports` 隔离目录，`SEEU_EXPORT_E2E_PORT=9412`）`{"ok":true,"csvClicked":true,"csvNote":"已导出 20000 行（共 22777 条，单次最多 20000 行）…","csvFile":{"bytes":4608566,"bom":true,"hasHeader":true,"dataLines":20000,"hasTs":true},"errors":[]}`，其余导出步骤（概览 718 / 记录 14,996 / 实体 1,888 / 表 7,025 / 时间线 3,235 字符）不变；`m2-ui-check` `m2ok:true / errors:[]`。
-- 遗留：CSV 只覆盖记录视图（表/时间线仍是 Markdown 清单）；20000 行是硬上限（22,777 条会被截断并提示，需要全量可调 `max` 或改 SQLite 直查）；时间列按索引里的字符串原样输出，不换算时区。
+- 遗留：CSV 覆盖记录视图与 typed 表（时间线/跨案仍是 Markdown 清单）；20000 行是硬上限（22,777 条会被截断并提示，需要全量可调 `max` 或改 SQLite 直查）；时间列按索引里的字符串原样输出，不换算时区。
+
+## 20.53 表视图导出 CSV（v0.2.7 起，未打包）
+
+- 动机：typed 表（联系人/短信/通话/账号…）是研判最常用的结构化数据，之前只能一页 20 行看、复制当前页引用清单；要拿全表只能去 SQLite。
+- `tools/ges-index/csv.mjs` 加 `genericCsv(columns, rows)`：按给定列做表头、按列名取值（缺列写空），同样 BOM+CRLF；`tests/csv.test.mjs` +1 例 → **55/55**。
+- 插件新增 `GET /seeu-index/export/table.csv`：`db/name` 必填（name 未知时 `table()` 抛 `E_BAD_TABLE`），支持 `eid/app/account/subcat/from/to/q/max`，内部按 200 行/页循环（`table()` 的 limit 上限就是 200），响应头与记录 CSV 一致。
+- 面板：`TablesView` 头部多【导出 CSV】（与「复制本页引用清单」并排），走模块级 `saveCsvText()`（Electron 桥落盘 / web 下载），文件名 `表导出-<表名>-<时间戳>.csv`，下方提示「已导出 N 行…」。
+- 验证：`export-check` 新增步骤（`SEEU_EXPORT_E2E_PORT=9413`）→ `{"ok":true,"csvTableClicked":true,"csvTableNote":"已导出 745 行到 …","csvTableFile":{"bytes":143621,"bom":true,"hasHeader":true,"dataLines":745},"errors":[]}`；记录 CSV 与其余导出断言不变。
+- 遗留：表 CSV 只导当前表（不做多表合一个文件）；`record_id` 为空的汇总行也照样导出（Excel 里自己筛）。

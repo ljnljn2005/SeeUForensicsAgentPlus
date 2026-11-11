@@ -159,9 +159,9 @@ const readClipboard = () => {
 }
 
 // 读回【导出 CSV】落盘的文件（取目录里最新的「记录导出-*.csv」）
-const readLatestCsv = () => {
+const readLatestCsv = (pattern = /^记录导出-.*[.]csv$/) => {
   try {
-    const files = readdirSync(EXPORT_DIR).filter((f) => /^记录导出-.*[.]csv$/.test(f))
+    const files = readdirSync(EXPORT_DIR).filter((f) => pattern.test(f))
     if (!files.length) return null
     const latest = files
       .map((f) => ({ f, t: statSync(join(EXPORT_DIR, f)).mtimeMs }))
@@ -268,6 +268,21 @@ try {
     hasCite: /引用：\S+/.test(clipTable),
   }
 
+  // ---- 3b) 表视图：导出 CSV（含 typed 表全列） ----
+  report.csvTableClicked = await clickText('导出 CSV')
+  await sleep(3500)
+  report.csvTableNote = await noteText(/已导出\s*\d+\s*行[^\n]*/)
+  const tableCsv = readLatestCsv(/^表导出-.*[.]csv$/)
+  report.csvTableFile = tableCsv
+    ? {
+        name: tableCsv.name,
+        bytes: tableCsv.bytes,
+        bom: tableCsv.bom,
+        hasHeader: tableCsv.text.includes('id,record_id,eid,app,account,subcat'),
+        dataLines: tableCsv.text.replace(/^\uFEFF/, '').split('\r\n').filter(Boolean).length - 1,
+      }
+    : null
+
   // ---- 4) 时间线视图：复制时间线清单，并检查标签页记忆 ----
   report.tabTimeline = await clickTab('时间线')
   await sleep(3000)
@@ -288,6 +303,7 @@ try {
     report.csvClicked && !!report.csvFile && report.csvFile.bom && report.csvFile.hasHeader && report.csvFile.dataLines > 0 && report.csvFile.hasTs &&
     report.tabEntity && report.entityCopied && report.entityClipboard.hasHeader && report.entityClipboard.len > 0 &&
     report.tabTables && !!report.tablePicked && report.tableCopied && report.tableClipboard.hasHeader && report.tableClipboard.hasCite &&
+    report.csvTableClicked && !!report.csvTableFile && report.csvTableFile.bom && report.csvTableFile.hasHeader && report.csvTableFile.dataLines > 0 &&
     report.tabTimeline && report.timelineCopied && report.timelineClipboard.hasHeader && report.timelineClipboard.hasBucket &&
     report.savedTab === 'timeline' &&
     errors.length === 0

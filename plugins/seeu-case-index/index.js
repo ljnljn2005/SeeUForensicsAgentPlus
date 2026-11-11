@@ -5,7 +5,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
 import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records, evidences, facets } from '../../tools/ges-index/query.mjs';
-import { recordsCsv } from '../../tools/ges-index/csv.mjs';
+import { genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
 
 const ROUTE = '/seeu-index';
@@ -232,6 +232,34 @@ async function handle(req, res) {
         const opts = { limit: url.searchParams.get('limit') ?? 20, offset: url.searchParams.get('offset') ?? 0 };
         for (const k of ['eid', 'app', 'account', 'category', 'artifact', 'from', 'to']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
         return send(res, 200, records(db, opts));
+      }
+      if (path === '/export/table.csv') {
+        const name = String(url.searchParams.get('name') ?? '');
+        if (!name) return send(res, 400, { error: '缺少 name' });
+        const opts = {};
+        for (const k of ['eid', 'app', 'account', 'subcat', 'from', 'to', 'q']) {
+          if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
+        }
+        const max = Math.min(20000, Math.max(1, Number(url.searchParams.get('max')) || 20000));
+        const pageSize = 200;
+        const rows = [];
+        let total = 0;
+        let columns = [];
+        for (let off = 0; off < max; off += pageSize) {
+          const page = table(db, name, { ...opts, limit: pageSize, offset: off });
+          total = page.total;
+          columns = page.columns;
+          rows.push(...page.rows);
+          if (page.next == null || rows.length >= max) break;
+        }
+        const csv = genericCsv(columns, rows.slice(0, max));
+        return sendText(res, 200, csv, {
+          'content-type': 'text/csv; charset=utf-8',
+          'content-disposition': `attachment; filename="seeu-table-${name}-${Date.now()}.csv"`,
+          'x-seeu-rows': String(rows.length),
+          'x-seeu-total': String(total),
+          'x-seeu-truncated': String(total > rows.length),
+        });
       }
       if (path === '/export/records.csv') {
         const opts = {};

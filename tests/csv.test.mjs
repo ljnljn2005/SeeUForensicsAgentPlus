@@ -36,3 +36,17 @@ test('recordsCsv 可关闭 BOM（写给非 Excel 消费者时）', () => {
   assert.ok(!csv.includes('\uFEFF'));
   assert.equal(csv, RECORD_CSV_HEADER.join(',') + '\r\n');
 });
+
+test('genericCsv 用给定列做表头并按列名取值（typed 表导出）', async () => {
+  const { genericCsv } = await import('../tools/ges-index/csv.mjs');
+  const csv = genericCsv(['id', 'name', 'phone'], [
+    { id: 1, name: '张三', phone: '85212345678', extra: 'x' },
+    { id: 2, name: '李,四', phone: null },
+  ]);
+  assert.ok(csv.startsWith('\uFEFF'));
+  const lines = csv.slice(1).split('\r\n');
+  assert.equal(lines[0], 'id,name,phone');
+  assert.equal(lines[1], '1,张三,85212345678');
+  assert.equal(lines[2], '2,"李,四",');
+  assert.equal(lines.at(-1), '');
+});
