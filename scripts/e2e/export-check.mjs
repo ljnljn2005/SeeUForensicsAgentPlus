@@ -214,10 +214,26 @@ try {
     hasCite: /引用：\S+/.test(clipTable),
   }
 
+  // ---- 4) 时间线视图：复制时间线清单，并检查标签页记忆 ----
+  report.tabTimeline = await clickTab('时间线')
+  await sleep(3000)
+  report.timelineCopied = await clickText('复制时间线清单')
+  await sleep(2500)
+  report.timelineNote = await noteText(/已复制\s*\d+\s*个时间段的清单[^\n]*/)
+  const clipTimeline = readClipboard()
+  report.timelineClipboard = {
+    len: clipTimeline.length,
+    hasHeader: clipTimeline.includes('# SeeU 取证索引 · 时间线清单'),
+    hasBucket: /—\s*\d+\s*条\s*·\s*\d+\s*检材/.test(clipTimeline),
+  }
+  report.savedTab = await evaluate("localStorage.getItem('seeu.panelTab')")
+
   report.ok = report.panelOpened && report.scanned &&
     report.tabRecords && report.recordsCopied && report.recordsClipboard.hasHeader && report.recordsClipboard.hasCite && report.recordsClipboard.len > 0 &&
     report.tabEntity && report.entityCopied && report.entityClipboard.hasHeader && report.entityClipboard.len > 0 &&
     report.tabTables && !!report.tablePicked && report.tableCopied && report.tableClipboard.hasHeader && report.tableClipboard.hasCite &&
+    report.tabTimeline && report.timelineCopied && report.timelineClipboard.hasHeader && report.timelineClipboard.hasBucket &&
+    report.savedTab === 'timeline' &&
     errors.length === 0
   if (!report.ok) report.errors.push('部分断言未通过')
 } catch (error) {

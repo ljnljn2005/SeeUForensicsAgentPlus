@@ -1289,3 +1289,16 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `node scripts/e2e/m2-ui-check.mjs` → `m2ok:true / errors:[]`；`npm test` 38/38；`npm run check:overlay` OK。
 
 遗留：高亮只覆盖检索/记录两个视图（树与表视图是短标签/表格单元，暂不高亮）；`<mark>` 依赖 Chromium 默认语义，若官方样式表给 `mark` 加了底色仍会被我们的 class 覆盖。
+
+### 20.23 面板位置记忆 + 时间线/跨案清单导出
+
+1. **位置记忆**（`plugins/seeu-case-index/client.js`）：`tab` 初值从 `localStorage.getItem('seeu.panelTab')` 恢复（只认 `TABS` 里的键，防脏值）；`tab` / `db` 变化时分别写回 `seeu.panelTab` / `seeu.panelDb`；扫描后自动选库改为「上次用过的库优先，否则第一个」。
+2. **时间线导出**：`TimelineView` 新增 `copying` / `note` 与【复制时间线清单】，抬头写分桶、筛选、时间段数、合计记录、索引库、导出时间，正文每个时间段一行 `桶 — N 条 · M 检材 · K 应用`。
+3. **跨案导出**：`CrossCaseView` 新增【复制重合实体清单】（有行才显示），抬头写 minCases / 类型 / 条数 / 跨案库，正文 `[kind] value — 案数 · 检材 · 提及次数` + 案件号行。
+
+验证：
+
+- `npm run test:e2e:export` → `ok:true`，新增 `timelineNote:"已复制 86 个时间段的清单（3235 字符）"`、`timelineClipboard:{len:3237,hasHeader:true,hasBucket:true}`、`savedTab:"timeline"`（点击时间线标签后 localStorage 记下），原有记录 14,996 / 实体 1,888 / 表 7,025 字符不变；
+- `node scripts/e2e/m2-ui-check.mjs` → `m2ok:true / errors:[]`（独立 `SEEU_DSH_HOME` / `SEEU_USER_DATA`，避免位置记忆被旧本地存储干扰）；`npm test` 38/38；`check:overlay` OK。
+
+遗留：跨案【复制重合实体清单】尚未在双案夹具下跑 e2e（单案时 minCases=2 无行、按钮不显示；代码与实体清单共用 `clipboardWrite` 路径），下次做双案联调时补一条断言。

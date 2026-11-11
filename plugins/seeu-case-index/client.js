@@ -586,6 +586,8 @@ window.__ModuleLoader__.load({
     // ---------- 视图：时间线（小时/天/月分桶，点柱条钻取记录） ----------
     function TimelineView({ db, onDrill }) {
       const [draft, setDraft] = useState({ eid: '', app: '', from: '', to: '', bucket: 'day' });
+      const [copying, setCopying] = useState(false);
+      const [note, setNote] = useState('');
       const [applied, setApplied] = useState(draft);
       const { data, error, loading } = useLoad(() => api('/timeline', { db, ...applied, limit: 200 }), [db, applied]);
       const apply = () => setApplied({ ...draft });
@@ -603,6 +605,32 @@ window.__ModuleLoader__.load({
       const bucketLabel = (BUCKETS.find(([key]) => key === applied.bucket) ?? BUCKETS[1])[1];
       const hasFilter = !!(applied.eid || applied.app || applied.from || applied.to);
       const total = rows.reduce((s, r) => s + (r.n ?? 0), 0);
+      // 导出时间线清单：每个时间段一行，带记录数/检材数/应用数，可直接贴进报告
+      const copyTimeline = async () => {
+        if (copying || !rows.length) return;
+        setCopying(true);
+        setNote('');
+        try {
+          const lines = [
+            '# SeeU 取证索引 · 时间线清单',
+            `分桶：${bucketLabel}`,
+            `筛选：${describeFilters(applied, { eid: '检材', app: '应用' })}`,
+            `共 ${data.returned} 个时间段 · 合计 ${total} 条记录`,
+            `索引库：${db}`,
+            `导出时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+            '',
+          ];
+          rows.forEach((r, i) => {
+            lines.push(`${i + 1}. ${r.bucket} — ${r.n} 条 · ${r.eids} 检材 · ${r.apps} 应用`);
+          });
+          const chars = await clipboardWrite(lines.join('\n'));
+          setNote(`已复制 ${rows.length} 个时间段的清单（${chars} 字符）`);
+        } catch (e) {
+          setNote(`复制失败：${String(e.message ?? e)}`);
+        } finally {
+          setCopying(false);
+        }
+      };
       return h('div', { style: S.card },
         h('div', { style: { ...S.row, gap: 6 } },
           h('div', { style: S.seg }, BUCKETS.map(([key, label]) => h('button', {
@@ -631,7 +659,9 @@ window.__ModuleLoader__.load({
           h('div', { style: S.row },
             h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `${bucketLabel}分桶`),
             h('span', { style: S.muted }, `${data.returned} 个时间段`),
+            (rows.length ? actionButton(copying ? '复制中…' : '复制时间线清单', copyTimeline, { disabled: copying }) : null),
             h('span', { style: { ...S.muted, marginLeft: 'auto' } }, `合计 ${total} 条记录 · 点柱条钻取该时段`)),
+          note ? h('div', { style: S.noticeInfo }, note) : null,
           h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 460, overflow: 'auto' } },
             rows.map((r) => h('div', {
               key: r.bucket,
@@ -827,6 +857,27 @@ window.__ModuleLoader__.load({
 
       const topRows = top.data?.rows ?? [];
       const foundRows = found.data?.rows ?? [];
+      // 导出重合实体清单（跨案比较结果，供报告直接引用）
+      const copyTop = async () => {
+        if (!topRows.length) return;
+        try {
+          const lines = [
+            '# SeeU 跨案 · 重合实体清单',
+            `筛选：最少 ${top.data?.minCases ?? minCases} 案 · 类型 ${kind || '全部'}`,
+            `共 ${topRows.length} 条 · 跨案库：${list.data?.crossPath ?? ''}`,
+            `导出时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+            '',
+          ];
+          topRows.forEach((r, i) => {
+            lines.push(`${i + 1}. [${r.kind}] ${r.value} — ${r.caseCount ?? '?'} 案 · ${r.evidenceCount ?? '-'} 检材 · 提及 ${r.hits ?? 0} 次`);
+            if (Array.isArray(r.cases) && r.cases.length) lines.push(`   案件：${r.cases.map((c) => c.caseNumber ?? '').filter(Boolean).join(', ')}`);
+          });
+          const chars = await clipboardWrite(lines.join('\n'));
+          setNote(`已复制 ${topRows.length} 条重合实体清单（${chars} 字符）`);
+        } catch (e) {
+          setSyncError(String(e.message ?? e));
+        }
+      };
       return h('div', { style: S.card },
         // ---- 概览 + 同步 ----
         h('div', { style: S.panel },
@@ -877,7 +928,8 @@ window.__ModuleLoader__.load({
               style: { ...S.filter, width: 'auto', minWidth: 88, cursor: 'pointer' },
               value: kind,
               onChange: (e) => setKind(e.target.value),
-            }, kindOptions.map(([v, l]) => h('option', { key: v || 'all', value: v }, l)))),
+            }, kindOptions.map(([v, l]) => h('option', { key: v || 'all', value: v }, l))),
+            topRows.length ? actionButton('复制重合实体清单', copyTop) : null),
           top.error ? h('div', { style: S.noticeErr }, `重合实体读取失败：${top.error}`) : null,
           top.loading && !top.data ? h(Skeleton, { n: 4 }) : null,
           top.data && !topRows.length
@@ -950,7 +1002,11 @@ window.__ModuleLoader__.load({
       const [db, setDb] = useState(null);
       const [node, setNode] = useState('root');
       const [view, setView] = useState(null);
-      const [tab, setTab] = useState('tree');
+      // 记住上次停留的标签页，重启/刷新面板不用每次重选
+      const [tab, setTab] = useState(() => {
+        const saved = localStorage.getItem('seeu.panelTab');
+        return TABS.some(([key]) => key === saved) ? saved : 'tree';
+      });
       const [recordSeed, setRecordSeed] = useState(null);
       const [query, setQuery] = useState('');
       // 检索筛选：检材 / 应用 / 起止日期（后端 search() 原生支持，空值不传）
@@ -975,7 +1031,8 @@ window.__ModuleLoader__.load({
           const list = body.indexes ?? [];
           const keep = list.some((ix) => ix.dbPath === db);
           if (list.length && !keep) {
-            const first = list[0];
+            const savedDb = localStorage.getItem('seeu.panelDb');
+            const first = list.find((ix) => ix.dbPath === savedDb) ?? list[0];
             setDb(first.dbPath);
             if (first.caseDir) setDir(first.caseDir);
             loadNodeRef.current?.(first.dbPath, 'root');
@@ -986,6 +1043,10 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         if (dir) localStorage.setItem('seeu.indexDir', dir);
       }, [dir]);
+
+      // 标签页与索引库都记住：下次打开面板直接回到上次的位置
+      useEffect(() => { localStorage.setItem('seeu.panelTab', tab); }, [tab]);
+      useEffect(() => { if (db) localStorage.setItem('seeu.panelDb', db); }, [db]);
 
       const loadNode = useCallback(async (targetDb, targetNode) => {
         if (!targetDb) return;
