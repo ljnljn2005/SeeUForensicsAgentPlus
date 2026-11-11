@@ -179,6 +179,25 @@ text = await bodyText()
 report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
 report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10
 
+// ---------- 浅色主题回归（SEEU_E2E_THEME=light；暗色为默认） ----------
+if (process.env.SEEU_E2E_THEME === 'light') {
+  report.lightRemoved = await ev(`(() => {
+    document.body.removeAttribute('data-ds-dark-theme')
+    document.documentElement.removeAttribute('data-ds-dark-theme')
+    return !document.body.hasAttribute('data-ds-dark-theme')
+  })()`)
+  await sleep(1500)
+  report.lightStyles = await ev(`(() => {
+    const parse = (c) => (String(c).match(/[\\d.]+/g) || []).slice(0, 3).map(Number)
+    const lum = (a) => (0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2]) / 255
+    const row = document.querySelector('.seeu-row.is-clickable') || document.body
+    const bodyBg = getComputedStyle(document.body).backgroundColor
+    const rowColor = getComputedStyle(row).color
+    return { bodyBg, rowColor, bodyLum: lum(parse(bodyBg)), rowLum: lum(parse(rowColor)) }
+  })()`)
+  report.lightOk = report.lightRemoved && report.lightStyles.bodyLum > 0.75 && report.lightStyles.rowLum < 0.45
+}
+
 report.errors = errors.slice(0, 6)
 console.log('REPORT', JSON.stringify(report, null, 2))
 

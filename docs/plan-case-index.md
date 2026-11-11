@@ -1462,3 +1462,20 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 结果：`{"ok":true,"pageTotal":41,"exportAllClicked":true,"exportAllCount":41,"exportAllClipboard":{"len":17413,"items":41},"baseRows":20,"filteredRows":12,"errors":[]}`。
 
 遗留：上限 200 条（每条要回查一次句柄，再多会明显变慢）；无进度条，只有按钮文字「复制中…」。
+
+### 20.32 第 30 轮：面板浅色主题回归
+
+背景：面板样式早就 token 化（`--dsw-alias-*` + 深色兜底），但 e2e 一直只在暗色下跑；§20.19/§20.22 把「浅色未单独出脚本」列为遗留。
+
+实现（只改 `scripts/e2e/m2-ui-check.mjs`）：新增 `SEEU_E2E_THEME=light` 分支，在既有断言跑完后执行：
+
+- `document.body.removeAttribute('data-ds-dark-theme')` 与 `documentElement` 同样处理，等 1.5s 让 token 重算；
+- 采样 `getComputedStyle`：`body` 背景、首个 `.seeu-row.is-clickable` 的 `color`，按 `0.2126r+0.7152g+0.0722b` 换算亮度；
+- 断言 `bodyLum > 0.75` 且 `rowLum < 0.45`（浅底深字），结果写进 REPORT 的 `lightOk`。
+
+验证：
+
+- `SEEU_E2E_THEME=light SEEU_DEV_MULTI=1 SEEU_NO_KILL=1 … node scripts/e2e/m2-ui-check.mjs` → `{"m2ok":true,"searchOk":true,"lightRemoved":true,"lightStyles":{"bodyBg":"rgb(245, 247, 250)","rowColor":"rgb(11, 18, 32)","bodyLum":0.968,"rowLum":0.069},"lightOk":true,"errors":[]}`；
+- 不设该变量（暗色）复跑 → `{"m2ok":true,"searchOk":true,"errors":[]}`（不受影响）。
+
+结论：面板颜色全部来自 `--dsw-alias-*` / `--dsw-static-*` token，没有硬编码暗色，浅色下无需改样式；唯一需要留意的是 `.seeu-btn.is-primary` 用 `bg-base` 作文字色（浅色下是近白配深青，对比度正常）。
