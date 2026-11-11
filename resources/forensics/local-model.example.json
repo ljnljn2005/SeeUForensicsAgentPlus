@@ -15,5 +15,6 @@
   "timeoutMs": 600000,
   "streamIdleTimeoutMs": 600000,
   "litePreset": true,
-  "usageInStreaming": false
+  "usageInStreaming": false,
+  "titleGeneration": true
 }

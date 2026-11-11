@@ -34,6 +34,9 @@ const DEFAULTS = {
   // 少数网关不支持 stream_options.include_usage（会直接 400），所以默认关闭；
   // 打开后流式响应末尾会带回 usage，会话里的 token 用量/上下文占比才有数。
   usageInStreaming: false,
+  // 会话标题生成是每次新会话的一次额外请求：本地网关并发低时它会跟首轮对话抢队列。
+  // 默认开着（标题更好读），关掉后首轮少一次请求、标题回退到首句截断。
+  titleGeneration: true,
 }
 
 export class LocalModelConfigError extends Error {
@@ -121,6 +124,7 @@ export function normalizeLocalModel(input = {}) {
     titleTimeoutMs: num(input.titleTimeoutMs, DEFAULTS.titleTimeoutMs),
     litePreset: input.litePreset !== false,
     usageInStreaming: input.usageInStreaming === true || input.usageInStreaming === 'true',
+    titleGeneration: !(input.titleGeneration === false || input.titleGeneration === 'false'),
     compat: input.compat !== null && typeof input.compat === 'object' ? input.compat : {},
     models: models.map((m) => ({
       id: m.id,
@@ -188,15 +192,25 @@ export function localModelPatch(cfg) {
   }
 
   // 会话标题生成是每次新会话的额外一次 LLM 请求；本地模型不需要 4096 输出 tokens。
-  lines.push(
-    '- id: session-title-llm',
-    '  config:',
-    '    targetWords: 5',
-    '    targetCjkCharacters: 10',
-    '    maxInputBytes: 4096',
-    `    maxOutputTokens: ${c.titleMaxOutputTokens}`,
-    `    timeoutMs: ${c.titleTimeoutMs}`,
-  )
+  // 低并发网关（一次只能跑一个请求）下这次请求会跟首轮对话抢队列，可以整行关掉：
+  // 标题回退到首句截断，首轮只发一次请求。
+  if (c.titleGeneration === false) {
+    lines.push(
+      '# 本地模型低并发：不再为会话标题额外发一次请求（标题回退到首句截断）',
+      '- id: session-title-llm',
+      '  disabled: true',
+    )
+  } else {
+    lines.push(
+      '- id: session-title-llm',
+      '  config:',
+      '    targetWords: 5',
+      '    targetCjkCharacters: 10',
+      '    maxInputBytes: 4096',
+      `    maxOutputTokens: ${c.titleMaxOutputTokens}`,
+      `    timeoutMs: ${c.titleTimeoutMs}`,
+    )
+  }
 
   if (c.defaultModel !== undefined) {
     lines.push(

@@ -236,6 +236,14 @@
   </div>
 
   <div class="check">
+    <input type="checkbox" id="titleGen" checked />
+    <label for="titleGen">
+      用本地模型生成会话标题
+      <div class="hint">每次新会话会多发一次小请求（约 700 字符、512 输出上限）。网关并发低、首轮有明显排队时关掉，标题回退到首句截断，首轮只发一次请求。</div>
+    </label>
+  </div>
+
+  <div class="check">
     <input type="checkbox" id="usageInStreaming" />
     <label for="usageInStreaming">
       流式响应带 token 用量（stream_options.include_usage）
@@ -335,6 +343,7 @@
       useAsDefault: $('useAsDefault').checked,
       litePreset: $('litePreset').checked,
       usageInStreaming: $('usageInStreaming').checked,
+      titleGeneration: $('titleGen').checked,
       timeoutMs: secToMs($('timeoutSec').value),
       streamIdleTimeoutMs: secToMs($('streamIdleSec').value),
       retryMaxRetries: numOrUndef($('retryMaxRetries').value),
@@ -369,6 +378,7 @@
     $('useAsDefault').checked = c.useAsDefault === true || c.defaultModel !== undefined
     $('litePreset').checked = c.litePreset !== false
     $('usageInStreaming').checked = c.usageInStreaming === true
+    $('titleGen').checked = c.titleGeneration !== false
     $('timeoutSec').value = c.timeoutMs ? Math.round(c.timeoutMs / 1000) : 600
     $('streamIdleSec').value = c.streamIdleTimeoutMs ? Math.round(c.streamIdleTimeoutMs / 1000) : 600
     $('retryMaxRetries').value = Number.isFinite(c.retryMaxRetries) ? c.retryMaxRetries : 3

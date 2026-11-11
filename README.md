@@ -461,6 +461,7 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 | `useAsDefault` | `false` | 为 `true` 时覆盖 `agent-default-model`，新会话直接用它 |
 | `litePreset` | `true` | 新会话默认用「取证分析（本地模型精简）」预设（工具表约 12 个，省约 8k tokens 固定开销）；`false` 时回到完整取证预设 |
 | `usageInStreaming` | `false` | 让网关在流式响应里带回 token 用量（`stream_options.include_usage`）；打开后会话里才显示「用量 N tok」，vLLM / LM Studio / llama.cpp 新版一般支持，老网关可能 400 |
+| `titleGeneration` | `true` | 每次新会话让本地模型生成标题（`session-title-llm` 的小输出配置）；`false` 时把该行整行 `disabled`，首轮少发一次请求（低并发网关更快），标题回退到首句截断 |
 | `timeoutMs` / `streamIdleTimeoutMs` | `600000` | 本地模型首 token 可能很慢，默认给 10 分钟 |
 | `retryMaxRetries` | `3` | 低并发网关的失败重试次数（dsh 默认 5 次，排队时会放大成 5 次长超时） |
 | `titleMaxOutputTokens` / `titleTimeoutMs` | `512` / `20000` | 会话标题生成的输出上限与超时（本地模型不值得给 4096 tokens） |
@@ -477,6 +478,8 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 - `litePreset: true`（默认）时追加 `agent-preset-registry` 行，把默认预设指到 `seeu-lite`（见 §9.2）。
 
 启动探测会同时比对**配置窗口 vs 网关自报窗口**：如果配置的上下文窗口比网关 `/v1/models` 自报的更大（例如配了 131072、但 vLLM 实际只有 32768），探测行会用黄字提示「配置窗口 131.1k 超过网关自报的 32.8k，超出部分请求会被拒」，日志里也有同样一条；这是最常见的一类「聊两句就报错」原因。拉取模型列表时网关若自报窗口，会自动把表单填成实际值。
+
+**会话标题生成（`titleGeneration`，默认开启）**：dsh 每开一个新会话会额外发一次「起标题」的小请求（约 700 字符输入、512 输出上限）。本机网关一次只能跑一个请求时，这次请求会跟首轮对话抢队列，首字延迟可感知地变长。设置页取消勾选「用本地模型生成会话标题」后，生成的 patch 把 `session-title-llm` 整行置为 `disabled: true`：实测 mock 网关带工具的首轮请求数从 3 次降到 2 次（标题请求 1 → 0），标题回退到首句截断。
 
 **token 用量显示**：勾选设置页的「流式响应带 token 用量」（`usageInStreaming`）后，请求会带 `stream_options: {include_usage: true}`，网关在流式末段返回 usage，dsh 的 token 计量/上下文占比才有数（实测 mock 网关：`用量 22 tok`）；默认关闭是因为老网关收到这个字段可能直接 400。
 

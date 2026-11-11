@@ -1623,3 +1623,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 实现：三个页面各追加 `@media (prefers-color-scheme: light)` 覆盖块：`:root { color-scheme: light }` + 变量换浅色（设置页 `--bg #F5F7FA / --surface #FFFFFF / --surface-2 #EEF3F8 / --accent #0E7490 / --text #0B1220` 等）；错误页与加载页额外覆盖 `body` 的径向渐变、card 的玻璃背景与阴影、`pre`/`button` 底色；设置页把 `button.primary` 的文字改成白色（浅色下强调色变深）并去掉 logo 的青色光晕。深色仍是默认（`prefers-color-scheme` 不匹配时不受影响）。
 - 验证：`scripts/e2e/settings-check.mjs` 用 CDP `Emulation.setEmulatedMedia` 模拟 `prefers-color-scheme: light` → `"lightShell":true,"lightShellStyles":{"bg":"rgb(245, 247, 250)","text":"rgb(11, 18, 32)","lum":0.968}`；`scripts/e2e/loading-check.mjs` 同法 → `"lightOk":true,"lightStyles":{"bg":"#F5F7FA","lum":0.968,"scheme":"light"}`（加载页底色是渐变，`backgroundColor` 透明，要读 `--bg` 变量）；`npm test` 44/44。
 - 遗留：错误页只在启动失败时出现，浅色样式靠静态检查 + 与另外两页共用变量，未单独跑 e2e。
+
+## 20.44 本地模型可关「会话标题生成」（低并发少一次请求，v0.2.6 起）
+
+- 问题：dsh 每开新会话都会调一次 `session-title-llm` 起标题（`targetWords 5 / maxOutputTokens 512`）。本地网关（vLLM 单卡、llama.cpp 单进程）一次只能处理一个请求时，这次小请求会排在首轮对话前面，用户感觉「第一句话发出去半天没反应」。
+- 实现：`tools/local-model.mjs` 的 `DEFAULTS.titleGeneration = true`；`normalizeLocalModel()` 接受 `false` / `'false'`；`localModelPatch()` 在 `titleGeneration === false` 时输出 `- id: session-title-llm` + `disabled: true`（不再输出 config 块），否则维持原来的小输出配置。设置页新增复选框「用本地模型生成会话标题」（默认勾选），`readForm()`/`fillForm()` 同步该字段。
+- 验证：`tests/local-model.test.mjs` 新增 1 例（默认带 config；关掉整行 disabled 且无 `targetWords`；`'false'` 字符串也归一成 false）→ `npm test` 45/45。`scripts/e2e/local-tools-e2e.mjs` 统计不带 tools 的标题请求并支持 `SEEU_TOOLS_E2E_NO_TITLE=1`：默认 `"titleGeneration":"on","titleRequests":1,"ok":true`；关掉后 `"titleGeneration":"off","titleRequests":0,"ok":true`（带工具请求仍是 12 个工具的精简预设）。`scripts/e2e/settings-check.mjs` 断言 `titleGenDefault:true`、`titleGenOffPreview:true`（取消勾选后 preview 里 `session-title-llm` 变 `disabled: true` 且无 `targetWords`）、`titleGenSaved:true`。
+- 遗留：标题回退到「首句截断」是 dsh 自身行为，未在本仓库定制；如果网关支持并发（vLLM `--max-num-seqs > 1`），建议保持开启。

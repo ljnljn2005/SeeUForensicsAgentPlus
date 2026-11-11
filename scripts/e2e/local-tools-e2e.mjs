@@ -119,6 +119,7 @@ delete env.ELECTRON_RUN_AS_NODE
 env.SEEU_DEV_MULTI = '1'
 env.SEEU_DSH_HOME = join(root, '.dev', 'tools-home')
 env.SEEU_USER_DATA = join(root, '.dev', 'tools-ud')
+const NO_TITLE = process.env.SEEU_TOOLS_E2E_NO_TITLE === '1'
 env.SEEU_LOCAL_MODEL_JSON = JSON.stringify({
   baseURL: `http://127.0.0.1:${MOCK_PORT}/v1`,
   models: [{ id: MODEL_ID, name: 'Mock Tools (本地)' }],
@@ -128,6 +129,7 @@ env.SEEU_LOCAL_MODEL_JSON = JSON.stringify({
   maxTokens: 8192,
   // 打开「流式带用量」，验证 compat.supportsUsageInStreaming 会落到请求体
   usageInStreaming: true,
+  titleGeneration: !NO_TITLE,
 })
 try { execFileSync('taskkill', ['/F', '/IM', 'electron.exe', '/T'], { stdio: 'ignore' }) } catch { /* 无残留 */ }
 
@@ -300,12 +302,15 @@ const toolCardStyleOk = toolCardStyle.count === 0 ? true : (toolCardStyle.radius
 
 // usageInStreaming=true 时 pi-ai 应在流式请求里带 stream_options.include_usage
 const usageRequested = first.hasStreamOptions === true && first.streamOptions?.include_usage === true
+// 标题请求不带 tools；关掉 titleGeneration 后首轮应只剩一次带工具请求
+const titleRequests = shapes.filter((x) => (x.toolsCount ?? 0) === 0).length
+const titleOk = NO_TITLE ? titleRequests === 0 : titleRequests >= 1
 // 默认本地模型配置会切到「取证分析（本地模型精简）」：工具表从 27 个降到约 12 个。
 const litePresetActive = (first.toolsCount ?? 99) <= 14
 // agent-instructions 应把 <工作区>/SEEU-CASE-BRIEF.md 读成会话指令（overlay 候选名之一）
 const briefSeen = shapes.some((x) => x.briefSeen === true)
 const summary = {
-  ok: gotReply && sawToolResult && (first.tools ?? 0) > 0 && first.maxTokensField === 'max_tokens' && usageRequested && first.hasStore === false && toolCardStyleOk && litePresetActive && briefSeen,
+  ok: gotReply && sawToolResult && (first.tools ?? 0) > 0 && first.maxTokensField === 'max_tokens' && usageRequested && first.hasStore === false && toolCardStyleOk && litePresetActive && briefSeen && titleOk,
   chatCalls,
   rounds: shapes.length,
   gotReply,
@@ -316,6 +321,9 @@ const summary = {
   toolCardStyleOk,
   litePresetActive,
   litePresetTools: first.toolsCount,
+  titleGeneration: NO_TITLE ? 'off' : 'on',
+  titleRequests,
+  titleOk,
   usageRequested,
   streamOptions: first.streamOptions,
   briefSeen,

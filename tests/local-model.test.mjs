@@ -283,3 +283,16 @@ test('contextWindowMismatch 只在配置超过网关自报能力时返回数值'
   assert.equal(contextWindowMismatch(131072, ['missing'], gw), null)
   assert.equal(contextWindowMismatch(131072, ['qwen'], [{ id: 'qwen' }]), null)
 })
+
+test('titleGeneration 默认给 session-title-llm 配小输出；关掉时整行 disabled', () => {
+  const on = localModelPatch({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm1' }] })
+  assert.match(on, /- id: session-title-llm\n {2}config:/)
+  assert.match(on, /maxOutputTokens: 512/)
+  const off = localModelPatch({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm1' }], titleGeneration: false })
+  assert.match(off, /- id: session-title-llm\n {2}disabled: true/)
+  assert.ok(!off.includes('targetWords'))
+  const base = { baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm1' }] }
+  assert.equal(normalizeLocalModel(base).titleGeneration, true)
+  assert.equal(normalizeLocalModel({ ...base, titleGeneration: false }).titleGeneration, false)
+  assert.equal(normalizeLocalModel({ ...base, titleGeneration: 'false' }).titleGeneration, false)
+})

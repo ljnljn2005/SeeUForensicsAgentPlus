@@ -238,6 +238,27 @@ try {
   const usagePreview = await evaluate(client, `document.getElementById('preview').textContent || ''`)
   report.usagePreview = /supportsUsageInStreaming:\s*true/.test(String(usagePreview))
   if (!report.usagePreview) throw new Error('勾选流式用量后 preview 未打开 supportsUsageInStreaming')
+  // 标题生成：默认开着（配 session-title-llm 的小输出）；取消勾选后该行应直接 disabled
+  report.titleGenDefault = await evaluate(client, "document.getElementById('titleGen').checked === true")
+  if (!report.titleGenDefault) throw new Error('标题生成默认没勾上')
+  await evaluate(client, `(() => {
+    const box = document.getElementById('titleGen')
+    box.checked = false
+    box.dispatchEvent(new Event('change', { bubbles: true }))
+    return true
+  })()`)
+  await sleep(600)
+  const titleOff = String(await evaluate(client, "document.getElementById('preview').textContent || ''"))
+  report.titleGenOffPreview = /session-title-llm\s*\n\s*disabled: true/.test(titleOff) && !/targetWords/.test(titleOff)
+  if (!report.titleGenOffPreview) throw new Error('取消标题生成后 preview 没有把 session-title-llm 置为 disabled')
+  log('标题生成', '关掉后 session-title-llm 整行 disabled')
+  await evaluate(client, `(() => {
+    const box = document.getElementById('titleGen')
+    box.checked = true
+    box.dispatchEvent(new Event('change', { bubbles: true }))
+    return true
+  })()`)
+  await sleep(400)
   log('流式用量', 'preview 已切到 supportsUsageInStreaming: true')
   log('preview', `patch ${preview.patch.length} 字符，含 retryPolicy=${report.previewHasRetryPolicy}`)
 
@@ -293,7 +314,8 @@ try {
     maxTokens: 8192,
     useAsDefault: true,
     litePreset: true,
-    usageInStreaming: true
+    usageInStreaming: true,
+    titleGeneration: true
   })`)
   if (saved?.ok !== true) throw new Error(`保存失败：${JSON.stringify(saved)}`)
   if (!existsSync(CONFIG)) throw new Error(`保存后配置文件不存在：${CONFIG}`)
@@ -301,6 +323,8 @@ try {
   report.savedModels = written.models.map((m) => m.id)
   report.litePresetSaved = written.litePreset === true
   if (!report.litePresetSaved) throw new Error('保存的配置里 litePreset 不是 true')
+  report.titleGenSaved = written.titleGeneration === true
+  if (!report.titleGenSaved) throw new Error('保存的配置里 titleGeneration 不是 true')
   report.usageSaved = written.usageInStreaming === true
   if (!report.usageSaved) throw new Error('保存的配置里 usageInStreaming 不是 true')
   log('保存', `写入 ${CONFIG}，模型 ${report.savedModels.join(',')}`)
