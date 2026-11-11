@@ -40,7 +40,16 @@ async function startMockGateway() {
   const server = createServer((req, res) => {
     if (req.url === '/v1/models') {
       res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ object: 'list', data: [{ id: 'qwen2.5-32b-instruct' }, { id: 'mock-14b' }] }))
+      // 模拟 vLLM：/v1/models 里自报 max_model_len，设置页应能自动填上下文窗口
+      res.end(
+        JSON.stringify({
+          object: 'list',
+          data: [
+            { id: 'qwen2.5-32b-instruct', max_model_len: 32768 },
+            { id: 'mock-14b', max_model_len: 32768 },
+          ],
+        }),
+      )
       return
     }
     res.writeHead(404)
@@ -265,6 +274,34 @@ try {
   if (!report.pulledModels.some((l) => l.startsWith('mock-14b'))) throw new Error(`拉取模型列表失败：${JSON.stringify(pulled)}`)
   if (!report.pulledModels.some((l) => l.includes('Qwen2.5 32B（本地）'))) throw new Error('拉取后丢失了已有显示名')
   log('拉取模型', report.pulledModels.join(' / '))
+  report.pulledContextWindow = await evaluate(client, `(async () => {
+    const t0 = Date.now()
+    while (Date.now() - t0 < 3000) {
+      const v = document.getElementById('contextWindow').value
+      if (v === '32768') return v
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    return document.getElementById('contextWindow').value
+  })()`)
+  if (report.pulledContextWindow !== '32768') throw new Error(`网关自报窗口没填进表单：${report.pulledContextWindow}`)
+  log('网关自报窗口', `已填入 ${report.pulledContextWindow}`)
+
+  // 配置里写一个网关没有的模型：探测应返回 missing（提醒模型改名/抄错）
+  const ghostSaved = await evaluate(client, `window.seeu.localModel.save({
+    enabled: true,
+    baseURL: 'http://127.0.0.1:${MOCK_PORT}/v1',
+    apiKey: 'local',
+    models: [{ id: 'qwen2.5-32b-instruct' }, { id: 'ghost-7b' }],
+    contextWindow: 131072,
+    maxTokens: 8192
+  })`)
+  if (ghostSaved?.ok !== true) throw new Error(`写缺失模型配置失败：${JSON.stringify(ghostSaved)}`)
+  const ghostProbe = await evaluate(client, 'window.seeu.localModel.probe()')
+  report.probeMissing = ghostProbe?.missing
+  if (!Array.isArray(report.probeMissing) || !report.probeMissing.includes('ghost-7b')) {
+    throw new Error(`缺失模型没被探测出来：${JSON.stringify(ghostProbe)}`)
+  }
+  log('缺失模型', report.probeMissing.join(','))
 
   const bad = await evaluate(client, `window.seeu.localModel.test({ baseURL: 'http://127.0.0.1:1/v1' })`)
   report.badGatewayRejected = bad?.ok === false

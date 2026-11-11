@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 
 import {
+  normalizeGatewayModels,
+  modelContextWindow,
   normalizeLocalModel,
   localModelPatch,
   localModelEnv,
@@ -188,4 +190,32 @@ test('非档位窗口提示最近档位，未启用时无警告', () => {
 
   const disabled = normalizeLocalModel({ ...base, enabled: false })
   assert.deepEqual(localModelWarnings(disabled), [])
+})
+
+test('modelContextWindow 能读常见网关字段', () => {
+  assert.equal(modelContextWindow({ id: 'a', max_model_len: 32768 }), 32768)
+  assert.equal(modelContextWindow({ id: 'b', meta: { n_ctx: 8192 } }), 8192)
+  assert.equal(modelContextWindow({ id: 'c', metadata: { context_length: 131072 } }), 131072)
+  assert.equal(modelContextWindow({ id: 'd' }), undefined)
+  // 太小的值（可能是 max_tokens 而不是窗口）不采信
+  assert.equal(modelContextWindow({ id: 'e', n_ctx: 512 }), undefined)
+})
+
+test('normalizeGatewayModels 归一化 /v1/models 响应', () => {
+  const list = normalizeGatewayModels([
+    { id: 'a', max_model_len: 32768 },
+    { id: 'b', meta: { n_ctx: 8192 } },
+    { id: 'c' },
+    { name: 'd', context_length: 131072 },
+  ])
+  assert.deepEqual(
+    list.map((m) => [m.id, m.contextWindow]),
+    [
+      ['a', 32768],
+      ['b', 8192],
+      ['c', undefined],
+      ['d', 131072],
+    ],
+  )
+  assert.deepEqual(normalizeGatewayModels(undefined), [])
 })

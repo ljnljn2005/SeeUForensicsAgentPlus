@@ -146,6 +146,8 @@ interface LocalModelProbeState {
   readonly ok: boolean
   readonly baseURL: string
   readonly models: string[]
+  /** 配置里写了、但网关 /v1/models 没返回的模型 id（通常是模型改名或抄错）。 */
+  readonly missing?: string[]
   readonly error?: string
   readonly at: string
 }
@@ -184,13 +186,23 @@ async function probeLocalModelGateway(reason: 'startup' | 'manual' = 'startup'):
   try {
     const probe = await testLocalGateway({ baseURL, apiKey, timeoutMs: 4000 })
     const ids = (probe.models ?? []).map((item) => item.id ?? item.name ?? '').filter(Boolean)
+    const missing = target.models.filter((id) => !ids.includes(id))
     localModelProbeState = probe.ok
-      ? { ok: true, baseURL, models: ids, at: new Date().toISOString() }
+      ? {
+          ok: true,
+          baseURL,
+          models: ids,
+          ...(missing.length === 0 ? {} : { missing }),
+          at: new Date().toISOString(),
+        }
       : { ok: false, baseURL, models: [], ...(probe.error === undefined ? {} : { error: probe.error }), at: new Date().toISOString() }
     refreshModelIndicators()
     broadcastLocalModelProbe()
     if (probe.ok) {
       logShell(`local model probe: ${baseURL} 可用（${ids.join(', ') || '网关未返回模型列表'}）`)
+      if (missing.length > 0) {
+        logShell(`local model probe: 配置的模型 ${missing.join(', ')} 不在网关列表里（网关有：${ids.join(', ')}）`)
+      }
       return localModelProbeState
     }
     logShell(`local model probe: ${baseURL} 不可用 → ${probe.error ?? '未知错误'}`)

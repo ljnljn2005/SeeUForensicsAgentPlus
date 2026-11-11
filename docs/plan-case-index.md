@@ -1120,3 +1120,21 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 产物：win-unpacked exe 246,329,856 B；app.asar 168,708,872 B（19,647 entries，14 个必需路径全命中）；NSIS 211,919,582 B（blockmap 220,872 B）；portable 189,530,173 B。
 - 验证：目录版 `{"ok":true,"elapsedMs":5123}`、portable `{"ok":true,"elapsedMs":43481}`；打包态面板 `m2ok:true/errors:[]`（七标签、KPI、检材名+备注、检索 20 命中）；打包态设置页 `ok:true`（asar 内页面、`presetApplied`、`previewWarnings`、`copiedDiagnostics`）。
 - 注意：验收机上有用户正在用的实例时**不要**跑 `scripts/kill-app.mjs`（按镜像名前缀匹配会杀掉用户的进程），一律用 `SEEU_DEV_MULTI=1` 并行启动做验证。
+
+## 20.16 第 16 轮：网关自报上下文窗口 + 配置模型缺失检测
+
+动机：真实 OpenAI 兼容网关大多在 `GET /v1/models` 里自报上下文长度（vLLM `max_model_len`、llama.cpp/LM Studio `n_ctx`/`context_length`/`context_window`），让用户手填既容易填错也没必要；另外「配置里写了某个模型，网关没有」这种错在会话里只表现为请求失败，排查成本高。
+
+实现：
+- `tools/local-model.mjs` 新增 `CONTEXT_FIELDS`（`max_model_len/context_length/context_window/max_context_length/n_ctx/max_input_tokens`）、`modelContextWindow(entry)`（同时看条目本身与 `meta/metadata/config`，值需为数字且 ≥2048——小于这个数多半是 `max_tokens` 而不是窗口）、`normalizeGatewayModels(data)` → `[{id,name,contextWindow?}]`。
+- `src/local-model.ts`：`testLocalGateway()` 的 `models` 改为 `GatewayModel[]`；`probeableLocalModel()` 额外返回配置里的 `models: string[]`。
+- `src/main.ts`：`LocalModelProbeState` 增 `missing?: string[]`，启动/手动探测时用「配置的模型 − 网关模型」得出，写 shell 日志 `local model probe: 配置的模型 X 不在网关列表里（网关有：…）`。
+- `renderer/local-model.html`：探测行 `missing` 非空时黄色提示；拉取模型列表时若网关自报窗口取值唯一则填 `#contextWindow`，不一致只提示；「复制诊断信息」增「配置缺失模型」行。
+
+验证（`npm run test:e2e:settings`）：
+```json
+{"ok":true,"pulledContextWindow":"32768","probeMissing":["ghost-7b"],"gatewayModels":["qwen2.5-32b-instruct","mock-14b"],"errors":[]}
+```
+单测补 `modelContextWindow` / `normalizeGatewayModels` 两组用例（`npm test` 38/38 通过）。
+
+遗留：只读 `/models`，不调用网关的 `/props` 等私有端点；个别网关把窗口写在 `/models` 之外的配置接口，仍需手填。

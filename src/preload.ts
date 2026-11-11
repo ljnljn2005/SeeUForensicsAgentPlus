@@ -38,6 +38,7 @@ export interface LocalModelProbeState {
   readonly models: string[]
   readonly error?: string
   readonly at: string
+  readonly missing?: string[]
 }
 
 export interface LocalModelView {
@@ -78,7 +79,7 @@ export interface LocalModelWarning {
 export interface LocalModelProbeResult {
   readonly ok: boolean
   readonly status?: number
-  readonly models?: Array<{ id?: string; name?: string }>
+  readonly models?: Array<{ id?: string; name?: string; contextWindow?: number }>
   readonly error?: string
 }
 

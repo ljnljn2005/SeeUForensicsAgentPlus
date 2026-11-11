@@ -18,6 +18,7 @@ import {
   localModelEnv,
   localModelPatch,
   localModelWarnings,
+  normalizeGatewayModels,
   normalizeLocalModel,
 } from '../tools/local-model.mjs'
 
@@ -112,15 +113,16 @@ export function prepareLocalModel(options: PrepareOptions = {}): LocalModelPrepa
 /** 启动探测用：把 env/文件配置归一化，未启用或配置非法都返回 undefined。 */
 export function probeableLocalModel(
   configFile = localModelConfigFile(),
-): { baseURL: string; apiKey?: string } | undefined {
+): { baseURL: string; apiKey?: string; models: string[] } | undefined {
   try {
     const raw = readLocalModelConfig(configFile)
     if (raw === undefined) return undefined
     const normalized = normalizeLocalModel(raw)
     if (!normalized.enabled) return undefined
+    const models = normalized.models.map((model: { id: string }) => model.id)
     return normalized.apiKey === undefined
-      ? { baseURL: normalized.baseURL }
-      : { baseURL: normalized.baseURL, apiKey: normalized.apiKey }
+      ? { baseURL: normalized.baseURL, models }
+      : { baseURL: normalized.baseURL, apiKey: normalized.apiKey, models }
   } catch {
     return undefined
   }
@@ -228,8 +230,15 @@ export interface GatewayProbe {
  * 「测试连接」：由主进程直接请求 `GET <baseURL>/models`。
  * 走 Electron 的 net（不受渲染进程 CORS 限制），8 秒超时。
  */
+export interface GatewayModel {
+  readonly id: string
+  readonly name: string
+  /** 网关在 /v1/models 里自报的上下文窗口（vLLM 的 max_model_len、llama.cpp 的 n_ctx 等）。 */
+  readonly contextWindow?: number
+}
+
 export async function testLocalGateway(probe: GatewayProbe): Promise<
-  | { ok: true; status: number; models: Array<{ id?: string; name?: string }> }
+  | { ok: true; status: number; models: GatewayModel[] }
   | { ok: false; error: string }
 > {
   const raw = (probe.baseURL ?? '').trim()
@@ -253,10 +262,10 @@ export async function testLocalGateway(probe: GatewayProbe): Promise<
     if (!response.ok) {
       return { ok: false, error: `HTTP ${response.status}：${text.slice(0, 300)}` }
     }
-    let models: Array<{ id?: string; name?: string }> = []
+    let models: GatewayModel[] = []
     try {
-      const body = JSON.parse(text) as { data?: Array<{ id?: string; name?: string }> }
-      if (Array.isArray(body.data)) models = body.data
+      const body = JSON.parse(text) as { data?: unknown }
+      models = normalizeGatewayModels(body.data) as GatewayModel[]
     } catch {
       // 网关返回非 JSON 时不视为失败：能连通、HTTP 200 就说明地址对了
     }

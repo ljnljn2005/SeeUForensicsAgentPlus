@@ -247,4 +247,39 @@ export function localModelWarnings(cfg) {
   }
   return out
 }
+/**
+ * 网关 /v1/models 条目里可能带上下文窗口，各家字段名不一致：
+ * vLLM 用 max_model_len，llama.cpp/LM Studio 用 n_ctx 或 context_length，
+ * 也有网关放在 meta/metadata/config 子对象里。
+ */
+const CONTEXT_FIELDS = ['max_model_len', 'context_length', 'context_window', 'max_context_length', 'n_ctx', 'max_input_tokens']
+
+export function modelContextWindow(entry) {
+  if (entry === null || typeof entry !== "object") return undefined
+  const sources = [entry, entry.meta, entry.metadata, entry.config]
+  for (const source of sources) {
+    if (source === null || typeof source !== "object") continue
+    for (const key of CONTEXT_FIELDS) {
+      const value = num(source[key], undefined)
+      // 小于 2k 的多半不是窗口（例如 n_ctx=512 的测试值），不当真
+      if (value !== undefined && value >= 2048) return value
+    }
+  }
+  return undefined
+}
+
+/** 把 /v1/models 的 data[] 归一化成 { id, name, contextWindow? }。 */
+export function normalizeGatewayModels(data) {
+  if (!Array.isArray(data)) return []
+  const out = []
+  for (const entry of data) {
+    if (entry === null || typeof entry !== "object") continue
+    const id = str(entry.id) ?? str(entry.name)
+    if (id === undefined) continue
+    const contextWindow = modelContextWindow(entry)
+    const name = str(entry.name) ?? id
+    out.push(contextWindow === undefined ? { id, name } : { id, name, contextWindow })
+  }
+  return out
+}
 export { DEFAULTS as LOCAL_MODEL_DEFAULTS }

@@ -255,8 +255,10 @@
     const at = String(probe.at || '').replace('T', ' ').replace(/\..*$/, '')
     if (probe.ok) {
       const models = Array.isArray(probe.models) && probe.models.length > 0 ? probe.models.join(', ') : '网关未返回模型列表'
-      probeEl.textContent = `启动探测：可用 · ${models} · ${probe.baseURL} · ${at}`
-      probeEl.className = 'hint ok'
+      const missing = Array.isArray(probe.missing) && probe.missing.length > 0 ? probe.missing : []
+      const suffix = missing.length > 0 ? `｜配置的模型 ${missing.join(', ')} 不在网关列表` : ''
+      probeEl.textContent = `启动探测：可用 · ${models} · ${probe.baseURL} · ${at}${suffix}`
+      probeEl.className = missing.length > 0 ? 'hint warn' : 'hint ok'
     } else {
       probeEl.textContent = `启动探测：不可用 · ${probe.error || '未知错误'} · ${probe.baseURL} · ${at}（仍可用官方模型）`
       probeEl.className = 'hint err'
@@ -380,6 +382,9 @@
     lines.push('请求超时: ' + Math.round((cfg.timeoutMs || 600000) / 1000) + 's  流式空闲: ' + Math.round((cfg.streamIdleTimeoutMs || 600000) / 1000) + 's  重试: ' + (cfg.retryMaxRetries ?? 3))
     if (lastProbe) {
       lines.push('启动探测: ' + (lastProbe.ok ? '可用 · ' + (lastProbe.models || []).join(', ') : '不可用 · ' + (lastProbe.error || '未知错误')) + ' · ' + (lastProbe.at || ''))
+      if (Array.isArray(lastProbe.missing) && lastProbe.missing.length > 0) {
+        lines.push('配置缺失模型: ' + lastProbe.missing.join(', ') + '（不在网关 /models 列表里）')
+      }
     } else {
       lines.push('启动探测: (尚未完成)')
     }
@@ -511,8 +516,17 @@
         if (id) names.set(id, name)
       }
       $('models').value = ids.map((id) => (names.get(id) ? id + ' | ' + names.get(id) : id)).join('\n')
+      // 网关若自报上下文窗口（vLLM 的 max_model_len / llama.cpp 的 n_ctx），顺手填上，省得手猜
+      const windows = [...new Set((res.models ?? []).map((m) => (m && m.contextWindow) || 0).filter((n) => n > 0))]
+      let windowNote = ''
+      if (windows.length === 1) {
+        $('contextWindow').value = String(windows[0])
+        windowNote = '；已按网关自报填上下文窗口 ' + windows[0]
+      } else if (windows.length > 1) {
+        windowNote = '；网关自报的窗口不一致（' + windows.join(' / ') + '），请按实际模型选'
+      }
       renderPreview()
-      setStatus('已从网关读到 ' + ids.length + ' 个模型：' + ids.join(', ') + '（记得点「保存」）', 'ok')
+      setStatus('已从网关读到 ' + ids.length + ' 个模型：' + ids.join(', ') + windowNote + '（记得点「保存」）', 'ok')
     } catch (error) {
       setStatus('拉取失败：' + (error && error.message ? error.message : String(error)), 'err')
     } finally {
