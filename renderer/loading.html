@@ -50,7 +50,18 @@
   .hint { margin-top: 26px; color: #64748B; font-size: 12px; line-height: 1.8; }
   .brandline { margin-top: 30px; padding-top: 18px; border-top: 1px solid rgba(148,163,184,.12); color: #64748B; font-size: 12px; display: flex; justify-content: space-between; }
   .brandline code { color: #7DD3FC; font-family: Consolas, monospace; }
-</style>
+
+  /* 跟随系统浅色主题 */
+  @media (prefers-color-scheme: light) {
+    :root { color-scheme: light; --bg:#F5F7FA; --surface:#FFFFFF; --accent:#0E7490; --accent-soft:#E0F2FE; --text:#0B1220; --muted:#44546A; --danger:#B91C1C; --warn:#B45309; }
+    body { background: radial-gradient(1200px 700px at 50% -10%, #E6F4FA 0%, var(--bg) 55%, #EEF3F8 100%); }
+    .card { background: rgba(255,255,255,.94); border-color: rgba(14,116,144,.18); box-shadow: 0 24px 60px rgba(15,23,42,.12), inset 0 1px 0 #FFFFFF; }
+    .logo svg { filter: none; }
+    .spinner { border-color: rgba(14,116,144,.22); border-top-color: var(--accent); }
+    .hint, .brandline, .brandline code { color: #64748B; }
+    .brandline { border-top-color: rgba(100,116,139,.18); }
+  }
+</style></style>
 </head>
 <body>
   <main class="card">

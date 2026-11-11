@@ -408,6 +408,21 @@ try {
   if (viewAfter?.config?.enabled !== false) throw new Error('get() 读到的 enabled 不是 false')
   log('禁用本地模型', `enabled=false，其余字段保留（models=${report.disableLocalModel.keptModel}）`)
 
+  // 跟随系统浅色：CDP 模拟 prefers-color-scheme: light，窗口底色应切成浅色
+  await client.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] })
+  await sleep(600)
+  report.lightShellStyles = await evaluate(client, `(() => {
+    const bg = getComputedStyle(document.body).backgroundColor
+    const m = bg.match(/\\d+/g) || []
+    const lum = (0.2126 * Number(m[0]) + 0.7152 * Number(m[1]) + 0.0722 * Number(m[2])) / 255
+    return { bg, text: getComputedStyle(document.body).color, lum: Number(lum.toFixed(3)) }
+  })()`)
+  report.lightShell = (report.lightShellStyles?.lum ?? 0) > 0.7
+  if (!report.lightShell) throw new Error('浅色模式下设置窗口底色没变浅：' + JSON.stringify(report.lightShellStyles))
+  log('浅色跟随', `body 背景 ${report.lightShellStyles.bg}（亮度 ${report.lightShellStyles.lum}）`)
+  await client.send('Emulation.setEmulatedMedia', { features: [] })
+  await sleep(300)
+
   const shot = await client.send('Page.captureScreenshot', { format: 'png' })
   mkdirSync(join(REPO, '.probe', 'shots'), { recursive: true })
   writeFileSync(OUT, Buffer.from(shot.data, 'base64'))

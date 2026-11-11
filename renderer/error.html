@@ -37,7 +37,19 @@
   button.primary { background: linear-gradient(180deg, #0E7490, #155E75); border-color: rgba(34,211,238,.55); color: #E0F7FA; }
   .foot { margin-top: 18px; color: #64748B; font-size: 12px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   code { color: #7DD3FC; font-family: Consolas, monospace; }
-</style>
+
+  /* 跟随系统浅色主题 */
+  @media (prefers-color-scheme: light) {
+    :root { color-scheme: light; --bg:#F7F8FA; --surface:#FFFFFF; --accent:#0E7490; --text:#111827; --muted:#6B7280; --danger:#B91C1C; }
+    body { background: radial-gradient(1000px 600px at 50% -10%, #FDECEC 0%, var(--bg) 55%, #F1F5F9 100%); }
+    .card { background: rgba(255,255,255,.96); border-color: rgba(185,28,28,.22); box-shadow: 0 24px 60px rgba(15,23,42,.12); }
+    .banner { background: rgba(185,28,28,.06); border-color: rgba(185,28,28,.18); color: #991B1B; }
+    pre { background: #F1F5F9; border-color: rgba(100,116,139,.2); color: #1F2937; }
+    button { border-color: rgba(100,116,139,.3); background: #FFFFFF; color: var(--text); }
+    button.primary { background: linear-gradient(180deg, #0E7490, #155E75); border-color: rgba(14,116,144,.6); color: #F0FDFF; }
+    code { color: var(--accent); }
+  }
+</style></style>
 </head>
 <body>
   <main class="card">

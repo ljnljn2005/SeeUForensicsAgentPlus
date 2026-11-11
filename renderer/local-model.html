@@ -101,7 +101,30 @@
     details.adv { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: rgba(255,255,255,0.02); }
     details.adv > summary { cursor: pointer; font-size: 12px; color: var(--fg2); font-weight: 600; }
     details.adv[open] > summary { margin-bottom: 8px; }
-</style>
+
+  /* 跟随系统浅色主题：设置窗口不再固定深色（深色仍是默认） */
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #F5F7FA;
+      --surface: #FFFFFF;
+      --surface-2: #EEF3F8;
+      --border: rgba(14, 116, 144, .18);
+      --accent: #0E7490;
+      --accent-soft: rgba(14, 116, 144, .10);
+      --text: #0B1220;
+      --muted: #44546A;
+      --dim: #64748B;
+      --ok: #047857;
+      --warn: #B45309;
+      --err: #B91C1C;
+    }
+    header svg { filter: none; }
+    header svg path:first-of-type { fill: var(--accent-soft); stroke: var(--accent); }
+    header svg circle, header svg path:last-of-type { stroke: var(--accent); }
+    button.primary { color: #FFFFFF; }
+  }
+</style></style>
 </head>
 <body>
 <div class="wrap">

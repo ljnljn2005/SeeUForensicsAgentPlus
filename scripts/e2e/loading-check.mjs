@@ -119,6 +119,20 @@ try {
   log('状态行', text || '（空）')
   if (!text.includes('不可用')) throw new Error(`状态行没有提示网关不可用：${JSON.stringify(text)}`)
   if (!text.includes('官方模型')) throw new Error(`状态行没有提示仍可用官方模型：${JSON.stringify(text)}`)
+  // 浅色跟随：模拟 prefers-color-scheme: light 后加载页底色应变成浅色
+  await client.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] })
+  await sleep(500)
+  report.lightStyles = await evaluate(client, `(() => {
+    // 加载页底色是 radial-gradient，backgroundColor 透明；看 --bg 变量最稳
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
+    const hex = raw.replace('#', '')
+    const n = hex.length === 3 ? hex.split('').map((c) => parseInt(c + c, 16)) : [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16))
+    const lum = (0.2126 * n[0] + 0.7152 * n[1] + 0.0722 * n[2]) / 255
+    return { bg: raw, lum: Number(lum.toFixed(3)), scheme: getComputedStyle(document.documentElement).colorScheme }
+  })()`)
+  report.lightOk = (report.lightStyles?.lum ?? 0) > 0.7
+  if (!report.lightOk) throw new Error('浅色模式下加载页底色没变浅：' + JSON.stringify(report.lightStyles))
+  log('浅色跟随', `body 背景 ${report.lightStyles.bg}（亮度 ${report.lightStyles.lum}）`)
   client.close()
   report.ok = true
 } catch (error) {
