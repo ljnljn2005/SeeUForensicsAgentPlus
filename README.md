@@ -57,18 +57,29 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.2.0**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.2.1**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 769 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,656,136 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`） |
-| `release/SeeUForensicsAgentPlus-0.2.0-x64.exe`（NSIS 安装包） | 211,911,443 B（blockmap 220,870 B） |
-| `release/SeeUForensicsAgentPlus-0.2.0-x64-portable.exe` | 189,515,660 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,708,872 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
+| `release/SeeUForensicsAgentPlus-0.2.1-x64.exe`（NSIS 安装包） | 211,919,582 B（blockmap 220,872 B） |
+| `release/SeeUForensicsAgentPlus-0.2.1-x64-portable.exe` | 189,530,173 B |
 
-实测冷启动到 dsh UI：目录版 4095 ms；portable 首次 36.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+实测冷启动到 dsh UI：目录版 5123 ms；portable 首次 43.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
 
-> 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；新产物是 0.2.0 的那三个文件。
+> 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
+
+### v0.2.1 改了什么
+
+- **欢迎页**：品牌块 + 「证据链优先 · 只读取证 · 结论可回查」+ 三步上手（选案件目录建库 → 直接提问 → 看引用回查）；
+- **本地模型可见性**：托盘 tooltip、`工具 → 本地模型状态…`、加载页状态行、错误页一键「禁用本地模型并重启」；
+- **能力自检**：设置页一次跑「模型列表 / 基础对话 / 工具调用」，工具调用不过就明确提示该模型只能聊天、不能查库；
+- **低并发/长上下文**：重试 3 次、标题生成 512 tokens、`compaction` 余量 32768 → 8192（32k 窗口也能用）、请求体不发 `store`/`stream_options`/developer 角色（兼容 vLLM/Ollama/LM Studio）；
+- **设置页**：从网关拉取模型列表、窗口档位一键套用（32k/128k/256k）、配置健康度提示、超时/重试高级项、复制诊断信息；
+- **索引面板**：首次使用三步引导、旧库 schema 不一致提示；
+- **测试**：`npm test` 36 个纯函数单测；`scripts/e2e/` 入仓 9 个端到端脚本（本地模型对话/工具调用/429 重试/能力自检/设置页/欢迎页/加载页/空库引导/面板）。
+
 
 > **v0.2.0 改了什么**
 >

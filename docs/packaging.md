@@ -610,3 +610,32 @@ asar 自检（19,639 entries）命中：`plugins/seeu-case-index/{index.js,clien
 
 > 测试用的第二案是把真实库复制后改 `meta.case_number` 的夹具（`Documents\SeeUForensicsWorkspace\caseB-test`）；
 > 验证完已删除夹具与 `indexes/crosscase.db`，交付版首次使用时重新同步即可。
+
+### v0.2.1 回归验证
+
+产物（Electron 44.7.0、无签名、x64）：
+
+| 产物 | 大小 |
+| --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B |
+| `release/win-unpacked/resources/app.asar` | 168,708,872 B（19,647 entries） |
+| `release/SeeUForensicsAgentPlus-0.2.1-x64.exe` | 211,919,582 B（blockmap 220,872 B） |
+| `release/SeeUForensicsAgentPlus-0.2.1-x64-portable.exe` | 189,530,173 B |
+
+asar 自检：14 个必需路径全部命中（`plugins/seeu-theme/*`、`plugins/seeu-case-index/*`、`tools/ges-index/{typed,cross,build}.mjs`、`dist/renderer/{local-model,loading,error}.html`、`resources/forensics/cordis.patch.yml`、`resources/forensics/skills/ges-case-index/SKILL.md`、`resources/forensics/local-model.example.json`）。
+
+启动验证（`SEEU_DEV_MULTI=1` 绕过单实例锁；验收机上有用户正在运行的 0.1.7 portable，所以不能 kill）：
+
+```json
+// 目录版：node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9336
+{"ok": true, "elapsedMs": 5123, "url": "http://127.0.0.1:60909/?token=…", "title": "SeeUForensicsAgentPlus"}
+
+// portable：--exe release/SeeUForensicsAgentPlus-0.2.1-x64-portable.exe --port 9337
+{"ok": true, "elapsedMs": 43481, "url": "http://127.0.0.1:51091/?token=…", "title": "SeeUForensicsAgentPlus"}
+```
+
+打包态 UI（`scripts/e2e/m2-ui-check.mjs`，`SEEU_UI_EXE` 指向 win-unpacked exe、`SEEU_NO_KILL=1`）：`m2ok: true`、`errors: []`，七个标签、KPI（W盘 / 5 检材 / 22777 记录 / 8191 实体 / 63.0 MiB）、检材名与备注、检索「加密」20 命中。
+
+打包态设置页（`scripts/e2e/settings-check.mjs --exe <win-unpacked exe>`）：`ok: true`，页面来自 `app.asar/dist/renderer/local-model.html`，`presetApplied: true`（256k → 262144/8192）、`previewWarnings: ["output-window","retries"]`、`copiedDiagnostics: true`、`errors: []`。
+
+> `release/` 里的 0.1.7 portable 删不掉是用户正在运行它（Windows 文件占用），与 0.2.1 产物无关。打包时先用 `-c.directories.output=release-021` 出包，再把文件搬进 `release/`。

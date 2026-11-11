@@ -1112,3 +1112,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - **规则**：输出上限 ≥ 窗口 → err；超过窗口 1/4 → warn；窗口 < 32k → warn；重试 > 5 → warn；超时 < 60s → warn；流式空闲 > 总超时 → info；窗口不在档位 → info（提示最近档位）。
 - **验证**：`npm test` 36 项全绿（新增 5 项：档位形状、默认无警告、输出上限警告分级、窗口/重试/超时组合、非档位提示 + 未启用无警告）；`npm run test:e2e:settings` 全绿（`presetApplied:true`「256k → 窗口 262144 / 输出 8192」、`previewWarnings:["output-window","retries"]`、`copiedDiagnostics:true`）；`npm run test:e2e:local` 仍 `chatCalls 2 / gotReply true`；`npm run check:overlay` OK。
 - **遗留**：预设只覆盖窗口/输出两个字段，重试/超时仍留给高级区手动调（机器差异大，不做「一键最优」）；警告只提示、不阻止保存。
+
+### 20.15 第 15 轮：v0.2.1 打包与打包态回归
+
+- 版本 0.2.0 → **0.2.1**（package.json / package-lock.json），`npm run check:overlay` OK 后出包。
+- 出包技巧：用户机上 `release/SeeUForensicsAgentPlus-0.1.7-x64-portable.exe` 正在运行（文件占用 → 目录不可删），因此 `npx electron-builder --win --x64 -c.directories.output=release-021` 先出到旁路目录，再逐个搬进 `release/`，不做 `rm -rf release`。
+- 产物：win-unpacked exe 246,329,856 B；app.asar 168,708,872 B（19,647 entries，14 个必需路径全命中）；NSIS 211,919,582 B（blockmap 220,872 B）；portable 189,530,173 B。
+- 验证：目录版 `{"ok":true,"elapsedMs":5123}`、portable `{"ok":true,"elapsedMs":43481}`；打包态面板 `m2ok:true/errors:[]`（七标签、KPI、检材名+备注、检索 20 命中）；打包态设置页 `ok:true`（asar 内页面、`presetApplied`、`previewWarnings`、`copiedDiagnostics`）。
+- 注意：验收机上有用户正在用的实例时**不要**跑 `scripts/kill-app.mjs`（按镜像名前缀匹配会杀掉用户的进程），一律用 `SEEU_DEV_MULTI=1` 并行启动做验证。
