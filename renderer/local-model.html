@@ -212,6 +212,8 @@
     </label>
   </div>
 
+  <div class="hint" id="budget" style="margin:2px 0 10px"></div>
+
   <div class="actions">
     <button class="primary" id="btn-save">保存</button>
     <button id="btn-models">从网关拉取模型列表</button>
@@ -469,6 +471,20 @@
       previewEl.textContent = ''
     }
     renderWarnings(res && res.ok ? res.warnings : [])
+    renderBudget(res && res.ok ? res.budget : null)
+  }
+
+  /** 固定开销估算：工具描述 + 系统提示是每次请求都要付的成本，本地小窗口模型尤其需要看到。 */
+  function renderBudget(budget) {
+    const el = $('budget')
+    if (!el) return
+    if (!budget) { el.textContent = ''; return }
+    const k = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n))
+    el.textContent =
+      '固定开销估算：约 ' + k(budget.fixedTokens) + ' tokens（工具 ' + budget.toolsCount +
+      ' 个 + 系统提示，共 ' + budget.fixedChars.toLocaleString('en-US') + ' 字符）｜窗口 ' + k(budget.contextWindow) +
+      ' → 约 ' + k(budget.remainingTokens) + ' tokens 留给对话（' + Math.round(budget.conversationShare * 100) + '%）'
+    el.style.color = budget.conversationShare < 0.5 ? '#FBBF24' : 'var(--fg2)'
   }
 
   async function save() {
@@ -515,7 +531,8 @@
     try {
       const res = await api.test({ baseURL, apiKey: $('apiKey').value.trim() })
       if (!res || res.ok !== true) {
-        setStatus('拉取失败：' + ((res && res.error) || '未知错误') + '（网关没起、端口不对或需要 apiKey）', 'err')
+        const hint = res && res.hint ? '\n' + res.hint : ''
+        setStatus('拉取失败：' + ((res && res.error) || '未知错误') + hint, 'err')
         return
       }
       const ids = (res.models ?? []).map((m) => m && m.id).filter(Boolean)

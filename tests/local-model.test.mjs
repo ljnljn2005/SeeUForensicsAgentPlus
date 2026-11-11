@@ -12,6 +12,8 @@ import {
   LocalModelConfigError,
   CONTEXT_PRESETS,
   localModelWarnings,
+  estimateContextBudget,
+  explainGatewayError,
 } from '../tools/local-model.mjs'
 
 const require = createRequire(import.meta.url)
@@ -232,4 +234,28 @@ test('litePreset=false 时不写 registry 行（仍保留模型与标题行）',
   assert.ok(!patch.includes('agent-preset-registry'))
   assert.ok(patch.includes('- id: session-title-llm'))
   assert.equal(normalizeLocalModel({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm' }], litePreset: false }).litePreset, false)
+})
+
+test('estimateContextBudget：精简预设的固定开销更小，32k 窗口仍留出大半', () => {
+  const lite = estimateContextBudget({ ...base, contextWindow: 32768, litePreset: true })
+  assert.equal(lite.preset, 'lite')
+  assert.equal(lite.toolsCount, 12)
+  assert.equal(lite.fixedChars, 10229 + 4379)
+  assert.equal(lite.fixedTokens, Math.round((10229 + 4379) / 2.2))
+  assert.equal(lite.remainingTokens, 32768 - lite.fixedTokens)
+  assert.ok(lite.conversationShare > 0.6, '32k 窗口下精简预设应留出 60% 以上给对话')
+  const full = estimateContextBudget({ ...base, contextWindow: 32768, litePreset: false })
+  assert.equal(full.preset, 'full')
+  assert.equal(full.toolsCount, 27)
+  assert.ok(full.fixedTokens > lite.fixedTokens, '完整预设固定开销应更大')
+  assert.ok(full.remainingTokens < lite.remainingTokens)
+})
+
+test('explainGatewayError：常见网关错误都有中文可操作提示', () => {
+  assert.match(explainGatewayError('connect ECONNREFUSED 127.0.0.1:8000'), /网关没启动|端口/)
+  assert.match(explainGatewayError('HTTP 401: {"error":"bad key"}'), /apiKey|鉴权/)
+  assert.match(explainGatewayError('请求超时（8000ms）'), /无响应|超时/)
+  assert.match(explainGatewayError('HTTP 404: not found'), /404|路径/)
+  assert.match(explainGatewayError(''), /确认网关地址/)
+  assert.match(explainGatewayError('some unknown failure'), /诊断信息/)
 })

@@ -220,6 +220,11 @@ try {
   await evaluate(client, `(() => { document.querySelector("#presets button[data-preset='256k']").click(); return true })()`)
   await sleep(300)
   const presetState = await evaluate(client, `({ contextWindow: document.getElementById('contextWindow').value, maxTokens: document.getElementById('maxTokens').value })`)
+  report.budgetText = await evaluate(client, 'document.getElementById("budget").textContent')
+  if (!/固定开销估算/.test(report.budgetText) || !/留给对话/.test(report.budgetText)) {
+    throw new Error('设置页没有显示固定开销估算：' + report.budgetText)
+  }
+  log('固定开销', String(report.budgetText).trim())
   report.presetApplied = presetState.contextWindow === '262144' && presetState.maxTokens === '8192'
   if (!report.presetApplied) throw new Error(`预设未生效：${JSON.stringify(presetState)}`)
   log('窗口档位', `256k → 窗口 ${presetState.contextWindow} / 输出 ${presetState.maxTokens}`)
@@ -319,9 +324,13 @@ try {
   }
   log('缺失模型', report.probeMissing.join(','))
 
-  const bad = await evaluate(client, `window.seeu.localModel.test({ baseURL: 'http://127.0.0.1:1/v1' })`)
+  const bad = await evaluate(client, `window.seeu.localModel.test({ baseURL: 'http://127.0.0.1:19999/v1' })`)
   report.badGatewayRejected = bad?.ok === false
-  log('错误网关', report.badGatewayRejected ? '按预期失败' : '意外成功')
+  report.badGatewayHint = bad?.hint
+  if (!report.badGatewayHint || !/连不上|网关没启动|端口/.test(report.badGatewayHint)) {
+    throw new Error('网关失败时没有给出可操作提示：' + JSON.stringify(bad))
+  }
+  log('错误网关', report.badGatewayRejected ? '按预期失败，提示：' + report.badGatewayHint : '意外成功')
 
   // 错误页兜底：禁用本地模型（enabled=false），其余字段必须原样保留
   const disabled = await evaluate(client, 'window.seeu.localModel.disable()')

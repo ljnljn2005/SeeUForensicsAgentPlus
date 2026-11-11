@@ -17,6 +17,8 @@ import {
   LocalModelConfigError,
   localModelEnv,
   localModelPatch,
+  explainGatewayError,
+  estimateContextBudget,
   localModelWarnings,
   normalizeGatewayModels,
   normalizeLocalModel,
@@ -199,8 +201,18 @@ export interface LocalModelWarning {
   readonly message: string
 }
 
+export interface ContextBudget {
+  readonly preset: 'full' | 'lite'
+  readonly toolsCount: number
+  readonly fixedChars: number
+  readonly fixedTokens: number
+  readonly contextWindow: number
+  readonly remainingTokens: number
+  readonly conversationShare: number
+}
+
 export type LocalModelPreview =
-  | { ok: true; patch?: string; warnings: LocalModelWarning[] }
+  | { ok: true; patch?: string; warnings: LocalModelWarning[]; budget: ContextBudget }
   | { ok: false; error: string }
 
 /**
@@ -214,6 +226,7 @@ export function previewLocalModelPatch(input: unknown): LocalModelPreview {
       ok: true,
       patch: localModelPatch(input),
       warnings: localModelWarnings(cfg) as LocalModelWarning[],
+      budget: estimateContextBudget(cfg) as ContextBudget,
     }
   } catch (error) {
     return { ok: false, error: (error as Error).message }
@@ -239,17 +252,18 @@ export interface GatewayModel {
 
 export async function testLocalGateway(probe: GatewayProbe): Promise<
   | { ok: true; status: number; models: GatewayModel[] }
-  | { ok: false; error: string }
+  | { ok: false; error: string; hint: string }
 > {
   const raw = (probe.baseURL ?? '').trim()
-  if (raw === '') return { ok: false, error: '缺少 baseURL' }
+  if (raw === '') return { ok: false, error: '缺少 baseURL', hint: explainGatewayError('缺少 baseURL') }
   let url: string
   try {
     url = `${raw.replace(/\/+$/, '')}/models`
     // 提前校验协议与合法性，给出比 net 更清楚的信息
     void new URL(url)
   } catch (error) {
-    return { ok: false, error: `baseURL 不合法：${(error as Error).message}` }
+    const message = `baseURL 不合法：${(error as Error).message}`
+    return { ok: false, error: message, hint: explainGatewayError(message) }
   }
 
   const controller = new AbortController()
@@ -260,7 +274,8 @@ export async function testLocalGateway(probe: GatewayProbe): Promise<
     const response = await net.fetch(url, { method: 'GET', headers, signal: controller.signal })
     const text = await response.text()
     if (!response.ok) {
-      return { ok: false, error: `HTTP ${response.status}：${text.slice(0, 300)}` }
+      const message = `HTTP ${response.status}：${text.slice(0, 300)}`
+      return { ok: false, error: message, hint: explainGatewayError(message) }
     }
     let models: GatewayModel[] = []
     try {
@@ -274,7 +289,7 @@ export async function testLocalGateway(probe: GatewayProbe): Promise<
     const message = (error as Error).name === 'AbortError'
       ? `请求超时（${probe.timeoutMs ?? 8000}ms）`
       : (error as Error).message
-    return { ok: false, error: message }
+    return { ok: false, error: message, hint: explainGatewayError(message) }
   } finally {
     clearTimeout(timer)
   }

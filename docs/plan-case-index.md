@@ -1354,3 +1354,23 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `node scripts/e2e/m2-ui-check.mjs` → `m2ok:true / errors:[]`（面板不受预设改动影响）。
 
 遗留：精简预设只影响**新会话**（`agent-preset-registry.default` 在会话创建时读取），已有会话仍是创建时的预设；`agent-preset-registry` 目前只有 `default` 一个字段，dsh 改 registry 结构时要回看这一行。
+
+### 20.26 第 24 轮：设置页固定开销估算 + 网关失败的可操作提示
+
+问题：上一轮把工具描述实测出来了，但数字只写在文档里，用户看不到；另外网关连不上时设置页只显示 `net::ERR_CONNECTION_REFUSED` 这类原始错误，非开发者无法判断是没启动还是端口错。
+
+实现：
+
+- `tools/local-model.mjs` 新增 `CONTEXT_BUDGET`（实测常量：full = 27 工具 / 26,687 字符 + 系统提示 6,061；lite = 12 工具 / 10,229 + 4,379）、`estimateContextBudget(cfg)`（按 2.2 字符/token 估算 `fixedTokens / remainingTokens / conversationShare`）、`explainGatewayError(text)`（映射 ECONNREFUSED / ERR_UNSAFE_PORT / ENOTFOUND / 超时 / 401 / 403 / 404 / 5xx / MISSING_CREDENTIAL / 缺 baseURL，各给一句中文可操作提示）；
+- `src/local-model.ts`：`previewLocalModelPatch()` 返回 `budget`（`ContextBudget`）；`testLocalGateway` 失败分支统一返回 `{ ok:false, error, hint }`；
+- `src/preload.ts`：`LocalModelProbeResult.hint` 与 preview 的 `budget` 类型；
+- `renderer/local-model.html`：新增 `#budget` 行（「固定开销估算：约 6.6k tokens（工具 12 个 + 系统提示，共 14,608 字符）｜窗口 262.1k → 约 255.5k tokens 留给对话（97%）」，占比 <50% 变黄）；拉取模型失败时把 `hint` 拼进状态行。
+
+验证：
+
+- `npm test` **42/42**（新增 2 条：`estimateContextBudget` 精简/完整对比、`explainGatewayError` 五种错误映射）；
+- `node scripts/e2e/settings-check.mjs` → `ok:true`，`budgetText:"固定开销估算：约 6.6k tokens（工具 12 个 + 系统提示，共 14,608 字符）｜窗口 262.1k → 约 255.5k tokens 留给对话（97%）"`、`badGatewayHint:"连不上：网关没启动、端口不对，或被防火墙拦了。…"`；
+- **踩坑**：e2e 原来用 `http://127.0.0.1:1/v1` 测失败分支，Chromium 直接报 `net::ERR_UNSAFE_PORT`（1 是禁用端口）而不是连接拒绝，hint 落到兜底文案；改为 19999，并给 `ERR_UNSAFE_PORT` 补了专门提示；
+- `node scripts/e2e/m2-ui-check.mjs` → `m2ok:true / searchOk:true / errors:[]`（面板不受影响）。
+
+遗留：`CONTEXT_BUDGET` 是随包实测常量，官方工具描述变化或精简预设增删工具后要重新跑 `npm run test:e2e:tools` 更新（脚本已输出 `budget.toolsChars / systemChars`）。

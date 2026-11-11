@@ -424,6 +424,8 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 - 顶层 `session-title-llm` 覆盖：`maxOutputTokens: 512, timeoutMs: 20000`（每次新会话多一次标题请求，本地模型要省）；
 - `litePreset: true`（默认）时追加 `agent-preset-registry` 行，把默认预设指到 `seeu-lite`（见 §9.2）。
 
+设置页还会在「精简工具集」下方实时显示**固定开销估算**（工具描述 + 系统提示 ≈ 多少 tokens、窗口还剩多少留给对话），勾选/取消精简预设或改窗口时会立刻变化；测试连接/拉取模型失败时除了原始错误，会附一句可操作的中文提示（网关没启动 / 端口被占 / apiKey 错 / 超时 / 404 路径不对 / ERR_UNSAFE_PORT 等）。
+
 **设置页的「高级：超时与重试」**（折叠区）可调四个数：请求超时 `timeoutMs`（默认 600 秒）、流式空闲超时 `streamIdleTimeoutMs`（默认 600 秒）、失败重试次数 `retryMaxRetries`（默认 3）、标题生成上限 `titleMaxOutputTokens`（默认 512）。留空即用默认值，改完保存并重启。
 
 ### 9.2 长上下文与低并发调优
@@ -448,6 +450,8 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 - 开关在「本地模型设置」页（勾选「精简工具集（推荐…）」），对应 `local-model.json` 的 `litePreset`；
 - 勾选时新会话默认就是精简预设；某个会话需要子代理/工作流时，在该会话的预设选择里切回「取证分析（Forensics）」即可（不会改配置）；
 - `litePreset: false` 时完全回到完整取证预设，行为与旧版本一致。
+
+设置页会用这些实测值给**固定开销估算**（`tools/local-model.mjs` 的 `estimateContextBudget`）：精简预设 ≈14,608 字符 ≈6.6k tokens、完整预设 ≈32,748 字符 ≈14.9k tokens。换算下来 **32k 窗口**用精简预设还剩约 26k tokens 给对话（80%），用完整预设只剩约 18k（55%）——这是默认给本地模型开精简的另一个理由。
 
 ### 9.3 验证
 

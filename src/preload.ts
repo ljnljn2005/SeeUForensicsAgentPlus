@@ -81,6 +81,7 @@ export interface LocalModelProbeResult {
   readonly status?: number
   readonly models?: Array<{ id?: string; name?: string; contextWindow?: number }>
   readonly error?: string
+  readonly hint?: string
 }
 
 const api = {
@@ -102,12 +103,35 @@ const api = {
       ipcRenderer.invoke('seeu:local-model:save', config) as Promise<LocalModelSaveResult>,
     preview: (
       config: unknown,
-    ): Promise<{ ok: boolean; patch?: string; error?: string; warnings?: LocalModelWarning[] }> =>
+    ): Promise<{
+      ok: boolean
+      patch?: string
+      error?: string
+      warnings?: LocalModelWarning[]
+      budget?: {
+        preset: 'full' | 'lite'
+        toolsCount: number
+        fixedChars: number
+        fixedTokens: number
+        contextWindow: number
+        remainingTokens: number
+        conversationShare: number
+      }
+    }> =>
       ipcRenderer.invoke('seeu:local-model:preview', config) as Promise<{
         ok: boolean
         patch?: string
         error?: string
         warnings?: LocalModelWarning[]
+        budget?: {
+          preset: 'full' | 'lite'
+          toolsCount: number
+          fixedChars: number
+          fixedTokens: number
+          contextWindow: number
+          remainingTokens: number
+          conversationShare: number
+        }
       }>,
     test: (probe: { baseURL?: string; apiKey?: string }): Promise<LocalModelProbeResult> =>
       ipcRenderer.invoke('seeu:local-model:test', probe) as Promise<LocalModelProbeResult>,

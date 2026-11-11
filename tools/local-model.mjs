@@ -297,4 +297,50 @@ export function normalizeGatewayModels(data) {
   }
   return out
 }
+/**
+ * 固定上下文开销实测值（来自 scripts/e2e/local-tools-e2e.mjs 记录的请求体）：
+ * 工具描述 + 系统提示是每次请求都要付的固定成本，压缩只能减少历史消息。
+ * 本地模型调参时用它给出「还剩多少窗口给对话」的直观估算。
+ */
+const CONTEXT_BUDGET = {
+  full: { preset: 'full', toolsCount: 27, toolsChars: 26687, systemChars: 6061 },
+  lite: { preset: 'lite', toolsCount: 12, toolsChars: 10229, systemChars: 4379 },
+}
+
+/** 粗略 token 估算：中文为主的 JSON 约 2.2 字符/token（英文 JSON 约 4，中文约 1.5）。 */
+const CHARS_PER_TOKEN = 2.2
+
+export function estimateContextBudget(cfg) {
+  const c = normalizeLocalModel(cfg)
+  const budget = c.litePreset ? CONTEXT_BUDGET.lite : CONTEXT_BUDGET.full
+  const fixedChars = budget.toolsChars + budget.systemChars
+  const fixedTokens = Math.round(fixedChars / CHARS_PER_TOKEN)
+  const remainingTokens = Math.max(0, c.contextWindow - fixedTokens)
+  return {
+    preset: budget.preset,
+    toolsCount: budget.toolsCount,
+    fixedChars,
+    fixedTokens,
+    contextWindow: c.contextWindow,
+    remainingTokens,
+    conversationShare: c.contextWindow > 0 ? Math.round((remainingTokens / c.contextWindow) * 100) / 100 : 0,
+  }
+}
+
+/** 对网关探测失败给出可操作的中文提示（net 的原始错误对非开发者不友好）。 */
+export function explainGatewayError(error) {
+  const text = String(error ?? '')
+  if (text === '') return '没有拿到错误信息：确认网关地址是否填写。'
+  if (/缺少 baseURL|not valid URL|baseURL 不合法/i.test(text)) return 'baseURL 写法不对：要写成 http://127.0.0.1:8000/v1（带 /v1，不含 /chat/completions）。'
+  if (/ERR_CONNECTION_REFUSED|ECONNREFUSED|connect ECONNREFUSED/i.test(text)) return '连不上：网关没启动、端口不对，或被防火墙拦了。先确认进程在监听，再核对 baseURL 的端口。'
+  if (/ERR_UNSAFE_PORT/i.test(text)) return '这个端口被网络栈禁用（浏览器/Chromium 拒绝 1、7、9 等端口）：换一个正常端口，例如 8000、8080、11434。'
+  if (/ERR_NAME_NOT_RESOLVED|ENOTFOUND|getaddrinfo/i.test(text)) return '域名解析失败：检查主机名拼写；本机网关用 127.0.0.1 而不是 localhost 可以避开部分 DNS 问题。'
+  if (/请求超时|ETIMEDOUT|timed out|AbortError/i.test(text)) return '网关无响应：模型可能还在加载，或这个地址代理到了别处。加载大模型后重试，必要时提高超时时间。'
+  if (/HTTP 401|HTTP 403/i.test(text)) return '鉴权失败：网关要求 apiKey，但没传或传错。在「apiKey」里填网关控制台给的 key。'
+  if (/HTTP 404/i.test(text)) return '404：路径不对。多数网关的模型列表在 <baseURL>/models，确认 baseURL 以 /v1 结尾。'
+  if (/HTTP 5\d\d/i.test(text)) return '网关内部错误（5xx）：看网关自己的日志；也可能是请求体字段不被支持（可试 compat 里的兼容项）。'
+  if (/MISSING_CREDENTIAL/i.test(text)) return '缺少凭据：apiKeyEnv 指向的环境变量没有值，保存配置并重启应用即可（外壳会注入占位值）。'
+  return '检查 baseURL、apiKey 与网关日志；如仍失败，点「复制诊断信息」把配置与错误一起发给开发者。'
+}
+
 export { DEFAULTS as LOCAL_MODEL_DEFAULTS }
