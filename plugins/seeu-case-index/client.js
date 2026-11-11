@@ -176,6 +176,56 @@ window.__ModuleLoader__.load({
       ['month', '按月'],
     ];
 
+    /** 统一的剪贴板出口：Electron 走 preload 桥，纯 web 预览退回 navigator.clipboard。 */
+    const clipboardWrite = async (text) => {
+      const value = String(text ?? '');
+      if (!value) throw new Error('没有可复制的内容');
+      if (window.seeu?.writeClipboard) await window.seeu.writeClipboard(value);
+      else if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+      else throw new Error('当前环境不支持剪贴板');
+      return value.length;
+    };
+
+    /** 把筛选条件拼成一行中文，供清单抬头使用。 */
+    const describeFilters = (obj, labels = {}) => {
+      const parts = [];
+      for (const [key, label] of Object.entries(labels)) {
+        const v = obj?.[key];
+        if (v === undefined || v === null || String(v).trim() === '') continue;
+        parts.push(`${label} ${String(v).trim()}`);
+      }
+      if (obj?.from || obj?.to) parts.push(`时间 ${obj.from || '…'} ~ ${obj.to || '…'}`);
+      return parts.length ? parts.join(' · ') : '无';
+    };
+
+    /** 逐条回查 /cite，拼成可粘贴进报告的 Markdown 引用清单（只返回文本，不写剪贴板）。 */
+    const citationListMarkdown = async ({ db, title, items, metaLines = [] }) => {
+      const lines = [`# ${title}`, ...metaLines, `索引库：${db}`, `导出时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`, ''];
+      let count = 0;
+      let missing = 0;
+      for (const item of items ?? []) {
+        if (item?.id === null || item?.id === undefined) continue;
+        count += 1;
+        let c = null;
+        try { c = await api('/cite', { db, id: item.id }); } catch { c = null; }
+        const head = [c?.ev ?? item.fallback, c?.app, c?.ts, c?.line != null ? `第 ${c.line} 行` : ''].filter(Boolean).join(' · ');
+        lines.push(`${count}. ${head}`);
+        if (c?.citation) {
+          const m = String(c.citation).match(/\(([^)]+)\)/);
+          lines.push(`   引用：${m ? m[1] : c.citation}`);
+        } else {
+          missing += 1;
+          lines.push('   引用：（该行无溯源句柄，只能作为导航线索）');
+        }
+        if (c?.verifyCmd) lines.push(`   回查：${c.verifyCmd}`);
+        const snippet = String(c?.text ?? item.text ?? '').replace(/\s+/g, ' ').trim();
+        if (snippet) lines.push(`   摘要：${snippet.slice(0, 240)}`);
+        lines.push('');
+      }
+      if (missing) lines.push(`（其中 ${missing} 条无溯源句柄，已在清单里标注。）`);
+      return { markdown: lines.join('\n'), count, missing };
+    };
+
     // ---------- 通用小组件：空态 / 骨架 / 加载 / KPI 卡 ----------
     const EmptyState = ({ title, text, action }) => h('div', { className: 'seeu-empty', style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '16px 12px', border: '1px dashed ' + C_L2, borderRadius: R_MD, color: C_FG3, fontSize: 12, textAlign: 'center' } },
       title ? h('div', { className: 'seeu-empty-title', style: { color: C_FG2, fontSize: 12.5, fontWeight: 600 } }, title) : null,
@@ -312,6 +362,8 @@ window.__ModuleLoader__.load({
       const [draft, setDraft] = useState(base);
       const [applied, setApplied] = useState(base);
       const [offset, setOffset] = useState(0);
+      const [copying, setCopying] = useState(false);
+      const [note, setNote] = useState('');
       useEffect(() => { setDraft(base); setApplied(base); setOffset(0); }, [base]);
       const { data, error, loading } = useLoad(() => api('/records', { db, ...applied, limit: PAGE, offset }), [db, applied, offset]);
       const apply = () => { setOffset(0); setApplied({ ...draft }); };
@@ -324,6 +376,32 @@ window.__ModuleLoader__.load({
       const hasFilter = !!(applied.eid || applied.app || applied.category || applied.q || applied.from || applied.to);
       const total = data?.total ?? 0;
       const rows = data?.rows ?? [];
+      // 把当前页记录导出成带 Goldeneyes 句柄的清单（逐条 /cite 回查）
+      const copyPage = async () => {
+        if (copying || !rows.length) return;
+        setCopying(true);
+        setNote('');
+        try {
+          const { markdown, count, missing } = await citationListMarkdown({
+            db,
+            title: 'SeeU 取证索引 · 记录引用清单',
+            metaLines: [
+              `筛选：${describeFilters(applied, { eid: '检材', app: '应用', category: '类别', q: '关键词' })}`,
+              `共 ${total} 条，导出当前页 ${rows.length} 条`,
+            ],
+            items: rows.map((r) => ({
+              id: r.id,
+              fallback: [`检材 ${r.eid}`, r.app, r.ts, r.line != null ? `第 ${r.line} 行` : ''].filter(Boolean).join(' · '),
+            })),
+          });
+          const chars = await clipboardWrite(markdown);
+          setNote(`已复制 ${count} 条记录引用清单（${chars} 字符）${missing ? `，其中 ${missing} 条无句柄` : ''}`);
+        } catch (e) {
+          setNote(`复制失败：${String(e.message ?? e)}`);
+        } finally {
+          setCopying(false);
+        }
+      };
       return h('div', { style: S.card },
         h('div', { style: { ...S.row, gap: 6 } },
           narrowInput(draft.eid, (v) => setDraft((d) => ({ ...d, eid: v })), '检材号 eid', { width: 84, onEnter: apply }),
@@ -342,7 +420,10 @@ window.__ModuleLoader__.load({
           h('div', { style: { ...S.row, marginBottom: 4 } },
             h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `记录 ${total} 条`),
             h('span', { style: S.muted }, `当前 ${data.offset + 1}-${data.offset + data.returned}`),
-            loading ? h('span', { style: S.muted }, '更新中…') : null),
+            loading ? h('span', { style: S.muted }, '更新中…') : null,
+            h('span', { style: { marginLeft: 'auto' } },
+              actionButton(copying ? '复制中…' : '复制本页引用清单', copyPage, { disabled: copying }))),
+          note ? h('div', { style: S.noticeInfo }, note) : null,
           h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 420, overflow: 'auto' } },
             rows.map((r) => h('div', {
               key: r.id,
@@ -367,6 +448,8 @@ window.__ModuleLoader__.load({
     function EntityView({ db, onCite }) {
       const [draft, setDraft] = useState({ kind: '', q: '', eid: '' });
       const [applied, setApplied] = useState(draft);
+      const [copying, setCopying] = useState(false);
+      const [note, setNote] = useState('');
       const { data, error, loading } = useLoad(() => api('/entity', { db, ...applied, limit: PAGE }), [db, applied]);
       const apply = () => setApplied({ ...draft });
       const clear = () => {
@@ -388,13 +471,42 @@ window.__ModuleLoader__.load({
       const kinds = data?.kinds ?? [];
       const mention = data?.matched === 'mention';
       const hasFilter = !!(applied.kind || applied.q || applied.eid);
+      // 实体聚合没有单条 record_id，导出的是"实体 → 出现次数 / 检材"清单，供直接粘进报告
+      const copyEntities = async () => {
+        if (copying || !rows.length) return;
+        setCopying(true);
+        setNote('');
+        try {
+          const lines = [
+            '# SeeU 取证索引 · 实体清单',
+            `筛选：${describeFilters(applied, { kind: '类型', q: '关键词', eid: '检材' })}`,
+            `返回 ${data.returned} 条聚合 · 跨检材 ${data.crossEvidence ?? '-'} 条`,
+            `索引库：${db}`,
+            `导出时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+            '',
+          ];
+          rows.forEach((r, i) => {
+            lines.push(`${i + 1}. [${r.kind}] ${r.value} — ${r.count} 次 · ${r.evidences} 检材`);
+            if (Array.isArray(r.eids) && r.eids.length) lines.push(`   检材：${r.eids.join(', ')}`);
+          });
+          const chars = await clipboardWrite(lines.join('\n'));
+          setNote(`已复制 ${rows.length} 条实体清单（${chars} 字符）`);
+        } catch (e) {
+          setNote(`复制失败：${String(e.message ?? e)}`);
+        } finally {
+          setCopying(false);
+        }
+      };
       return h('div', { style: S.card },
         h('div', { style: { ...S.row, gap: 6 } },
           narrowInput(draft.kind, (v) => setDraft((d) => ({ ...d, kind: v })), '实体类型 kind', { width: 110, onEnter: apply }),
           narrowInput(draft.q, (v) => setDraft((d) => ({ ...d, q: v })), '值 / 关键词 q', { width: 150, onEnter: apply }),
           narrowInput(draft.eid, (v) => setDraft((d) => ({ ...d, eid: v })), '检材号 eid', { width: 84, onEnter: apply }),
           actionButton('查询', apply, { primary: true }),
-          hasFilter ? actionButton('清空', clear) : null),
+          hasFilter ? actionButton('清空', clear) : null,
+          h('span', { style: { marginLeft: 'auto' } },
+            actionButton(copying ? '复制中…' : '复制实体清单', copyEntities, { disabled: copying || !rows.length }))),
+        note ? h('div', { style: S.noticeInfo }, note) : null,
         kinds.length ? h('div', { style: { ...S.row, gap: 5 } },
           h('span', { style: S.muted }, '实体类别'),
           kinds.slice(0, 14).map((k) => {
@@ -533,6 +645,8 @@ window.__ModuleLoader__.load({
       const [draft, setDraft] = useState({ q: '', eid: '' });
       const [applied, setApplied] = useState(draft);
       const [offset, setOffset] = useState(0);
+      const [copying, setCopying] = useState(false);
+      const [note, setNote] = useState('');
       const detail = useLoad(() => (name ? api('/table', { db, name, ...applied, limit: TABLE_PAGE, offset }) : Promise.resolve(null)), [db, name, applied, offset]);
       const pick = (table) => { setName(table); setOffset(0); };
       const apply = () => { setApplied({ ...draft }); setOffset(0); };
@@ -541,6 +655,33 @@ window.__ModuleLoader__.load({
         setDraft(next);
         setApplied(next);
         setOffset(0);
+      };
+      // 当前页里能引用的行（record_id 非空）导出成清单
+      const copyPage = async () => {
+        if (copying || !detail.data) return;
+        const pageRows = detail.data.rows ?? [];
+        const items = pageRows.filter((r) => r.record_id != null).map((r) => ({ id: r.record_id }));
+        if (!items.length) { setNote('当前页没有可引用的行（record_id 全为空）：这些行来自汇总统计，不能落到原文。'); return; }
+        setCopying(true);
+        setNote('');
+        try {
+          const { markdown, count, missing } = await citationListMarkdown({
+            db,
+            title: `SeeU 取证索引 · ${detail.data.label || name} 表引用清单`,
+            metaLines: [
+              `表：${name}`,
+              `筛选：${describeFilters(applied, { eid: '检材', q: '关键词' })}`,
+              `共 ${detail.data.total} 行，导出当前页可引用 ${items.length} 行（本页 ${pageRows.length} 行）`,
+            ],
+            items,
+          });
+          const chars = await clipboardWrite(markdown);
+          setNote(`已复制 ${count} 行表记录引用清单（${chars} 字符）${missing ? `，其中 ${missing} 条无句柄` : ''}`);
+        } catch (e) {
+          setNote(`复制失败：${String(e.message ?? e)}`);
+        } finally {
+          setCopying(false);
+        }
       };
       if (list.error) return h('div', { style: S.card }, h('div', { style: S.noticeErr }, `表清单读取失败：${list.error}`));
       if (list.loading && !list.data) return h('div', { style: S.card }, h(Skeleton, { n: 5 }));
@@ -571,7 +712,9 @@ window.__ModuleLoader__.load({
             h('span', { style: S.muted }, `共 ${data.total} 行`),
             h('span', { style: S.muted }, `当前 ${data.offset + 1}-${data.offset + data.returned}`),
             detail.loading ? h('span', { style: S.muted }, '更新中…') : null,
-            h('span', { style: { ...S.muted, marginLeft: 'auto' } }, '点一行看引用句柄（record_id 为空的行不可引用）')),
+            h('span', { style: { ...S.muted, marginLeft: 'auto' } }, '点一行看引用句柄（record_id 为空的行不可引用）'),
+            actionButton(copying ? '复制中…' : '复制本页引用清单', copyPage, { disabled: copying })),
+          note ? h('div', { style: S.noticeInfo }, note) : null,
           h('div', { className: 'seeu-table-wrap seeu-scroll', style: S.tableWrap }, h('table', { className: 'seeu-table', style: S.table },
             h('thead', null, h('tr', null, cols.map((c) => h('th', { key: c, style: S.th }, c)))),
             h('tbody', null, rows.map((r, i) => h('tr', {

@@ -1227,3 +1227,32 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 采样点：`[data-chat-flow-kind="user"] [class*="_bubble_"]`、`[data-chat-flow-kind="assistant-step"] [class*="_markdown_"]`、`[data-composer-input]`，断言背景 alpha > 0、圆角 ≥12px、正文行高 ≥24px、输入框圆角 ≥10px。坑：`color-mix()` 的 `backgroundColor` 在 Chromium 里读出来是 `color(srgb r g b / a)`，不是 `rgba()`，断言 alpha 要两种格式都解析；CDP 的 `send()` 返回整条消息，截图数据在 `result.data` 不在 `data`。
 
 遗留：`[data-tool]` 的样式在没有工具调用的 mock 对话里无法验证（`toolCards: 0`），只在真机工具调用时才可见；dsh 若改 `data-*` 名称或去掉 name 片段，此段需回归；浅色主题沿用同一套 token，未单独出验收脚本（采样值随 `body[data-ds-dark-theme]` 切换）。
+
+## 20.20 第 20 轮：各视图复制清单（记录 / 表 / 实体）
+
+动机：检索视图上一轮已有【复制引用清单】，但研判时更常用的入口是「记录」翻页后挑一页、或「表」里看联系人/账号这类结构化行；实体聚合结果也需要能贴进报告。三处都要能直接产出可回查的 Markdown，否则用户还得逐条点开引用再手抄。
+
+实现（`plugins/seeu-case-index/client.js`）：
+- 抽出模块级三个辅助：`clipboardWrite(text)`（Electron preload 桥优先，web 预览退回 `navigator.clipboard`）、`describeFilters(obj, labels)`（把 eid/app/category/q/from/to 拼成一行中文）、`citationListMarkdown({ db, title, items, metaLines })`（逐条 `/cite` 回查，输出「序号. 检材 · 应用 · 时间 · 第 N 行 / 引用：<句柄> / 回查：<ges read …> / 摘要：…」，统计无句柄行并在文末标注）。
+- 记录视图（`RecordsView`）：头部右侧【复制本页引用清单】，导出当前页 30 条；抬头写筛选条件与「共 N 条，导出当前页 M 条」，成功提示「已复制 30 条记录引用清单（14996 字符）」。
+- 表视图（`TablesView`）：头部右侧【复制本页引用清单】，只导出 `record_id` 非空的行（表里由汇总统计派生的行没有原文，不能引用）；若整页都不可引用，提示「当前页没有可引用的行…」而不是报错。
+- 实体视图（`EntityView`）：工具栏右侧【复制实体清单】，导出 `[kind] 值 — N 次 · M 检材` + `检材：3, 5` 明细；聚合行没有 record_id，所以不拼引用而拼检材号。
+
+验证（新增 `npm run test:e2e:export`，真 Electron + 真案件库 + 系统剪贴板读回）：
+
+```json
+{"ok":true,"errors":[],"panelOpened":true,"dirFilled":true,"scanned":true,
+ "tabRecords":true,"recordsCopied":true,"recordsNote":"已复制 30 条记录引用清单（14996 字符）",
+ "recordsClipboard":{"len":14998,"hasHeader":true,"hasCite":true,"hasRecheck":true},
+ "tabEntity":true,"entityCopied":true,"entityNote":"已复制 30 条实体清单（1888 字符）",
+ "entityClipboard":{"len":1890,"hasHeader":true,"hasKind":true},
+ "tabTables":true,"tablePicked":"联系人（745）","tableCopied":true,
+ "tableNote":"已复制 20 行表记录引用清单（7025 字符）",
+ "tableClipboard":{"len":7027,"hasHeader":true,"hasCite":true}}
+```
+
+脚本要点：标签页按钮文字里带数量 badge（`记录22777`），不能用「文字完全相等」点击，改为 `[role="tab"]` 里比 `firstChild.textContent`；表视图的下拉用 `HTMLSelectElement.prototype.value` setter + `change` 事件切换；剪贴板读回仍走 `powershell Get-Clipboard -Raw`（渲染进程读剪贴板被 Chromium 权限拒绝）。
+
+回归：`m2-ui-check` 仍 `m2ok: true / errors: []`；`npm test` 38/38；`npm run check:overlay` OK。
+
+遗留：导出的是「当前页」而不是全部命中（避免 20+ 次 `/cite` 串行拖慢界面，需要全量时用检索视图的清单或翻页导出）；表视图的导出条数以 typed 行为准，与记录视图可能重叠（同一原文在两个视图各出现一次）。
