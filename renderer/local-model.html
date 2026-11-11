@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+<title>本地模型设置 · SeeUForensicsAgentPlus</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0A111E;
+    --surface: #0E1728;
+    --surface-2: #131E33;
+    --border: rgba(34, 211, 238, .16);
+    --accent: #22D3EE;
+    --accent-soft: rgba(34, 211, 238, .12);
+    --text: #E6EDF7;
+    --muted: #A9BBD1;
+    --dim: #8397B0;
+    --ok: #34D399;
+    --warn: #FBBF24;
+    --err: #F87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 13px;
+    overflow-y: auto;
+  }
+  .wrap { max-width: 660px; margin: 0 auto; padding: 22px 26px 30px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  header svg { width: 30px; height: 30px; flex: none; filter: drop-shadow(0 0 10px rgba(34,211,238,.35)); }
+  h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: .3px; }
+  .sub { color: var(--muted); font-size: 12px; margin: 8px 0 18px; line-height: 1.7; }
+  .sub code { color: var(--accent); background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+  .field { margin-bottom: 14px; }
+  .field > label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  .field .hint { color: var(--dim); font-size: 11px; margin-top: 5px; line-height: 1.6; }
+  input[type="text"], input[type="number"], textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font: inherit;
+    padding: 8px 10px;
+    outline: none;
+  }
+  input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34,211,238,.12); }
+  textarea { min-height: 86px; resize: vertical; font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .check { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 14px; }
+  .check input { margin-top: 2px; accent-color: var(--accent); }
+  .check label { color: var(--text); }
+  .check .hint { color: var(--dim); font-size: 11px; margin-top: 3px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 12px; }
+  button {
+    font: inherit;
+    border-radius: 8px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:hover { border-color: rgba(34,211,238,.4); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #04121A; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.06); }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { min-height: 40px; border-radius: 8px; padding: 9px 12px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; line-height: 1.7; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+  #status.ok { border-color: rgba(52,211,153,.35); color: var(--ok); }
+  #status.warn { border-color: rgba(251,191,36,.35); color: var(--warn); }
+  #status.err { border-color: rgba(248,113,113,.35); color: var(--err); }
+  pre#preview { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--dim); font-size: 11px; line-height: 1.6; overflow: auto; max-height: 180px; display: none; }
+  footer { margin-top: 18px; color: var(--dim); font-size: 11px; line-height: 1.7; border-top: 1px solid var(--border); padding-top: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <path d="M24 3l16 6v13c0 10-6.6 18.6-16 23C14.6 40.6 8 32 8 22V9l16-6z" stroke="#22D3EE" stroke-width="2.4" fill="rgba(34,211,238,.08)"/>
+      <circle cx="22" cy="22" r="6.5" stroke="#22D3EE" stroke-width="2.4"/>
+      <path d="M27 27l6 6" stroke="#22D3EE" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>
+    <h1>本地模型设置</h1>
+  </header>
+
+  <p class="sub">
+    接入任何 <strong>OpenAI 兼容网关</strong>（<code>GET /v1/models</code>、<code>POST /v1/chat/completions</code> 支持 SSE）。
+    保存后写入 <code id="config-path">…</code>，<strong>重启应用生效</strong>；官方 DeepSeek 账号链路保持可用，随时可关闭。
+  </p>
+
+  <div class="check">
+    <input type="checkbox" id="enabled" />
+    <label for="enabled">
+      启用本地模型
+      <div class="hint">关闭后仅使用官方 DeepSeek 模型；已保存的网关信息会保留。</div>
+    </label>
+  </div>
+
+  <div class="field">
+    <label for="baseURL">网关地址（baseURL）</label>
+    <input type="text" id="baseURL" placeholder="http://127.0.0.1:8000/v1" spellcheck="false" />
+    <div class="hint">要带 <code>/v1</code>，不含 <code>/chat/completions</code>。例：<code>http://127.0.0.1:11434/v1</code>（Ollama）、<code>http://127.0.0.1:1234/v1</code>（LM Studio）。</div>
+  </div>
+
+  <div class="field">
+    <label for="apiKey">API Key（可选）</label>
+    <input type="text" id="apiKey" placeholder="local" spellcheck="false" />
+    <div class="hint">多数本地网关不校验；不能留空时随便填一个（会写进子进程环境变量，不进补丁文件）。</div>
+  </div>
+
+  <div class="field">
+    <label for="models">模型列表（一行一个，可选“ | 显示名”）</label>
+    <textarea id="models" placeholder="qwen2.5-32b-instruct&#10;qwen2.5-32b-instruct | Qwen2.5 32B（本地）" spellcheck="false"></textarea>
+    <div class="hint">ID 必须与网关 <code>/v1/models</code> 返回的一致；“设为默认”用第一个模型。</div>
+  </div>
+
+  <div class="row2">
+    <div class="field">
+      <label for="contextWindow">上下文窗口（tokens）</label>
+      <input type="number" id="contextWindow" min="1024" step="1024" placeholder="131072" />
+      <div class="hint">个人赛常用 131072（128k），团体赛 262144（256k）。</div>
+    </div>
+    <div class="field">
+      <label for="maxTokens">单次输出上限（tokens）</label>
+      <input type="number" id="maxTokens" min="256" step="256" placeholder="8192" />
+      <div class="hint">建议 8192；太大易触发网关 OOM。</div>
+    </div>
+  </div>
+
+  <div class="check">
+    <input type="checkbox" id="useAsDefault" />
+    <label for="useAsDefault">
+      设为新会话默认模型
+      <div class="hint">等价于覆盖 <code>agent-default-model</code>；官方模型仍可在会话内切换。</div>
+    </label>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="btn-save">保存</button>
+    <button id="btn-test">测试连接</button>
+    <button id="btn-save-restart">保存并重启</button>
+    <button id="btn-reload">重新读取</button>
+    <button id="btn-open">打开配置文件位置</button>
+  </div>
+
+  <div id="status">就绪。</div>
+  <pre id="preview"></pre>
+
+  <footer>
+    常见问题：<br />
+    · 「测试连接」由外壳直接请求 <code>/v1/models</code>，不经过 dsh，失败通常是网关没起或端口不对。<br />
+    · 上下文窗口要按模型实际能力填；<strong>小于 48k 的模型</strong>还需要调小随包 preset 里的压缩余量（见 README §9.2）。<br />
+    · 保存后必须重启应用：dsh 只在启动时读取 <code>local-model.patch.yml</code>。
+  </footer>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id)
+  const statusEl = $('status')
+  const previewEl = $('preview')
+  const api = window.seeu && window.seeu.localModel
+
+  function setStatus(text, kind) {
+    statusEl.textContent = text
+    statusEl.className = kind || ''
+  }
+
+  function readForm() {
+    const models = $('models').value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line !== '')
+      .map((line) => {
+        const parts = line.split('|')
+        const id = parts[0].trim()
+        const name = (parts[1] || '').trim()
+        return name ? { id, name } : { id }
+      })
+    const contextWindow = Number($('contextWindow').value)
+    const maxTokens = Number($('maxTokens').value)
+    return {
+      enabled: $('enabled').checked,
+      baseURL: $('baseURL').value.trim(),
+      apiKey: $('apiKey').value.trim() || undefined,
+      models,
+      contextWindow: Number.isFinite(contextWindow) && contextWindow > 0 ? contextWindow : undefined,
+      maxTokens: Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : undefined,
+      useAsDefault: $('useAsDefault').checked,
+    }
+  }
+
+  function fillForm(config) {
+    const c = config || {}
+    $('enabled').checked = c.enabled !== false
+    $('baseURL').value = c.baseURL || ''
+    $('apiKey').value = c.apiKey || ''
+    const models = Array.isArray(c.models) && c.models.length > 0
+      ? c.models
+      : (c.model ? [{ id: c.model }] : [])
+    $('models').value = models
+      .map((m) => (m.name && m.name !== m.id ? m.id + ' | ' + m.name : m.id))
+      .join('\n')
+    $('contextWindow').value = c.contextWindow || 131072
+    $('maxTokens').value = c.maxTokens || 8192
+    $('useAsDefault').checked = c.useAsDefault === true || c.defaultModel !== undefined
+  }
+
+  async function load() {
+    if (!api) {
+      setStatus('预加载桥不可用（window.seeu.localModel 缺失），请从桌面版菜单打开本页。', 'err')
+      return
+    }
+    const view = await api.get()
+    $('config-path').textContent = view.path
+    if (view.config) fillForm(view.config)
+    else fillForm({})
+    if (!view.exists) {
+      setStatus('当前未配置本地模型（文件不存在）。填好网关后点「保存并重启」。', 'warn')
+    } else if (view.error) {
+      setStatus('配置文件读取失败：' + view.error, 'err')
+    } else {
+      setStatus('已加载现有配置。', 'ok')
+    }
+    renderPreview()
+  }
+
+  async function renderPreview() {
+    if (!api) return
+    const res = await api.preview(readForm())
+    if (res && res.ok && res.patch) {
+      previewEl.style.display = 'block'
+      previewEl.textContent = res.patch
+    } else {
+      previewEl.style.display = 'none'
+      previewEl.textContent = ''
+    }
+  }
+
+  async function save() {
+    const res = await api.save(readForm())
+    if (res.ok) {
+      setStatus('已保存到 ' + res.path + '\n重启应用后生效。', 'ok')
+      renderPreview()
+    } else {
+      setStatus('保存失败：' + res.error, 'err')
+    }
+  }
+
+  $('btn-save').addEventListener('click', () => { void save() })
+  $('btn-save-restart').addEventListener('click', async () => {
+    const res = await api.save(readForm())
+    if (!res.ok) { setStatus('保存失败：' + res.error, 'err'); return }
+    setStatus('已保存，正在重启应用…', 'ok')
+    setTimeout(() => api.restart(), 400)
+  })
+  $('btn-test').addEventListener('click', async () => {
+    const form = readForm()
+    if (!form.baseURL) { setStatus('先填网关地址。', 'err'); return }
+    setStatus('正在请求 ' + form.baseURL.replace(/\/$/, '') + '/models …')
+    const res = await api.test({ baseURL: form.baseURL, apiKey: form.apiKey })
+    if (res.ok) {
+      const ids = (res.models || []).map((m) => m.id || m.name || m).filter(Boolean)
+      setStatus('连接成功（HTTP ' + res.status + '），网关模型：\n' + (ids.length ? ids.join('\n') : '(未返回模型列表)'), 'ok')
+    } else {
+      setStatus('连接失败：' + res.error, 'err')
+    }
+  })
+  $('btn-reload').addEventListener('click', () => { void load() })
+  $('btn-open').addEventListener('click', () => api.openFile())
+
+  for (const el of document.querySelectorAll('input, textarea')) {
+    el.addEventListener('input', () => { void renderPreview() })
+    el.addEventListener('change', () => { void renderPreview() })
+  }
+
+  void load()
+</script>
+</body>
+</html>

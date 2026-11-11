@@ -75,8 +75,15 @@ export function windowIconPath(): string {
   return join(appRoot(), 'build', 'icon.ico')
 }
 
-/** 用户数据根（%APPDATA%/SeeUForensicsAgentPlus）。 */
+/**
+ * 用户数据根（%APPDATA%/SeeUForensicsAgentPlus）。
+ *
+ * `SEEU_USER_DATA` 可覆盖：自动化截图/验收要用独立目录，避免污染真实配置
+ * （Electron 的 `--user-data-dir` 只影响 Chromium 数据，不改 `app.getPath('userData')`）。
+ */
 export function userDataDir(): string {
+  const override = process.env.SEEU_USER_DATA
+  if (override !== undefined && override.trim() !== '') return override
   return app.getPath('userData')
 }
 

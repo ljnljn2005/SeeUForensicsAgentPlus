@@ -32,6 +32,26 @@ export interface SeeuInfo {
   readonly hostLog: string
 }
 
+export interface LocalModelView {
+  readonly path: string
+  readonly exists: boolean
+  readonly config?: unknown
+  readonly error?: string
+}
+
+export interface LocalModelSaveResult {
+  readonly ok: boolean
+  readonly path?: string
+  readonly error?: string
+}
+
+export interface LocalModelProbeResult {
+  readonly ok: boolean
+  readonly status?: number
+  readonly models?: Array<{ id?: string; name?: string }>
+  readonly error?: string
+}
+
 const api = {
   info: (): Promise<SeeuInfo> => ipcRenderer.invoke('seeu:info') as Promise<SeeuInfo>,
   onStatus: (callback: (status: SeeuStatus) => void): (() => void) => {
@@ -43,6 +63,17 @@ const api = {
   openLogs: (): void => { ipcRenderer.send('seeu:open-logs') },
   openWorkspace: (): void => { ipcRenderer.send('seeu:open-workspace') },
   quit: (): void => { ipcRenderer.send('seeu:quit') },
+  localModel: {
+    get: (): Promise<LocalModelView> => ipcRenderer.invoke('seeu:local-model:get') as Promise<LocalModelView>,
+    save: (config: unknown): Promise<LocalModelSaveResult> =>
+      ipcRenderer.invoke('seeu:local-model:save', config) as Promise<LocalModelSaveResult>,
+    preview: (config: unknown): Promise<{ ok: boolean; patch?: string; error?: string }> =>
+      ipcRenderer.invoke('seeu:local-model:preview', config) as Promise<{ ok: boolean; patch?: string; error?: string }>,
+    test: (probe: { baseURL?: string; apiKey?: string }): Promise<LocalModelProbeResult> =>
+      ipcRenderer.invoke('seeu:local-model:test', probe) as Promise<LocalModelProbeResult>,
+    restart: (): void => { ipcRenderer.send('seeu:local-model:restart') },
+    openFile: (): void => { ipcRenderer.send('seeu:local-model:open-file') },
+  },
 }
 
 contextBridge.exposeInMainWorld('seeu', api)

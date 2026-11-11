@@ -838,6 +838,7 @@ typed 表行数（实测）：`health_metric` 6,200、`exif` 4,518、`msg_csv` 4
 
 **实现**：
 
+- 设置界面（v0.2.0 第二轮）：`renderer/local-model.html` + 菜单 `工具 → 本地模型设置…`。为什么不用 dsh 设置页：同一服务行的 settings 写入会被 overlay 覆盖并硬拒（`Configuration for "<id>" is overridden by a home patch or command-line overlay`）。窗口能力：读配置、实时预览生成的 patch、`GET <baseURL>/models` 连通性测试（主进程 `net.fetch`，绕开渲染进程 CORS）、保存并重启。IPC：`seeu:local-model:get|save|preview|test|restart|open-file`；`src/local-model.ts` 新增 `describeLocalModelConfig/writeLocalModelConfig/previewLocalModelPatch/testLocalGateway`。开发钩子：`SEEU_USER_DATA`（独立 userData，供自动化验收）、`SEEU_OPEN_SETTINGS=1`（启动即打开设置窗口）。
 - `tools/local-model.mjs`（纯 JS，外壳与 dev-web 共用）：`normalizeLocalModel()` 归一化配置（兼容 `model: 'id'` 与 `models: [...]`）、`localModelPatch()` 生成 YAML、`localModelEnv()` 生成 `{ [apiKeyEnv]: apiKey }`。
 - `src/local-model.ts`：读 `<userData>/local-model.json`（`SEEU_LOCAL_MODEL_JSON` 优先）→ 写 `<userData>/local-model.patch.yml`；配置错误只记摘要、不阻塞启动。
 - `src/host.ts`：取证 overlay 之后追加第二个 `--patch <local-model.patch.yml>`，合并 env。
@@ -851,6 +852,8 @@ typed 表行数（实测）：`health_metric` 6,200、`exif` 4,518、`msg_csv` 4
 **验证**：`--dump-config` 1336 行、exit 0、`provider: local-openai`/`model: mock-14b`/`baseURL: http://127.0.0.1:18080/v1` 均在；`.probe/local-model-e2e.mjs`（mock OpenAI 网关 + 真 Electron + CDP）通过：`REPORT {"ok":true,"chatCalls":2,"gotReply":true,"errors":[]}`，页面出现「MOCK-OK：本地网关已连通，模型是 mock-14b」，模型 chip 显示「Mock 14B (本地)」，预设显示「取证分析（Forensics）」。
 
 **e2e 踩坑（CDP 驱动 composer）**：① 首屏有「预览版说明」提示卡，会挡住 composer，必须先点文本为「继续」的按钮；② composer 是 Lexical 的 `contenteditable` DIV（`textareas: 0`），直接改 `textContent` 无效，要 `Input.dispatchMouseEvent` 点击聚焦 + `Input.insertText` + `Input.dispatchKeyEvent` Enter；③ 判断是否真的输入成功：读 `document.activeElement.innerText`。
+
+**设置窗口验收**（`.probe/settings-check.mjs`，独立 userData + `SEEU_OPEN_SETTINGS=1` + CDP）：`REPORT {"ok":true,...,"previewHasRetryPolicy":true,"previewHasTitleRow":true,"gatewayModels":["qwen2.5-32b-instruct","mock-14b"],"badGatewayRejected":true}`。步骤：preload 桥存在 → `get()` 指向独立 userData → 填表 → `preview()` 生成 1014 字符 patch（含 `retryPolicy`/`session-title-llm`）→ `test()` 打 mock `GET /v1/models` 得 HTTP 200 与两个模型 → `save()` 落盘 → 重新读取一致 → 错误端口 `test()` 按预期失败 → 截图 `.probe/shots/local-model-settings.png`。
 
 ### 20.3 遗留
 

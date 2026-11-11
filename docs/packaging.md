@@ -323,6 +323,7 @@ node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-un
 - 生成逻辑 `tools/local-model.mjs` 被 `src/local-model.ts` 静态 import，esbuild 已把它内联进 `dist/main.cjs`（`files` 只放行 `dist/**`，所以**不需要**单独放行 `tools/local-model.mjs`）；自检：
   `grep -c "local-model.patch.yml" dist/main.cjs` 应为 `1`。
 - 用户配置在 `<userData>\local-model.json`（asar 外，升级/重装后仍在），示例随包放在 `resources/forensics/local-model.example.json`（`resources/**` 白名单已覆盖）。
+- 设置窗口 `renderer/local-model.html` 由 `scripts/build.mjs` 复制到 `dist/renderer/`，随 `dist/**` 进 asar；`src/main.ts` 用 `loadFile(join(rendererDir(),'local-model.html'))` 加载，asar 内 `loadFile` 正常。开发/自动化钩子：`SEEU_USER_DATA`（覆盖 userData 根）、`SEEU_OPEN_SETTINGS=1`（启动即打开设置窗口），两者都不影响打包产物默认行为。
 - 运行时生成的 `local-model.patch.yml` 也写在 `<userData>`，作为第二个 `--patch` 传给 dsh——不写 asar、不需要重打包即可换网关。
 
 ## 6. 体积现状

@@ -20,6 +20,13 @@ import {
   PRODUCT_NAME,
 } from './brand.js'
 import { DshHost, type HostState } from './host.js'
+import {
+  describeLocalModelConfig,
+  localModelConfigFile,
+  previewLocalModelPatch,
+  testLocalGateway,
+  writeLocalModelConfig,
+} from './local-model.js'
 import { installBundledSkills } from './skills.js'
 import {
   dshHome,
@@ -46,6 +53,7 @@ interface StatusPayload {
 }
 
 let mainWindow: BrowserWindow | undefined
+let settingsWindow: BrowserWindow | undefined
 let tray: Tray | undefined
 let host: DshHost | undefined
 let quitting = false
@@ -254,6 +262,40 @@ function focusMainWindow(): void {
   mainWindow.focus()
 }
 
+/**
+ * 本地模型设置窗口：只读写 `<userData>/local-model.json`，保存后重启生效。
+ * 用独立窗口而不是 dsh 设置页，是因为同一服务行的 settings 写入会被 overlay
+ * 覆盖并硬拒（`Configuration for "<id>" is overridden by …`）。
+ */
+function openLocalModelSettings(): void {
+  if (settingsWindow !== undefined && !settingsWindow.isDestroyed()) {
+    settingsWindow.focus()
+    return
+  }
+  settingsWindow = new BrowserWindow({
+    width: 700,
+    height: 780,
+    minWidth: 560,
+    minHeight: 520,
+    title: '本地模型设置',
+    parent: mainWindow === undefined || mainWindow.isDestroyed() ? undefined : mainWindow,
+    modal: false,
+    show: false,
+    backgroundColor: COLORS.background,
+    icon: existsSync(windowIconPath()) ? windowIconPath() : undefined,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: preloadFile(),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  })
+  settingsWindow.once('ready-to-show', () => settingsWindow?.show())
+  settingsWindow.on('closed', () => { settingsWindow = undefined })
+  void settingsWindow.loadFile(join(rendererDir(), 'local-model.html'))
+}
+
 function createTray(): void {
   const icon = trayIconPath()
   if (!existsSync(icon)) {
@@ -268,6 +310,9 @@ function createTray(): void {
       { type: 'separator' },
       { label: '打开取证工作区', click: () => void shell.openPath(workspaceDir()) },
       { label: '打开日志目录', click: () => void shell.openPath(logDir()) },
+      { label: '本地模型设置…', click: () => openLocalModelSettings() },
+      { type: 'separator' },
+      { label: '本地模型设置…', click: () => openLocalModelSettings() },
       { type: 'separator' },
       { label: '退出', click: () => void requestQuit() },
     ]))
@@ -333,6 +378,13 @@ function buildMenu(): void {
       ],
     },
     {
+      label: '工具',
+      submenu: [
+        { label: '本地模型设置…', click: () => openLocalModelSettings() },
+        { label: '打开配置文件目录', click: () => void shell.openPath(userDataDir()) },
+      ],
+    },
+    {
       label: '帮助',
       submenu: [
         { label: `关于 ${PRODUCT_NAME}`, click: () => showAbout() },
@@ -366,6 +418,23 @@ function registerIpc(): void {
   ipcMain.on('seeu:open-logs', () => { void shell.openPath(logDir()) })
   ipcMain.on('seeu:open-workspace', () => { void shell.openPath(workspaceDir()) })
   ipcMain.on('seeu:quit', () => { void requestQuit() })
+
+  // 本地模型设置窗口
+  ipcMain.handle('seeu:local-model:get', () => describeLocalModelConfig())
+  ipcMain.handle('seeu:local-model:save', (_event, input: unknown) => writeLocalModelConfig(input))
+  ipcMain.handle('seeu:local-model:preview', (_event, input: unknown) => previewLocalModelPatch(input))
+  ipcMain.handle('seeu:local-model:test', (_event, probe: { baseURL?: string; apiKey?: string }) =>
+    testLocalGateway(probe ?? {}))
+  ipcMain.on('seeu:local-model:restart', () => {
+    logShell('local model: 用户从设置页请求重启')
+    app.relaunch()
+    void requestQuit()
+  })
+  ipcMain.on('seeu:local-model:open-file', () => {
+    const file = localModelConfigFile()
+    if (existsSync(file)) shell.showItemInFolder(file)
+    else void shell.openPath(userDataDir())
+  })
 }
 
 // ── 启动 ────────────────────────────────────────────────────────────────────
@@ -406,6 +475,8 @@ if (!gotLock) {
     buildMenu()
     createTray()
     mainWindow = createWindow()
+    // 开发/自动化：SEEU_OPEN_SETTINGS=1 时启动即打开本地模型设置窗口（截图与 CDP 验收用）。
+    if (process.env.SEEU_OPEN_SETTINGS === '1') openLocalModelSettings()
     await startHost()
   })
 }

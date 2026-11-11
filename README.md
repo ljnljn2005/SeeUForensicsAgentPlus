@@ -339,6 +339,14 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 开发预览：`npm run dev:web -- --workspace "<案件目录>" --local-model resources/forensics/local-model.example.json`
 临时覆盖：环境变量 `SEEU_LOCAL_MODEL_JSON='<同一段 JSON>'`（优先级最高，自动化测试用这个）。
 
+**设置界面（推荐）**：菜单 `工具 → 本地模型设置…`（托盘菜单里也有）打开一个独立窗口，可以直接填网关地址、模型、上下文窗口，并且：
+
+- 【测试连接】由主进程直接请求 `<baseURL>/models`（走 Electron `net`，不受页面 CORS 限制，8 秒超时），会列出网关返回的模型 id；
+- 表单每次改动都会在下方实时预览「将要生成的 patch 文本」，保存前就能看到 `retryPolicy`、`session-title-llm` 这些行；
+- 【保存并重启】写入 `<userData>\local-model.json` 后自动重启应用，重启后模型选择器里就能看到本地模型。
+
+它写的就是上面那个 JSON 文件，两种方式等价；设置页存在的原因是 dsh 自己的设置页在同一服务行上会被 overlay 覆盖并硬拒。
+
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
 | `enabled` | `true` | `false` 时忽略本配置，回到官方账号链路 |
