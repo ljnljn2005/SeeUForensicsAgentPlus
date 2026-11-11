@@ -153,6 +153,23 @@ try {
   report.highlights = await evaluate('(() => { const ms = [...document.querySelectorAll(\'mark.seeu-hl\')]; return { count: ms.length, sample: ms.slice(0, 3).map((m) => m.textContent) } })()')
   report.highlightOk = (report.highlights?.count ?? 0) > 0 && (report.highlights?.sample ?? []).every((t) => String(t).includes("加密"))
   if (!base.length) throw new Error('关键词检索没有结果，无法继续')
+
+  // 分页：头部显示「共 N 条 · 第 a–b 条」，下一页应换一批、上一页能回来
+  const pageText = String((await evaluate('document.body.innerText')) ?? '')
+  const pageMatch = pageText.match(/共\s*(\d+)\s*条\s*·\s*第\s*(\d+)[–-](\d+)\s*条/)
+  report.pageTotal = pageMatch ? Number(pageMatch[1]) : null
+  if (report.pageTotal && report.pageTotal > base.length) {
+    report.pageNextClicked = await clickText('下一页')
+    await sleep(1800)
+    const page2 = await readSearchRows()
+    report.page2Rows = page2.length
+    report.page2Different = page2.length > 0 && page2[0].text !== base[0].text
+    report.pagePrevShown = String((await evaluate('document.body.innerText')) ?? '').includes('上一页')
+    report.pagePrevClicked = await clickText('上一页')
+    await sleep(1800)
+    const back = await readSearchRows()
+    report.pageBackSame = back.length > 0 && back[0].text === base[0].text
+  }
   const eid = base[0].eid
   report.filterEid = eid
 
@@ -193,8 +210,10 @@ try {
     return el ? el.value : null
   })()`)
 
+  report.pagedOk = !report.pageTotal || report.pageTotal <= report.baseRows ||
+    (report.pageNextClicked && report.page2Different && report.pagePrevShown && report.pagePrevClicked && report.pageBackSame)
   report.ok = report.panelOpened && report.scanned && report.tabOpened && report.queryFilled &&
-    report.searched && report.baseRows > 0 && report.highlightOk && report.filterApplied && report.filteredRows > 0 &&
+    report.searched && report.baseRows > 0 && report.highlightOk && report.pagedOk && report.filterApplied && report.filteredRows > 0 &&
     report.filteredAllMatch && report.filterNarrowed && report.copyNoteShown &&
     report.clipboard.len > 0 && report.clipboard.hasHeader && report.clipboard.hasCite &&
     report.afterClear === '' && errors.length === 0

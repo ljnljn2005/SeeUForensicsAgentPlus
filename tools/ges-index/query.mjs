@@ -245,6 +245,7 @@ export function search(db, opts = {}) {
   const q = String(opts.q ?? '').trim();
   if (!q) { const e = new Error('缺少关键词'); e.code = 'E_NO_QUERY'; throw e; }
   const limit = Math.min(100, Number(opts.limit) || 10);
+  const offset = Math.max(0, Number(opts.offset) || 0);
   const filters = [];
   const params = [];
   if (opts.eid) { filters.push('r.eid=?'); params.push(Number(opts.eid)); }
@@ -254,6 +255,7 @@ export function search(db, opts = {}) {
   if (opts.from) { filters.push('r.ts>=?'); params.push(String(opts.from)); }
   if (opts.to) { filters.push('r.ts<=?'); params.push(String(opts.to)); }
   const kw = typeof opts.q === 'string' ? opts.q.trim() : '';
+  const filterParams = [...params];
   if (kw) {
     if (kw.length >= 3) {
       filters.push('r.id in (select rowid from record_fts where record_fts match ?)');
@@ -266,23 +268,29 @@ export function search(db, opts = {}) {
   const where = filters.length ? ` and ${filters.join(' and ')}` : '';
   let engine = 'like';
   let rows = null;
+  let total = null;
   if (q.length >= 3) {
     engine = 'fts5-trigram';
     try {
       rows = db.prepare(`select r.id, r.eid, r.app, r.account, r.category, r.ts, r.line_no,
           snippet(record_fts, 0, '«', '»', '…', 10) snip
         from record_fts f join record r on r.id=f.rowid
-        where record_fts match ?${where} limit ?`).all(q, ...params, limit);
-    } catch { rows = null; }
+        where record_fts match ?${where} limit ? offset ?`).all(q, ...params, limit, offset);
+      total = db.prepare(`select count(*) n
+        from record_fts f join record r on r.id=f.rowid
+        where record_fts match ?${where}`).get(q, ...params).n;
+    } catch { rows = null; total = null; }
   }
   if (!rows) {
     engine = 'like';
     const like = q.replace(/[\\%_]/g, (m) => '\\' + m);
     rows = db.prepare(`select r.id, r.eid, r.app, r.account, r.category, r.ts, r.line_no, substr(r.text,1,160) snip
-      from record r where r.text like '%'||?||'%' escape '\\'${where} limit ?`).all(like, ...params, limit);
+      from record r where r.text like '%'||?||'%' escape '\\'${where} limit ? offset ?`).all(like, ...params, limit, offset);
+    total = db.prepare(`select count(*) n from record r where r.text like '%'||?||'%' escape '\\'${where}`).get(like, ...params).n;
   }
+  const nextOffset = offset + rows.length < total ? offset + rows.length : null
   return {
-    query: q, engine, returned: rows.length,
+    query: q, engine, returned: rows.length, total, offset, limit, next: nextOffset,
     rows: rows.map((r) => ({
       id: r.id, eid: r.eid, app: r.app, account: r.account ?? '', cat: r.category,
       ts: r.ts, line: r.line_no, snip: clip(r.snip, 100),

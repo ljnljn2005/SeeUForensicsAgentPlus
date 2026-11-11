@@ -1109,8 +1109,10 @@ window.__ModuleLoader__.load({
         }
       }, [dir, scan, loadNode]);
 
-      const doSearch = useCallback(async () => {
+      const doSearch = useCallback(async (nextOffset) => {
         if (!db || !query.trim()) return;
+        // 事件对象也会传进来（onClick），Number.isFinite 过滤后按第 0 页处理
+        const wantOffset = Number.isFinite(Number(nextOffset)) && Number(nextOffset) > 0 ? Math.floor(Number(nextOffset)) : 0;
         setBusy('search');
         setError('');
         setDetail(null);
@@ -1121,7 +1123,11 @@ window.__ModuleLoader__.load({
         if (String(filters.app ?? '').trim()) extra.app = String(filters.app).trim();
         if (String(filters.from ?? '').trim()) extra.from = String(filters.from).trim();
         if (String(filters.to ?? '').trim()) extra.to = String(filters.to).trim();
-        try { setResult(await api('/search', { db, q: query.trim(), limit: 20, ...extra })); }
+        try {
+          const params = { db, q: query.trim(), limit: 20, ...extra };
+          if (wantOffset > 0) params.offset = wantOffset;
+          setResult(await api('/search', params));
+        }
         catch (e) { setError(String(e.message ?? e)); }
         finally { setBusy(''); }
       }, [db, query, filters]);
@@ -1438,6 +1444,15 @@ window.__ModuleLoader__.load({
             result ? h('div', { style: S.card },
               h('div', { style: S.row },
                 h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `引擎 ${result.engine} · ${result.returned} 命中`),
+                (result.total ?? result.returned) > result.returned
+                  ? h('span', { style: S.muted }, `共 ${result.total} 条 · 第 ${(result.offset ?? 0) + 1}–${(result.offset ?? 0) + result.returned} 条`)
+                  : null,
+                (result.offset ?? 0) > 0
+                  ? actionButton('上一页', () => doSearch(Math.max(0, (result.offset ?? 0) - (result.limit ?? 20))), { disabled: busy === 'search' })
+                  : null,
+                result.next != null
+                  ? actionButton('下一页', () => doSearch(result.next), { disabled: busy === 'search' })
+                  : null,
                 (result.rows ?? []).length
                   ? actionButton(busy === 'copy' ? '复制中…' : '复制引用清单', exportCitations, { disabled: busy === 'copy' })
                   : null,

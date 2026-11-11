@@ -167,7 +167,7 @@ async function handle(req, res) {
     try {
       if (path === '/tree') return send(res, 200, tree(db, url.searchParams.get('node') || 'root'));
       if (path === '/search') {
-        const opts = { q: url.searchParams.get('q'), limit: url.searchParams.get('limit') };
+        const opts = { q: url.searchParams.get('q'), limit: url.searchParams.get('limit'), offset: url.searchParams.get('offset') };
         for (const k of ['eid', 'app', 'account', 'category', 'from', 'to']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
         return send(res, 200, search(db, opts));
       }
