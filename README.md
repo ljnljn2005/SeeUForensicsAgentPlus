@@ -57,19 +57,28 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.2.4**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.2.5**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,621,299 B ≈ 766 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,768,410 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
-| `release/SeeUForensicsAgentPlus-0.2.4-x64.exe`（NSIS 安装包） | 211,929,804 B（blockmap 220,797 B） |
-| `release/SeeUForensicsAgentPlus-0.2.4-x64-portable.exe` | 189,498,621 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,610,372 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,777,657 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
+| `release/SeeUForensicsAgentPlus-0.2.5-x64.exe`（NSIS 安装包） | 211,931,937 B（blockmap 220,676 B） |
+| `release/SeeUForensicsAgentPlus-0.2.5-x64-portable.exe` | 189,540,572 B |
 
-实测冷启动到 dsh UI：目录版 4091 ms；portable 首次 52.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。更细的打包说明见 `docs/packaging.md`。
+实测冷启动到 dsh UI：目录版 4088 ms；portable 首次 51.6s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
+更细的打包说明见 `docs/packaging.md`。
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
 
+### v0.2.5 改了什么
+
+- **会话自动带上案件概览（本轮重点）**：每个新会话开始前，dsh 会把 `<DSH_HOME>/AGENTS.md` 里的 `seeu-case-brief` 区块读进上下文——里面有本机案件名、索引库、规模、数据时间范围、`eid｜检材｜名称｜平台｜记录数` 表和「用户说检材名时按表对应 eid，不要猜」的规则。本地小模型第一句话就知道分析哪个检材，不用再反复调用 `/evidences` 或猜 eid；
+- **注入是合并式的**：只替换自己的标记区块，用户手写的 `AGENTS.md` 内容原样保留；连续重写字节数稳定；下次启动/扫描索引/建库成功后自动刷新；
+- **只写用户级文件**：只在 `<DSH_HOME>/AGENTS.md` 写入，绝不往取证案件目录里写文件（`SEEU_WORKSPACE` 可能是只读的证据盘）；只有没有 `DSH_HOME` 时才退回工作区 `SEEU-CASE-BRIEF.md`；
+- **面板可见可刷新**：索引面板 KPI 下方一行「● 会话语境：已注入 N 个案件概览（含本库/不含本库） · HH:MM:SS · 新会话会自动带上检材清单」，绿/黄/红点表示状态，旁边【刷新会话概览】立即重写（点完显示「已刷新」）；
+- **接口**：`GET /seeu-index/brief?db=…` 返回最近一次注入状态与当前库是否在列表里，`POST /seeu-index/brief` 强制刷新；
+- **测试**：`npm test` 43 个单测不变；`scripts/e2e/m2-ui-check.mjs` 新增 `briefVisible` / `briefRefreshOk` 并纳入 `m2ok`；`scripts/e2e/local-tools-e2e.mjs` 的 mock 网关检查请求 messages，断言 `briefSeen: true / briefChars: 475`（确认概览真的进了模型上下文）。
 ### v0.2.4 改了什么
 
 - **案件概览一键导出**：面板 KPI 下方【复制案件概览】，输出案件名/编号/目录/索引库/生成时间 + 检材清单表（名称、持有人、平台、记录数、备注），交接材料第一页直接可用；

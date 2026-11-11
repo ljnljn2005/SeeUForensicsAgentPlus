@@ -1595,3 +1595,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 
 - 回归：`local-tools-e2e` 仍 `briefSeen:true / briefChars:475`；`npm test` 43/43；`npm run check:overlay` OK。
 - 遗留：`briefState` 只在进程内保存，重启后到第一次写入前显示「尚未注入」；多案件时只显示总数，不列案件名单。
+
+## 20.40 v0.2.5：会话上下文注入随包交付
+
+- 版本 0.2.4 → 0.2.5；本包相对 0.2.4 的新增内容：`de2650d`/`620978f`（会话自动注入案件概览，写 `<DSH_HOME>/AGENTS.md` 合并区块）、`52d23c7`/`64bc6de`（面板显示注入状态 + 【刷新会话概览】）。
+- 打包：`npx electron-builder --win --x64 -c.directories.output=release-025`（后台作业，约 12 分钟）；产物 NSIS 211,931,937 B / portable 189,540,572 B / app.asar 168,777,657 B（19,647 entries）；asar 自检 15 路径 `missing: []`。
+- 打包态验证：目录版 4088 ms、portable 51586 ms；面板 e2e `m2ok:true` 且 `briefVisible/briefRefreshOk:true`（打包态注入状态与刷新按钮都真实可用）；设置页 e2e `ok:true`（精简预设、预热、窗口超限、缺模型提示全绿）。
+- 遗留：`briefState` 进程内保存；打包态面板 e2e 会顺带写一次真实的 `<DSH_HOME>/AGENTS.md`（用的是隔离 home，无副作用）。

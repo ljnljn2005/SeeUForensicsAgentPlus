@@ -720,3 +720,28 @@ asar 自检（`@electron/asar.listPackage` + `extractFile`，entries 带前导�
 - 导出：`SEEU_EXPORT_E2E_PORT=9363 export-check.mjs` → `ok:true`（`overviewNote:"已复制案件概览（685 字符，含 5 个检材）"`、`timelineNote:"已复制 86 个时间段的清单（3235 字符）"`、`errors:[]`）。
 
 **注意**：`release/` 里仍保留用户在跑的 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`；打包时若 `release/win-unpacked` 被占用会报 `Device or resource busy`，用旁路输出目录（`-c.directories.output=release-024`）再搬。
+
+### v0.2.5 回归验证
+
+产物（`npx electron-builder --win --x64 -c.directories.output=release-025`，无证书跳过签名，产物再搬进 `release/`）：
+
+| 产物 | 大小 |
+| --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,610,372 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,777,657 B（19,647 entries） |
+| `release/SeeUForensicsAgentPlus-0.2.5-x64.exe` | 211,931,937 B（blockmap 220,676 B） |
+| `release/SeeUForensicsAgentPlus-0.2.5-x64-portable.exe` | 189,540,572 B |
+
+asar 自检（`@electron/asar.listPackage` + `extractFile`）：`{"entries":19647,"missing":[]}`，15 个必需路径齐全；`plugins\seeu-case-index\index.js` 含 `briefState` 与 `/brief` 路由，`plugins\seeu-case-index\client.js` 含「会话语境」「刷新会话概览」「evLabel」；`plugins\seeu-theme\client.js` 含欢迎页两个 chip（`data-seeu-local-model` / `data-seeu-recent`）；`dist\renderer\local-model.html` 含 `btn-warmup`。
+
+启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：
+
+- 目录版：`node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9371` → `"ok": true, "elapsedMs": 4088`；
+- portable：`--exe release/SeeUForensicsAgentPlus-0.2.5-x64-portable.exe --port 9372` → `"ok": true, "elapsedMs": 51586`。
+
+打包态 e2e（`SEEU_UI_EXE` 指向 win-unpacked exe，独立 `SEEU_DSH_HOME`/`SEEU_USER_DATA`）：
+
+- 面板：`node scripts/e2e/m2-ui-check.mjs` → `{"evNames":true,"briefVisible":true,"briefText":"会话语境：已注入 1 个案件概览（含本库） · 05:21:56 · 新会话会自动带上检材清单","briefRefreshOk":true,"searchOk":true,"searchEvNames":true,"m2ok":true,"errors":[]}`——**打包态也确认概览注入可见、可刷新**；
+- 设置页：`node scripts/e2e/settings-check.mjs --exe "<win-unpacked exe>"` → `ok:true`（页面来自 `app.asar/dist/renderer/local-model.html`；`presetApplied`、`pulledContextWindow:"32768"`、`warmupOk:true`、`probeMismatch{configured:131072,gateway:32768}`、`probeMissing:["ghost-7b"]`、`disableLocalModel.enabled:false`、`errors:[]`）。
+
+注：`release/` 里仍保留 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`（用户机上有旧实例在跑、文件被占用）。
