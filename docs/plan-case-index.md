@@ -1194,3 +1194,36 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 回归：`npm run test:e2e:ui`（面板主流程 `m2ok:true`、`errors:[]`）、`npm test` 38/38、`npm run check:overlay` OK。
 
 遗留：应用筛选是**精确匹配**（与后端一致），不支持下拉补全与模糊匹配；日期只按 `record.ts` 字符串比较（格式 `YYYY-MM-DD HH:MM:SS`，跨时区仍以检材原始时间串为准）；一次最多导出当前页 20 条，分页导出待做。
+
+## 20.19 第 19 轮：会话区排版（气泡 / 正文 / 代码块 / 输入框）
+
+动机：会话界面是研判时看得最久的区域，官方默认偏英文排版；主题插件此前只改色板与字体，正文行高、用户气泡、代码块、输入框聚焦态仍是默认值。中文长报告+长句柄（`Goldeneyes://…`）在默认排版下容易糊成一片、句柄被折成两三行。
+
+约束：组件 class 是 CSS Modules 哈希（`<hash>_<name>_<hash>`），升级 dsh 会变；不能依赖。可用只有两类稳定事实：
+- 官方渲染器输出的语义属性：`data-chat-flow-kind`（`user` / `assistant-step` / `turn-tail` / `turn-process`）、`data-conversation-scroll`、`data-composer-input`、`data-conversation-region`、`data-tool`、`data-lexical-editor`；
+- 哈希字符串里保留的 name 片段（`_bubble_` / `_markdown_`），用 `[class*="_bubble_"]` 这类选择器匹配（比整串哈希稳，但仍属"软契约"）。
+
+实现（`plugins/seeu-theme/theme.css` 末尾「会话区」段，全部 `!important` 以压过 ThemePresenter 的内联 token）：
+- `[data-chat-flow-kind]` 统一 `margin-block: 2px`；
+- 用户气泡 `[data-chat-flow-kind="user"] [class*="_bubble_"]`：强调色 12% 透明底 + 26% 边框、圆角 16px、`padding 10px 14px`、行高 1.7；
+- 助手正文 `[data-chat-flow-kind="assistant-step"] [class*="_markdown_"]`：14px / 行高 1.78，段距 0.55em、列表项 0.2em；
+- 代码块 `pre`：layer-2 底 + 细边 + 圆角 12px + 12.5px 字号，`overflow-x` 由官方容器负责（长句柄不折行）；
+- 行内代码：强调色文字 + 10% 淡底 + 5px 圆角；
+- 回合尾部按钮弱化到 11.5px（用量/操作不抢正文）；
+- 输入框 `[data-composer-input]`：圆角 16px，`:focus-within` 描青边 + 3px 柔光环；
+- 工具卡 `[data-tool]`：圆角 12px、边框统一到 border-l2；消息内链接强调色 + 悬停下划线。
+
+验证（新增 `npm run test:e2e:theme-conv`，mock 网关 + 真 Electron + CDP，发一条消息后采样 computed style）：
+
+```json
+{"ok":true,"gotReply":true,"checks":{"bubbleBg":true,"bubbleRadius":true,"bubbleLine":true,"markdownLine":true,"composerRadius":true,"flowItems":true},
+ "styles":{"bubble":{"bg":"color(srgb 0.133333 0.827451 0.933333 / 0.12)","radius":16,"pad":"10px 14px","line":23.8},
+           "markdown":{"size":14,"line":24.92},
+           "composer":{"radius":16,"border":"color(srgb 0.133333 0.827451 0.933333 / 0.55)"},
+           "flowItems":4},
+ "screenshot":".dev/shots/conv-theme.png","errors":[]}
+```
+
+采样点：`[data-chat-flow-kind="user"] [class*="_bubble_"]`、`[data-chat-flow-kind="assistant-step"] [class*="_markdown_"]`、`[data-composer-input]`，断言背景 alpha > 0、圆角 ≥12px、正文行高 ≥24px、输入框圆角 ≥10px。坑：`color-mix()` 的 `backgroundColor` 在 Chromium 里读出来是 `color(srgb r g b / a)`，不是 `rgba()`，断言 alpha 要两种格式都解析；CDP 的 `send()` 返回整条消息，截图数据在 `result.data` 不在 `data`。
+
+遗留：`[data-tool]` 的样式在没有工具调用的 mock 对话里无法验证（`toolCards: 0`），只在真机工具调用时才可见；dsh 若改 `data-*` 名称或去掉 name 片段，此段需回归；浅色主题沿用同一套 token，未单独出验收脚本（采样值随 `body[data-ds-dark-theme]` 切换）。
