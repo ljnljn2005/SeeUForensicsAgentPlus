@@ -116,6 +116,16 @@ const pressEnter = () => ev(`(() => {
 })()`)
 
 await sleep(8000)
+const searchByKeyword = (value) => ev(`(() => {
+  const input = [...document.querySelectorAll('input')].find((el) => (el.placeholder || '').includes('关键词'))
+  if (!input) return 'no-input'
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+  setter.call(input, ${JSON.stringify(value)})
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  for (const type of ['keydown', 'keypress', 'keyup']) input.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }))
+  return 'typed-enter'
+})()`)
+
 const report = {}
 report.sidebar = (await bodyText()).includes('取证索引')
 // 1) 把上次使用的案件目录写进 localStorage，然后刷新，让面板初始状态就用它（等价于用户上次输入过）
@@ -139,9 +149,9 @@ report.drilledText = text.slice(text.indexOf('检材 3') >= 0 ? text.indexOf('�
 // 先切到「检索」标签，否则 last input 是顶部的案件目录输入框
 await clickText('检索', 'button')
 await sleep(1500)
-report.searchTyped = await typeInto('input', '加密')
+report.searchTyped = await searchByKeyword('加密')
 await sleep(400)
-report.searchEnter = await pressEnter()
+report.searchEnter = report.searchTyped
 await sleep(7000)
 text = await bodyText()
 report.searchOk = /引擎 (trigram|like) · \d+ 命中/.test(text)

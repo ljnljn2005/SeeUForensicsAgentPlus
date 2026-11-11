@@ -639,3 +639,29 @@ asar 自检：14 个必需路径全部命中（`plugins/seeu-theme/*`、`plugins
 打包态设置页（`scripts/e2e/settings-check.mjs --exe <win-unpacked exe>`）：`ok: true`，页面来自 `app.asar/dist/renderer/local-model.html`，`presetApplied: true`（256k → 262144/8192）、`previewWarnings: ["output-window","retries"]`、`copiedDiagnostics: true`、`errors: []`。
 
 > `release/` 里的 0.1.7 portable 删不掉是用户正在运行它（Windows 文件占用），与 0.2.1 产物无关。打包时先用 `-c.directories.output=release-021` 出包，再把文件搬进 `release/`。
+
+### v0.2.2 回归验证
+
+版本 **0.2.2**（`package.json` / `package-lock.json` 顶层与 `packages[""].version` 同步）。产物（无签名、Windows x64、Electron 44.7.0）：
+
+| 产物 | 大小 |
+| --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,731,959 B（19,647 entries） |
+| `release/SeeUForensicsAgentPlus-0.2.2-x64.exe` | 211,923,744 B（blockmap 220,936 B） |
+| `release/SeeUForensicsAgentPlus-0.2.2-x64-portable.exe` | 189,545,900 B |
+
+asar 自检（`@electron/asar.listPackage`，14 个必需路径）：`{"entries":19647,"missing":[]}`；另用 `extractFile(asar, 'plugins\\seeu-case-index\\client.js')`（**注意路径要用反斜杠**，`listPackage` 的条目以 `\` 开头、`extractFile` 只认不带前导分隔符的反斜杠写法）读出 89,943 字节，确认含「复制实体清单」「citationListMarkdown」。
+
+启动验证（`SEEU_DEV_MULTI=1`，规避用户正在运行的 0.1.7 实例单实例锁；不跑 `scripts/kill-app.mjs`）：
+
+- 目录版 `node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9349` → `"ok": true, "elapsedMs": 4109`；
+- portable `--exe release/SeeUForensicsAgentPlus-0.2.2-x64-portable.exe --port 9350 --timeout 180000` → `"ok": true, "elapsedMs": 39362`。
+
+打包态 UI（`SEEU_UI_EXE` 指向 win-unpacked exe、`SEEU_NO_KILL=1`、独立 `SEEU_DSH_HOME` / `SEEU_USER_DATA`）：
+
+- `scripts/e2e/m2-ui-check.mjs` → `evNames: true`、`evRemark: true`、`searchOk: true`、`m2ok: true`、`errors: []`（本轮修了探针自身：检索框按 placeholder 含「关键词」定位，原先按「最后一个 input」会命中外层筛选框 → 误报 `searchOk:false`）；
+- `scripts/e2e/settings-check.mjs --exe <win-unpacked exe>` → `ok: true`，页面来自 `app.asar/dist/renderer/local-model.html`，`presetApplied / previewWarnings ["output-window","retries"] / copiedDiagnostics / 网关自报窗口 32768 / probeMissing ["ghost-7b"] / disableLocalModel 保留字段` 全绿；
+- `scripts/e2e/export-check.mjs`（端口 9354）→ `ok: true`，记录清单 14,996 字符 / 实体清单 1,888 字符 / 表清单 7,025 字符，与开发态一致。
+
+> 打包仍先用 `-c.directories.output=release-022` 出到旁路目录，再逐个 `mv` 进 `release/`：用户正在运行 0.1.7 portable，`rm -rf release` 会 `Device or resource busy`。0.2.1 的三个旧文件已删除，0.1.7 portable 保留。

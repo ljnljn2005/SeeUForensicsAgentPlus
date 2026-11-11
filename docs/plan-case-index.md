@@ -1256,3 +1256,22 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 回归：`m2-ui-check` 仍 `m2ok: true / errors: []`；`npm test` 38/38；`npm run check:overlay` OK。
 
 遗留：导出的是「当前页」而不是全部命中（避免 20+ 次 `/cite` 串行拖慢界面，需要全量时用检索视图的清单或翻页导出）；表视图的导出条数以 typed 行为准，与记录视图可能重叠（同一原文在两个视图各出现一次）。
+
+### 20.21 v0.2.2 发布：欢迎页入口、检索筛选与清单导出、会话区排版、网关自报窗口
+
+本轮把 0.2.1 之后累积的四批改动打包发布：
+
+1. **欢迎页快捷入口**（`ee1d515`、`ff3f6e5`）：`plugins/seeu-theme/client.js` 注册 `conversation.hero.options`（list 槽），三枚按钮 `index` / `model` / `workspace`，分别 `ctx.layout.selectPanel('seeu-case-index')`、`window.seeu.openLocalModelSettings()`、`window.seeu.openWorkspace()`；没有 preload 桥时只渲染第一个。`scripts/e2e/hero-check.mjs` 验证（注意步骤顺序：先点设置、再点索引，切面板后 hero 会被替换）。
+2. **检索筛选 + 引用清单导出**（`431d6fd`）：检索视图四条件（`eid` / `app` 精确 / `from` / `to`，日期按字符串比较），`search()` 后端本就支持；结果行加【复制引用清单】，逐条 `/cite` 回查句柄，输出 Markdown（`关键词/引擎/筛选/索引库/导出时间` + 每条 `引用：` 与 `回查：ges read …`）。
+3. **记录/表/实体视图导出**（`b849c81`）：抽出模块级 `clipboardWrite` / `describeFilters` / `citationListMarkdown`；记录与表视图先批量 `/cite` 再导出（表视图只导出 `record_id` 非空行），实体视图导出聚合清单（无 record_id，拼检材号）。`scripts/e2e/export-check.mjs` 用系统剪贴板读回（`powershell Get-Clipboard -Raw`，渲染进程读剪贴板被 Chromium 拒）。
+4. **会话区排版**（`c5854e8`）：`plugins/seeu-theme/theme.css` 追加 13 条规则，只依赖官方语义属性 `data-chat-flow-kind` / `data-composer-input` / `data-tool` 与保留的 class 片段 `_bubble_` / `_markdown_`（CSS Modules 哈希不可用）；`scripts/e2e/theme-conv-check.mjs` 采样 computed style（`color-mix()` 读出来是 `color(srgb … / a)`，不是 `rgba()`）。
+5. **本地模型**（`6b8e5fb`）：`normalizeGatewayModels()` 从 `/v1/models` 自报字段（`max_model_len` / `context_length` / `n_ctx` 等，≥2048 才采信）读窗口；`probeableLocalModel().models` 与探测状态 `missing` 让「配置了网关没有的模型」在设置页与 `logs\shell.log` 可见。
+
+打包与回归：见 `docs/packaging.md`「v0.2.2 回归验证」。要点：
+
+- 旁路输出目录 `release-022` 再搬进 `release/`（用户机上 0.1.7 portable 在运行，`rm -rf release` 会 `Device or resource busy`）；0.2.1 三个旧产物已删、0.1.7 portable 保留；
+- asar `extractFile` 的路径写法：条目以 `\` 开头，但 `extractFile` 要传不带前导分隔符的反斜杠路径（`plugins\\seeu-case-index\\client.js`），传 `plugins/seeu-case-index/client.js` 会报 not found；
+- `verify-launch.mjs` 输出是 pretty-print JSON，别用 `grep -o '{"ok".*}'` 抓；
+- 修了 `m2-ui-check.mjs` 探针：检索框改按 placeholder（含「关键词」）定位，避免新增筛选框后 `last input` 命中筛选框导致 `searchOk:false` 误报。
+
+遗留：检索筛选的 `app` 是精确匹配、日期按字符串比较（跨时区/非 ISO 时间可能不精确）；导出只覆盖当前页（20/30 行）；`[data-tool]` 工具体验在 mock 对话（无工具调用）里没被 theme-conv 覆盖。

@@ -57,18 +57,27 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.2.1**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.2.2**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 766 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,708,872 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
-| `release/SeeUForensicsAgentPlus-0.2.1-x64.exe`（NSIS 安装包） | 211,919,582 B（blockmap 220,872 B） |
-| `release/SeeUForensicsAgentPlus-0.2.1-x64-portable.exe` | 189,530,173 B |
+| `release/win-unpacked/resources/app.asar` | 168,731,959 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
+| `release/SeeUForensicsAgentPlus-0.2.2-x64.exe`（NSIS 安装包） | 211,923,744 B（blockmap 220,936 B） |
+| `release/SeeUForensicsAgentPlus-0.2.2-x64-portable.exe` | 189,545,900 B |
 
-实测冷启动到 dsh UI：目录版 5123 ms；portable 首次 43.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+实测冷启动到 dsh UI：目录版 4109 ms；portable 首次 39.4s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
+
+### v0.2.2 改了什么
+
+- **欢迎页快捷入口**：品牌块下方三枚按钮——打开「取证索引」面板 / 本地模型设置 / 打开取证工作区（纯 web 预览无 preload 桥时只显示第一个）；
+- **检索筛选**：检材号（eid）、应用（精确）、起止日期四个条件与关键词 AND 组合，条件存在时出现【清空筛选】，筛选会带到检索结果与导出清单的抬头里；
+- **引用清单导出**：检索结果【复制引用清单】、记录视图【复制本页引用清单】、表视图【复制本页引用清单】、实体视图【复制实体清单】，每条都回查 Goldeneyes 句柄，输出 Markdown（抬头含关键词/筛选/索引库/时间，正文带 `引用：` 与可直接执行的 `回查：ges read …`，无句柄行标注并在文末统计）；
+- **会话区排版**：用户气泡用强调色低透明度底、助手正文行高 1.78、代码块卡片化（长句柄/命令不折行）、输入框圆角 16px 且聚焦描青边；规则只依赖官方 `data-chat-flow-kind` / `data-composer-input` / `data-tool` 属性，`npm run test:e2e:theme-conv` 验证；
+- **本地模型增强**：从网关 `/v1/models` 自动读取上下文窗口（兼容 `max_model_len` / `context_length` / `n_ctx` 等自报字段）填入设置页；启动探测发现「配置的模型不在网关列表」时在设置页和日志里明确提示，避免抄错模型名后只看到会话请求失败；
+- **测试**：`npm test` 38 个纯函数单测；`scripts/e2e/` 入仓 14 个端到端脚本（本地模型对话/工具调用/429 重试/能力自检/设置页/欢迎页/欢迎页快捷入口/加载页/空库引导/面板/检索筛选/会话区主题/引用清单导出）。
 
 ### v0.2.1 改了什么
 
@@ -78,8 +87,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 - **低并发/长上下文**：重试 3 次、标题生成 512 tokens、`compaction` 余量 32768 → 8192（32k 窗口也能用）、请求体不发 `store`/`stream_options`/developer 角色（兼容 vLLM/Ollama/LM Studio）；
 - **设置页**：从网关拉取模型列表、窗口档位一键套用（32k/128k/256k）、配置健康度提示、超时/重试高级项、复制诊断信息；
 - **索引面板**：首次使用三步引导、旧库 schema 不一致提示；
-- **会话区排版**：用户气泡用强调色低透明度底、助手正文行高 1.78、代码块卡片化（长句柄/命令不折行）、输入框圆角 16px 且聚焦描青边；规则只依赖官方 `data-chat-flow-kind` / `data-composer-input` / `data-tool` 属性，`npm run test:e2e:theme-conv` 验证；
-- **测试**：`npm test` 38 个纯函数单测；`scripts/e2e/` 入仓 14 个端到端脚本（本地模型对话/工具调用/429 重试/能力自检/设置页/欢迎页/欢迎页快捷入口/加载页/空库引导/面板/检索筛选/会话区主题/引用清单导出）。
+- **测试**：`npm test` 36 个纯函数单测；`scripts/e2e/` 9 个端到端脚本。
 
 
 > **v0.2.0 改了什么**
