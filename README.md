@@ -69,6 +69,8 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 实测冷启动到 dsh UI：目录版 4150 ms；portable 首次 47.6s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
 更细的打包说明见 `docs/packaging.md`。
 
+验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
+
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
 
 ### v0.2.8 待发布（v0.2.7 之后、尚未打包）

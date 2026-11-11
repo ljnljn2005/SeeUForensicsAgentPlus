@@ -1734,3 +1734,14 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
   - 结果头部按钮：`复制引用清单` / `导出全部 N 条` / `导出 CSV`。
 - 验证：`npm run test:e2e:search`（真实案件库，关键词「加密」→ 筛检材 3 得 12 条 → 点【导出 CSV】→ 用 `readdirSync/readFileSync` 读回落盘文件）→ `"csvClicked":true,"csvNote":"已导出 12 行","csvRows":12,"csvFile":{"bytes":2961,"bom":true,"hasHeader":true,"dataLines":12,"hasTs":true}`，`ok:true`；`m2-ui-check` `m2ok:true / errors:[]`；`npm test` 55/55；`check:overlay` OK。
 - 遗留：CSV 从 `result.query` 取关键词，若用户改了输入框但没点检索，导出仍是上次检索的条件（与复制清单一致）；20000 行上限写死，未做成配置项。
+
+---
+
+## 20.56 验收清单与界面截图（v0.2.8 起）
+
+- 动机：目标里的「dev 预览验收」一直卡在用户侧（多轮未回），与其继续堆功能，不如把「该看什么、怎么试、发现问题怎么说」写成 10 分钟能走完的清单，并附真实案件库的界面截图。
+- 新增 `scripts/e2e/acceptance-shots.mjs`（`npm run test:e2e:shots`）：拉起 Electron 外壳（开发态或 `SEEU_UI_EXE` 打包态）→ 载入真实案件库（`localStorage.seeu.indexDir` 种入后 reload）→ 依次截欢迎页、面板树、检索（输「加密」回车）、记录、时间线、浅色面板，存 `docs/screenshots/`；设置页截图由 `settings-check.mjs --out docs/screenshots/07-settings.png` 生成；会话区深浅色两张复用 `theme-conv-check` 的产物。
+- 实测：`REPORT {"ok":true,"shots":[6 张],"errors":[],"panelText":true,"searchTyped":"typed-enter","searchRows":"共 41 条","searchHit":"20 命中","rowCount":21,"lightBodyBg":"rgb(245, 247, 250)"}`；`settings-check` 同时产出 `07-settings.png` 且全绿。
+- `docs/acceptance.md`：截图表（每张写明该看什么）+ 六步动手验收（启动/欢迎页/面板/导出 CSV/设置页/深浅色）+ 真机联调需要用户提供的信息（baseURL、模型 id、apiKey、并发/窗口）+ 已自动验证项 + 已知限制。
+- README §2 加验收清单链接；`package.json` 加 `test:e2e:shots`（e2e 脚本 16 → 17 个）。
+- 遗留：截图是 1280×800 窗口的整屏图，不含缩放比例差异；浅色面板截图靠去 `data-ds-dark-theme` 模拟，与 Windows 系统切换的下次重启路径等价。
