@@ -1030,3 +1030,27 @@ REPORT {"ok":true,"modelLine":"本地模型网关不可用（仍可用官方模�
 ```
 
 **遗留**：错误页的【禁用本地模型并重启】会重启整个应用（不可避免，dsh 只在启动时读 patch）；若失败原因其实不是本地模型，用户可能白重启一次——按钮文案已写明「禁用本地模型并重启」，不会让人误以为能修好其它问题。
+
+### 20.10 第 11 轮：取证索引面板「首次使用引导」
+
+**问题**：面板在没有索引库时只有一句「还没有索引库」，新用户（尤其比赛现场）不知道要先在火眼跑解释、更不知道要填哪个目录；而写库位置、耗时、只读边界这些最容易误解的点也没有地方讲。
+
+**实现**
+
+- `plugins/seeu-case-index/client.js` 新增 `onboarding` 卡片，渲染条件 `!db && indexes.length === 0`（没有打开的库且没扫描到任何索引）：
+  - 标题「三步开始」，`<ol>` 三步：① 在火眼（GoldenEyes）里跑完检材解析，记下案件目录（含 `.gec` 与「检材分析数据」的文件夹）；② 粘进输入框点【建库 / 更新】（首次约 3–5 分钟；只写 `.seeu-index`，不动原始证据）；③ 用 树 / 检索 / 记录 / 实体 / 时间线 / 表 查，每条结论都能用「引用」回查 Goldeneyes 句柄。
+  - 脚注：已有索引库时点【扫描已有索引】（向下找两层，并自动发现上次选过的案件目录）。
+  - 样式只复用面板已有的 `S.card / S.muted / C_FG / C_FG2` token，不新增主题色。
+- 卡片位置在索引列表 panel 之后、错误提示之前，不遮挡已有库的操作路径（有库时该卡片根本不渲染）。
+
+**验证**
+
+- 新增 `scripts/e2e/panel-empty-check.mjs`（`npm run test:e2e:panel-empty`）：`SEEU_INDEX_SEARCH_DIRS` 指向空目录、`SEEU_INDEX_STATE_FILE` 指到空 home、mock 网关提供模型，启动真 Electron → CDP 点侧栏「取证索引」→ 断言引导文案与【建库 / 更新】按钮。
+
+```
+REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true,"hasBuildButton":true,"noIndexText":true,"errors":[]}
+```
+
+- 回归 `npm run test:e2e:ui`（面板七标签真实数据）仍 `m2ok: true`、`errors: []`。
+
+**遗留**：引导卡只看「有没有库」，不区分「有库但库是旧版本 schema」；后者要靠 `manifest.json` 的 `schemaVersion` 提示（已在 `/stats` 暴露，面板暂未展示）。

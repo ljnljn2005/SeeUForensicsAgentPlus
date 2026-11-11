@@ -945,6 +945,14 @@ window.__ModuleLoader__.load({
         { label: '库大小', value: activeIndex ? fmtBytes(activeIndex.sizeBytes ?? 0) : '—' },
         { label: '生成时间', value: activeIndex?.builtAt ? fmtTime(activeIndex.builtAt) : '—', text: true },
       ] : null;
+      // 首次使用引导：还没有任何索引库时，把「火眼跑完 → 建库 → 查询」三步写在面板里
+      const onboarding = !db && indexes.length === 0 ? h('div', { style: { ...S.card, gap: 8 } },
+        h('div', { style: { fontSize: 12.5, fontWeight: 650, color: C_FG } }, '三步开始'),
+        h('ol', { style: { margin: '2px 0 0 18px', padding: 0, color: C_FG2, fontSize: 12, lineHeight: '1.85' } },
+          h('li', null, '先在火眼（GoldenEyes）里跑完检材解析，记下案件目录（含 .gec 与「检材分析数据」的那个文件夹）。'),
+          h('li', null, '把目录粘到上面的输入框，点「建库 / 更新」（首次约 3–5 分钟；只写 .seeu-index，不动原始证据）。'),
+          h('li', null, '建库完成后用 树 / 检索 / 记录 / 实体 / 时间线 / 表 查；每条结论都能用「引用」回查 Goldeneyes 句柄。')),
+        h('div', { style: { ...S.muted, fontSize: 11.5 } }, '已有索引库？点「扫描已有索引」会向下找两层，也会自动发现你在面板里选过的上次案件目录。')) : null;
       const noDbHint = h(EmptyState, {
         title: '未选择索引库',
         text: '在顶部填写案件目录后点「扫描已有索引」或「建库 / 更新」，也可以在索引列表里点一个已有库。',
@@ -1002,6 +1010,7 @@ window.__ModuleLoader__.load({
                     h('span', { style: { marginLeft: 'auto', ...S.rowTime } }, ix.builtAt ? fmtTime(ix.builtAt) : ''));
                 })))
             : h(EmptyState, { title: '还没有索引库', text: '在顶部填入案件目录（火眼全解析结果目录），点「建库 / 更新」；已有索引库时可点「扫描已有索引」。' })),
+        onboarding,
         error ? h('div', { style: S.noticeErr }, error) : null,
 
         h('div', { style: S.panel },
