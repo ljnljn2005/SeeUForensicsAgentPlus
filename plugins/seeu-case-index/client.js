@@ -1012,6 +1012,7 @@ window.__ModuleLoader__.load({
       // 检索筛选：检材 / 应用 / 起止日期（后端 search() 原生支持，空值不传）
       const [filters, setFilters] = useState({ eid: '', app: '', from: '', to: '' });
       const [copyNote, setCopyNote] = useState('');
+      const [overviewNote, setOverviewNote] = useState('');
       const [result, setResult] = useState(null);
       const [detail, setDetail] = useState(null);
       const [busy, setBusy] = useState('');
@@ -1239,6 +1240,39 @@ window.__ModuleLoader__.load({
         { label: '库大小', value: activeIndex ? fmtBytes(activeIndex.sizeBytes ?? 0) : '—' },
         { label: '生成时间', value: activeIndex?.builtAt ? fmtTime(activeIndex.builtAt) : '—', text: true },
       ] : null;
+      // 案件概览：给研判报告/交接用的 Markdown 抬头（检材清单 + 规模 + 索引信息）
+      const copyOverview = async () => {
+        if (!db) return
+        setBusy('overview')
+        setError('')
+        try {
+          const body = await api('/evidences', { db })
+          const evs = body.evidences ?? []
+          const caseName = activeIndex?.caseName ?? view?.name ?? caseNameOf(db)
+          const lines = []
+          lines.push('# 案件概览')
+          lines.push('')
+          lines.push(`- 案件：${caseName}`)
+          if (activeIndex?.caseNumber) lines.push(`- 案件编号：${activeIndex.caseNumber}`)
+          if (activeIndex?.caseDir) lines.push(`- 案件目录：${activeIndex.caseDir}`)
+          lines.push(`- 索引库：${db}`)
+          lines.push(`- 生成时间：${activeIndex?.builtAt ? fmtTime(activeIndex.builtAt) : '—'}（schema v${view?.schemaVersion ?? '?'}）`)
+          lines.push(`- 规模：检材 ${rootTotals?.evidences ?? evs.length} 个 · 记录 ${rootTotals?.records ?? '—'} 条 · 实体 ${rootTotals?.entities ?? '—'} 个 · 库 ${activeIndex ? fmtBytes(activeIndex.sizeBytes ?? 0) : '—'}`)
+          lines.push('')
+          lines.push('| 检材 | 名称 | 持有人 | 平台 | 记录数 | 备注 |')
+          lines.push('| --- | --- | --- | --- | --- | --- |')
+          for (const ev of evs) {
+            const remark = String(ev.remark ?? '').replace(/\|/g, '\\|')
+            lines.push(`| ${ev.eid} | ${ev.name ?? ''} | ${ev.holder ?? ''} | ${ev.platform ?? ''} | ${ev.recordCount ?? ''} | ${remark} |`)
+          }
+          lines.push('')
+          lines.push('> 由 SeeU 取证索引生成；具体记录用「检索 / 记录」视图并导出引用清单。')
+          const chars = await clipboardWrite(lines.join('\n'))
+          setOverviewNote(`已复制案件概览（${chars} 字符，含 ${evs.length} 个检材）`)
+        } catch (e) {
+          setError(`复制案件概览失败：${String(e.message ?? e)}`)
+        } finally { setBusy('') }
+      }
       // 首次使用引导：还没有任何索引库时，把「火眼跑完 → 建库 → 查询」三步写在面板里
       const onboarding = !db && indexes.length === 0 ? h('div', { style: { ...S.card, gap: 8 } },
         h('div', { style: { fontSize: 12.5, fontWeight: 650, color: C_FG } }, '三步开始'),
@@ -1275,6 +1309,12 @@ window.__ModuleLoader__.load({
         kpiItems
           ? h(KpiStrip, { items: kpiItems })
           : h('div', { style: S.noticeInfo }, '选择索引库后，这里显示案件名、检材数、记录数、实体数、库大小与生成时间。'),
+        db
+          ? h('div', { style: S.row },
+            actionButton(busy === 'overview' ? '导出中…' : '复制案件概览', copyOverview, { disabled: busy === 'overview' }),
+            h('span', { style: S.muted }, '给研判报告/交接用的 Markdown：案件信息 + 检材清单（名称/持有人/平台/记录数/备注）'),
+            overviewNote ? h('span', { style: { color: C_ACC, fontSize: 11.5 } }, overviewNote) : null)
+          : null,
         view && view.needsRebuild
           ? h('div', { style: S.noticeWarn }, `索引库 schema v${view.schemaVersion ?? '?'} 与当前工具 v${view.currentSchemaVersion ?? '?'} 不一致：建议点「建库 / 更新」重建，旧库可能缺字段或查不到新类别。`)
           : null,

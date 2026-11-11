@@ -172,6 +172,19 @@ try {
   report.scanned = await clickText('扫描已有索引')
   await sleep(4500)
 
+  // ---- 0) 案件概览：检材清单 Markdown ----
+  report.overviewCopied = await clickText('复制案件概览')
+  await sleep(3000)
+  report.overviewNote = await noteText(/已复制案件概览[^\n]*/)
+  const clipOverview = readClipboard()
+  report.overviewClipboard = {
+    len: clipOverview.length,
+    hasHeader: clipOverview.includes('# 案件概览'),
+    hasEvidence: clipOverview.includes('CHAN_MH_mobile.zip') || clipOverview.includes('检材分析'),
+    hasTable: clipOverview.includes('| 检材 | 名称 |'),
+    hasScale: /规模：检材\s*\d+\s*个/.test(clipOverview),
+  }
+
   // ---- 1) 记录视图：复制本页引用清单 ----
   report.tabRecords = await clickTab('记录')
   await sleep(2500)
@@ -229,6 +242,7 @@ try {
   report.savedTab = await evaluate("localStorage.getItem('seeu.panelTab')")
 
   report.ok = report.panelOpened && report.scanned &&
+    report.overviewCopied && report.overviewClipboard.hasHeader && report.overviewClipboard.hasTable && report.overviewClipboard.hasScale && report.overviewClipboard.len > 0 &&
     report.tabRecords && report.recordsCopied && report.recordsClipboard.hasHeader && report.recordsClipboard.hasCite && report.recordsClipboard.len > 0 &&
     report.tabEntity && report.entityCopied && report.entityClipboard.hasHeader && report.entityClipboard.len > 0 &&
     report.tabTables && !!report.tablePicked && report.tableCopied && report.tableClipboard.hasHeader && report.tableClipboard.hasCite &&

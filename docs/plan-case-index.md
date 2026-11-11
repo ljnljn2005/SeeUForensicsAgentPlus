@@ -1385,3 +1385,25 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 顺带在 `scripts/e2e/local-tools-e2e.mjs` 的 mock 里记录 \`strictTrue/strictAny\` 并投影进 `firstRequest`，实测当前请求 `strictAny: 0`（dsh/pi-ai 没有给本地路由加 `strict` schema，无需 `supportsStrictMode: false`）。
 - 踩坑：打包态设置页 e2e 第一次报「preload 桥未暴露」，实为上一轮中断的 CDP 会话占 9351 端口连到旧页面；手工 CDP 探测确认 `window.seeu` 键齐全，换干净进程重跑即过——以后 e2e 先排 CDP 残留。
 - 遗留：`tools/local-model.mjs` 不进 asar（已被 esbuild 打进 `dist/main.cjs`），文档里已注明；仍未拿到用户真实网关地址，真机联调未做；视觉验收仍待用户确认。
+
+### 20.28 第 26 轮：案件概览一键导出（检材清单 Markdown）
+
+动机：研判报告和交接材料的第一页永远是「这个案子有几个检材、各自是什么」。以前要人工从面板抄，或者让模型自己调 `/evidences`；KPI 条只显示数字，没有「谁是谁」。
+
+实现（只改 `plugins/seeu-case-index/client.js`）：
+
+- Panel 新增 `overviewNote` 状态与 `copyOverview()`：取 `/evidences?db=` 的检材列表，拼 Markdown：
+  - 抬头：案件名、案件编号、案件目录、索引库路径、生成时间（含 schema 版本）、规模（检材数 / 记录数 / 实体数 / 库大小）；
+  - 正文：`| 检材 | 名称 | 持有人 | 平台 | 记录数 | 备注 |` 表；备注里的 `|` 转义成 `\|`；
+  - 脚注：说明由 SeeU 取证索引生成、细节用检索/记录视图导出引用清单。
+- KPI 条下方渲染【复制案件概览】按钮 + 说明 + 复制结果（`已复制案件概览（685 字符，含 5 个检材）`）。
+- 走已有 `clipboardWrite`（Electron `writeClipboard` 优先、web 预览回退 `navigator.clipboard`）。
+
+验证：
+
+- `node scripts/e2e/export-check.mjs` 新增步骤 0：点【复制案件概览】→ `powershell Get-Clipboard` 读回；
+  `{"ok":true,"overviewCopied":true,"overviewNote":"已复制案件概览（685 字符，含 5 个检材）","overviewClipboard":{"len":687,"hasHeader":true,"hasEvidence":true,"hasTable":true,"hasScale":true},"errors":[]}`；
+- 其余导出步骤（记录 14,996 / 实体 1,888 / 表 7,025 / 时间线 3,235 字符）与标签页记忆不受影响；
+- `m2-ui-check` → `m2ok:true, searchOk:true, errors:[]`；`npm test` 42/42；`check:overlay` OK。
+
+遗留：概览不带跨案信息（跨案视图有独立的重合实体清单）；检材表按 `/evidences` 顺序（eid 升序）。
