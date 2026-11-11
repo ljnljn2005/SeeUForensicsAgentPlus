@@ -170,6 +170,28 @@ try {
     const back = await readSearchRows()
     report.pageBackSame = back.length > 0 && back[0].text === base[0].text
   }
+  // 导出全部命中：翻页取满后逐条回查，条数应等于 total（上限 200）
+  if (report.pageTotal && report.pageTotal > base.length) {
+    report.exportAllClicked = await evaluate(`(() => {
+      const btn = Array.from(document.querySelectorAll('button')).find((b) => (b.textContent || '').trim().startsWith('导出全部'))
+      if (!btn) return false
+      btn.click()
+      return true
+    })()`)
+    await sleep(6000)
+    const allBody = String((await evaluate('document.body.innerText')) ?? '')
+    const m = allBody.match(/已复制\s*(\d+)\s*条引用清单/)
+    report.exportAllNote = m ? m[0] : ''
+    report.exportAllCount = m ? Number(m[1]) : 0
+    try {
+      const allClip = execFileSync('powershell.exe', ['-NoProfile', '-Command', '[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Clipboard -Raw'], { encoding: 'utf8' })
+      report.exportAllClipboard = {
+        len: allClip.length,
+        items: (allClip.match(/^\d+\. /gm) ?? []).length,
+        hasCapNote: /最多导出 200 条|总计 \d+ 条/.test(allClip),
+      }
+    } catch (e) { report.exportAllClipboard = { error: String(e?.message ?? e) } }
+  }
   const eid = base[0].eid
   report.filterEid = eid
 
@@ -210,10 +232,13 @@ try {
     return el ? el.value : null
   })()`)
 
+  report.exportAllOk = !report.pageTotal || report.pageTotal <= report.baseRows ||
+    (report.exportAllClicked && report.exportAllCount === report.pageTotal &&
+      (report.exportAllClipboard?.items ?? 0) === report.pageTotal)
   report.pagedOk = !report.pageTotal || report.pageTotal <= report.baseRows ||
     (report.pageNextClicked && report.page2Different && report.pagePrevShown && report.pagePrevClicked && report.pageBackSame)
   report.ok = report.panelOpened && report.scanned && report.tabOpened && report.queryFilled &&
-    report.searched && report.baseRows > 0 && report.highlightOk && report.pagedOk && report.filterApplied && report.filteredRows > 0 &&
+    report.searched && report.baseRows > 0 && report.highlightOk && report.pagedOk && report.exportAllOk && report.filterApplied && report.filteredRows > 0 &&
     report.filteredAllMatch && report.filterNarrowed && report.copyNoteShown &&
     report.clipboard.len > 0 && report.clipboard.hasHeader && report.clipboard.hasCite &&
     report.afterClear === '' && errors.length === 0

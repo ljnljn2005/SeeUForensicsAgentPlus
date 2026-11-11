@@ -1444,3 +1444,21 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 回归 `m2-ui-check` → `{"m2ok":true,"searchOk":true,"evNames":true,"errors":[]}`、`npm test` 43/43。
 
 遗留：每页固定 20 条（未做成可调）；「复制引用清单」仍只导出当前页；`total` 用 `count(*)` 全量统计，超大库（百万行）会慢，必要时可加「估算」模式。
+
+### 20.31 第 29 轮：导出全部命中的引用清单
+
+问题：分页之后能看到全部结果了，但【复制引用清单】仍只导出当前页 20 条；写报告时想要整批命中还要手工翻页复制。
+
+实现（只改 `plugins/seeu-case-index/client.js`）：
+
+- `exportCitations(all)`：`all === true` 且 `total > 当前页条数` 时，先按 `offset` 循环调 `/search`（每页 100）把结果取满（上限 200 条，取不满就按已取到的导出），再逐条 `/cite` 回查；
+- 清单抬头「引擎 … · N 条（导出 X 条，总计 N 条，最多导出 200 条）」；
+- 结果区在「复制引用清单」旁多一个【导出全部 N 条】按钮（`(result.total ?? 0) > rows.length` 才显示）；
+- 注意 `onClick` 会把事件对象传进来，所以判断写成 `all === true`，否则点「复制引用清单」会误触发全量导出。
+
+验证：
+
+- `npm run test:e2e:search` 新增步骤：检索「加密」得到 41 条命中 → 点【导出全部 41 条】→ 提示「已复制 41 条引用清单」→ 用 `Get-Clipboard -Raw` 读回，`^\d+\. ` 行数 41、总长 17,413 字符；
+- 结果：`{"ok":true,"pageTotal":41,"exportAllClicked":true,"exportAllCount":41,"exportAllClipboard":{"len":17413,"items":41},"baseRows":20,"filteredRows":12,"errors":[]}`。
+
+遗留：上限 200 条（每条要回查一次句柄，再多会明显变慢）；无进度条，只有按钮文字「复制中…」。

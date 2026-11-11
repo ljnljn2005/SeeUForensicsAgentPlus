@@ -1151,16 +1151,37 @@ window.__ModuleLoader__.load({
       }, []);
 
       /** 把当前检索结果导出成可粘贴进报告的引用清单（逐条回查句柄）。 */
-      const exportCitations = useCallback(async () => {
-        const rows = result?.rows ?? [];
+      const exportCitations = useCallback(async (all) => {
+        const wantAll = all === true;
+        let rows = result?.rows ?? [];
         if (!rows.length) return;
+        // all=true 时翻完分页再导出（上限 200 条，避免一次回查过多句柄）
+        const total = Number(result?.total ?? rows.length);
+        if (wantAll && total > rows.length) {
+          const extra = {};
+          if (String(filters.eid ?? '').trim()) extra.eid = Number(filters.eid);
+          if (String(filters.app ?? '').trim()) extra.app = String(filters.app).trim();
+          if (String(filters.from ?? '').trim()) extra.from = String(filters.from).trim();
+          if (String(filters.to ?? '').trim()) extra.to = String(filters.to).trim();
+          const collected = [...rows];
+          let offset = rows.length;
+          try {
+            while (collected.length < Math.min(total, 200) && offset < total) {
+              const page = await api('/search', { db, q: result?.query ?? query, limit: 100, offset, ...extra });
+              if (!page?.rows?.length) break;
+              collected.push(...page.rows);
+              offset += page.rows.length;
+            }
+          } catch { /* 拿不满就按已取到的导出 */ }
+          rows = collected.slice(0, 200);
+        }
         setBusy('copy');
         setError('');
         try {
           const parts = [];
           parts.push('# SeeU 取证索引 · 检索引用清单');
           parts.push(`关键词：${result.query ?? query}`);
-          parts.push(`引擎：${result.engine ?? 'like'} · ${result.returned ?? rows.length} 条（导出 ${rows.length} 条）`);
+          parts.push(`引擎：${result.engine ?? 'like'} · ${result.returned ?? rows.length} 条（导出 ${rows.length} 条${wantAll && total > rows.length ? `，总计 ${total} 条，最多导出 200 条` : ''}）`);
           const fl = [];
           if (filters.eid) fl.push(`检材 ${filters.eid}`);
           if (filters.app) fl.push(`应用 ${filters.app}`);
@@ -1455,6 +1476,9 @@ window.__ModuleLoader__.load({
                   : null,
                 (result.rows ?? []).length
                   ? actionButton(busy === 'copy' ? '复制中…' : '复制引用清单', exportCitations, { disabled: busy === 'copy' })
+                  : null,
+                (result.total ?? 0) > (result.rows ?? []).length
+                  ? actionButton(busy === 'copy' ? '复制中…' : `导出全部 ${Math.min(result.total, 200)} 条`, () => exportCitations(true), { disabled: busy === 'copy' })
                   : null,
                 h('span', { style: { ...S.muted, marginLeft: 'auto' } }, '点一条看引用句柄。')),
               copyNote ? h('div', { style: S.noticeInfo }, copyNote) : null,
