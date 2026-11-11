@@ -26,7 +26,7 @@
 
 - **外壳职责**：窗口、托盘、中文菜单、单实例、权限收紧（全部拒绝）、外链走系统浏览器、加载页/故障页、优雅退出。
 - **运行时职责**：agent 循环、模型接入、工具（文件/搜索/shell/技能/session 等）、会话存储、Web UI。
-- **视觉层**：`plugins/seeu-theme/` 是一个 dsh 客户端插件 + 宿主样式注入——取证深色主题（青蓝强调色、中文字体栈）、侧栏/欢迎页 SeeU 品牌、页面标题替换、欢迎页三步上手提示（选案件目录建库 → 直接提问 → 引用回查）；同时关闭官方 brand 插件避免双份。
+- **视觉层**：`plugins/seeu-theme/` 是一个 dsh 客户端插件 + 宿主样式注入——取证深色主题（青蓝强调色、中文字体栈）、侧栏/欢迎页 SeeU 品牌、页面标题替换、欢迎页三步上手提示（选案件目录建库 → 直接提问 → 引用回查）与三个快捷入口（打开取证索引 / 本地模型设置 / 取证工作区）；同时关闭官方 brand 插件避免双份。
 - **取证职责**：`resources/forensics/cordis.patch.yml` 以 dsh 官方 patch-list 机制叠加在 `web` profile 之上——关闭遥测/产品分析行，注入中文取证 persona，并把会话 preset（`preset-standard`）改成**取证专用工具面**：保留官方 22 项里的 19 项（子代理 / 工作流 / 后台作业 / 定时任务 / 目标 / plan / todo 都可用），去掉 `tool-web`（取证会话不联网）、`tool-plugin-manager`（可联网安装/移除插件包）与 `tool-plugin-market`（插件市场），`tool-fs` 收成只读。详见 [docs/forensics-profile.md](docs/forensics-profile.md)。
 
 ## 2. 快速开始
@@ -78,7 +78,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 - **低并发/长上下文**：重试 3 次、标题生成 512 tokens、`compaction` 余量 32768 → 8192（32k 窗口也能用）、请求体不发 `store`/`stream_options`/developer 角色（兼容 vLLM/Ollama/LM Studio）；
 - **设置页**：从网关拉取模型列表、窗口档位一键套用（32k/128k/256k）、配置健康度提示、超时/重试高级项、复制诊断信息；
 - **索引面板**：首次使用三步引导、旧库 schema 不一致提示；
-- **测试**：`npm test` 36 个纯函数单测；`scripts/e2e/` 入仓 9 个端到端脚本（本地模型对话/工具调用/429 重试/能力自检/设置页/欢迎页/加载页/空库引导/面板）。
+- **测试**：`npm test` 38 个纯函数单测；`scripts/e2e/` 入仓 11 个端到端脚本（本地模型对话/工具调用/429 重试/能力自检/设置页/欢迎页/欢迎页快捷入口/加载页/空库引导/面板）。
 
 
 > **v0.2.0 改了什么**

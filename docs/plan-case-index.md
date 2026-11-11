@@ -1138,3 +1138,20 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 单测补 `modelContextWindow` / `normalizeGatewayModels` 两组用例（`npm test` 38/38 通过）。
 
 遗留：只读 `/models`，不调用网关的 `/props` 等私有端点；个别网关把窗口写在 `/models` 之外的配置接口，仍需手填。
+
+## 20.17 第 17 轮：欢迎页快捷入口
+
+动机：欢迎页虽然有品牌与三步提示，但「接下来点哪里」还得用户自己在侧栏/菜单里找；第一次上手时「案件索引在哪」「本地模型在哪配」是最常见的两个卡点。把入口做成欢迎页按钮，比再加说明文字有效。
+
+实现：
+- `plugins/seeu-theme/client.js`：新增 `HeroActions` 组件，注册到 `conversation.hero.options`（list 槽、scope session）。按钮用 `data-seeu-action` 标记（`index` / `model` / `workspace`）：打开取证索引走 `ctx.layout.selectPanel('seeu-case-index')`；本地模型设置与工作区目录走 preload 桥 `window.seeu.openLocalModelSettings()` / `openWorkspace()`。桥不存在时（纯浏览器 dev 环境）自动隐藏后两个按钮。
+- `src/main.ts` / `src/preload.ts`：新增 IPC `seeu:open-settings` → `openLocalModelSettings()`，preload 暴露 `openLocalModelSettings()`。
+- 插件 inject 从 `['slots']` 改为 `['slots', 'layout']`（`layout` 由 `dsh-client-ui-layout` 通过 `ctx.reflect.provide("layout", layout)` 提供）。
+
+验证（新增 `npm run test:e2e:hero`）：真 Electron + CDP，先点「本地模型设置」再点「打开取证索引」——顺序不能反：切面板后欢迎页 hero 被面板替换，按钮就不在 DOM 里了。
+
+```json
+{"ok":true,"actions":["index","model","workspace"],"settingsOpened":true,"panelOpened":true,"errors":[]}
+```
+
+遗留：hero 只在新会话（无消息）出现；「帮助」入口未做，产品说明仍以 README 为准。

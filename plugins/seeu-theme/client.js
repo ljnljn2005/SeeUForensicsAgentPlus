@@ -165,8 +165,88 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // 欢迎页快捷入口：把「接下来该干什么」做成按钮，减少第一次使用时的迷路。
+    // 注意 conversation.hero.options 是 list 槽（scope: session），只在有会话时渲染。
+    function HeroActions() {
+      const shell = typeof window !== 'undefined' ? window.seeu : undefined
+      const actions = [
+        {
+          key: 'index',
+          label: '打开取证索引',
+          title: '在侧栏打开「取证索引」面板：选案件目录、建库、检索',
+          run: () => {
+            try {
+              const layout = ctxRef.current && ctxRef.current.layout
+              if (layout && typeof layout.selectPanel === 'function') {
+                layout.selectPanel('seeu-case-index')
+              }
+            } catch (error) {
+              console.warn('[seeu-theme] 打开取证索引失败', error)
+            }
+          },
+        },
+      ]
+      if (shell && typeof shell.openLocalModelSettings === 'function') {
+        actions.push({
+          key: 'model',
+          label: '本地模型设置',
+          title: '配置 OpenAI 兼容网关（地址 / 模型 / 上下文窗口），并做能力自检',
+          run: () => {
+            void shell.openLocalModelSettings()
+          },
+        })
+      }
+      if (shell && typeof shell.openWorkspace === 'function') {
+        actions.push({
+          key: 'workspace',
+          label: '取证工作区',
+          title: '在文件管理器里打开 dsh 工作目录',
+          run: () => {
+            void shell.openWorkspace()
+          },
+        })
+      }
+      return h(
+        'div',
+        {
+          className: 'seeu-hero-actions',
+          style: {
+            display: 'flex',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            gap: '8px',
+            marginTop: '6px',
+          },
+        },
+        ...actions.map((action) =>
+          h(
+            'button',
+            {
+              key: action.key,
+              type: 'button',
+              title: action.title,
+              'data-seeu-action': action.key,
+              onClick: action.run,
+              style: {
+                cursor: 'pointer',
+                padding: '6px 14px',
+                borderRadius: '999px',
+                fontSize: '12px',
+                lineHeight: 1.6,
+                color: 'var(--dsw-alias-label-secondary, #A9BBD1)',
+                background: 'var(--dsw-alias-bg-layer-2, #131E33)',
+                border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,0.12))',
+              },
+            },
+            action.label,
+          ),
+        ),
+      )
+    }
+
     // ── 注册 ───────────────────────────────────────────────────────────────
-    const inject = ['slots']
+    const inject = ['slots', 'layout']
+    const ctxRef = { current: undefined }
 
     function apply(ctx) {
       ensureStyles()
@@ -188,6 +268,18 @@ window.__ModuleLoader__.load({
       own('sidebar.brand.mark', Mark)
       own('sidebar.brand.name', Wordmark)
       own('conversation.hero.brand.mark', HeroBrand)
+      try {
+        ctxRef.current = ctx
+      } catch {
+        // ignore
+      }
+      try {
+        ctx.slots.inject('conversation.hero.options', () =>
+          ctx.slots.register({ name: 'conversation.hero.options', id: 'seeu-hero-actions', order: 10 }, HeroActions),
+        )
+      } catch (error) {
+        console.warn('[seeu-theme] 无法注册欢迎页快捷入口', error)
+      }
     }
 
     return { apply, inject }
