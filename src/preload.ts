@@ -62,6 +62,7 @@ const api = {
   retry: (): void => { ipcRenderer.send('seeu:retry') },
   openLogs: (): void => { ipcRenderer.send('seeu:open-logs') },
   openWorkspace: (): void => { ipcRenderer.send('seeu:open-workspace') },
+  openLocalModelSettings: (): void => { ipcRenderer.send('seeu:open-settings') },
   quit: (): void => { ipcRenderer.send('seeu:quit') },
   localModel: {
     get: (): Promise<LocalModelView> => ipcRenderer.invoke('seeu:local-model:get') as Promise<LocalModelView>,

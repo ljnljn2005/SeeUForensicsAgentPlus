@@ -49,6 +49,7 @@
 
     <div class="actions">
       <button class="primary" id="retry">重试启动</button>
+      <button id="settings">本地模型设置</button>
       <button id="logs">打开日志目录</button>
       <button id="workspace">打开取证工作区</button>
       <button id="quit">退出</button>
@@ -84,6 +85,7 @@
   if (api.onStatus) api.onStatus(render)
 
   $('retry').addEventListener('click', () => { $('message').textContent = '正在重试…'; api.retry && api.retry() })
+  $('settings').addEventListener('click', () => api.openLocalModelSettings && api.openLocalModelSettings())
   $('logs').addEventListener('click', () => api.openLogs && api.openLogs())
   $('workspace').addEventListener('click', () => api.openWorkspace && api.openWorkspace())
   $('quit').addEventListener('click', () => api.quit && api.quit())

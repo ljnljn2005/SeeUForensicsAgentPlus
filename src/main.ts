@@ -24,6 +24,7 @@ import {
   describeLocalModelConfig,
   localModelConfigFile,
   previewLocalModelPatch,
+  probeableLocalModel,
   testLocalGateway,
   writeLocalModelConfig,
 } from './local-model.js'
@@ -131,6 +132,31 @@ async function showErrorPage(message: string, detail?: string): Promise<void> {
 
 // ── dsh Host 生命周期 ───────────────────────────────────────────────────────
 
+/**
+ * 已配置本地模型时，启动阶段先做一次短超时连通性探测。
+ * 目的：本地网关没开时不要等到用户发第一条消息才报错——先在日志和加载页里说清楚。
+ * 探测失败不阻塞启动（仍可以继续用官方模型），只更新提示。
+ */
+async function probeLocalModelGateway(): Promise<void> {
+  const target = probeableLocalModel()
+  if (target === undefined) return
+  const { baseURL, apiKey } = target
+  try {
+    const probe = await testLocalGateway({ baseURL, apiKey, timeoutMs: 4000 })
+    if (probe.ok) {
+      const ids = (probe.models ?? []).map((item) => item.id ?? item.name ?? '').filter(Boolean)
+      logShell(`local model probe: ${baseURL} 可用（${ids.join(', ') || '网关未返回模型列表'}）`)
+      return
+    }
+    logShell(`local model probe: ${baseURL} 不可用 → ${probe.error ?? '未知错误'}`)
+    if (lastStatus.phase === 'starting') {
+      setStatus({ phase: 'starting', message: '本地模型网关暂未连通，先用官方模型启动…' })
+    }
+  } catch (error) {
+    logShell(`local model probe 异常: ${errorDetail(error) ?? error}`)
+  }
+}
+
 async function startHost(): Promise<void> {
   if (host !== undefined) await host.stop()
   await showLoadingPage()
@@ -140,6 +166,7 @@ async function startHost(): Promise<void> {
     `skills: ${skills.skills.length} 个（${skills.skills.join(', ') || '无'}）→ ${skills.dir}${skills.changed ? ' [已更新]' : ' [无变化]'}`,
   )
   logShell(`start host: runtime=${dshRuntimeDir()} home=${dshHome()} patch=${forensicsPatchPath()}`)
+  void probeLocalModelGateway()
 
   const next = new DshHost()
   host = next
@@ -418,6 +445,7 @@ function registerIpc(): void {
   ipcMain.on('seeu:open-logs', () => { void shell.openPath(logDir()) })
   ipcMain.on('seeu:open-workspace', () => { void shell.openPath(workspaceDir()) })
   ipcMain.on('seeu:quit', () => { void requestQuit() })
+  ipcMain.on('seeu:open-settings', () => { openLocalModelSettings() })
 
   // 本地模型设置窗口
   ipcMain.handle('seeu:local-model:get', () => describeLocalModelConfig())

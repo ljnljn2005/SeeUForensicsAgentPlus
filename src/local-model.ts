@@ -108,6 +108,23 @@ export function prepareLocalModel(options: PrepareOptions = {}): LocalModelPrepa
 
 // ── 设置界面（renderer/local-model.html）用到的读写/探测 ────────────────────
 
+/** 启动探测用：把 env/文件配置归一化，未启用或配置非法都返回 undefined。 */
+export function probeableLocalModel(
+  configFile = localModelConfigFile(),
+): { baseURL: string; apiKey?: string } | undefined {
+  try {
+    const raw = readLocalModelConfig(configFile)
+    if (raw === undefined) return undefined
+    const normalized = normalizeLocalModel(raw)
+    if (!normalized.enabled) return undefined
+    return normalized.apiKey === undefined
+      ? { baseURL: normalized.baseURL }
+      : { baseURL: normalized.baseURL, apiKey: normalized.apiKey }
+  } catch {
+    return undefined
+  }
+}
+
 export interface LocalModelView {
   readonly path: string
   readonly exists: boolean

@@ -45,7 +45,7 @@ export function workspaceDir(): string {
 
 /** 外壳日志目录（dsh 子进程 stdout/stderr 也落在这里）。 */
 export function logDir(): string {
-  return join(app.getPath('userData'), 'logs')
+  return join(userDataDir(), 'logs')
 }
 
 export function hostLogFile(): string {
