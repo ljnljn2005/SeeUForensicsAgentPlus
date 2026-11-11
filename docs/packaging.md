@@ -665,3 +665,32 @@ asar 自检（`@electron/asar.listPackage`，14 个必需路径）：`{"entries"
 - `scripts/e2e/export-check.mjs`（端口 9354）→ `ok: true`，记录清单 14,996 字符 / 实体清单 1,888 字符 / 表清单 7,025 字符，与开发态一致。
 
 > 打包仍先用 `-c.directories.output=release-022` 出到旁路目录，再逐个 `mv` 进 `release/`：用户正在运行 0.1.7 portable，`rm -rf release` 会 `Device or resource busy`。0.2.1 的三个旧文件已删除，0.1.7 portable 保留。
+
+### v0.2.3 回归验证
+
+版本 **0.2.3**（`package.json` / `package-lock.json` 顶层与 `packages[""].version` 同步）。产物（无签名、Windows x64、Electron 44.7.0）：
+
+| 产物 | 大小 |
+| --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B |
+| `release/win-unpacked/resources/app.asar` | 168,751,123 B（19,647 entries） |
+| `release/SeeUForensicsAgentPlus-0.2.3-x64.exe` | 211,926,785 B（blockmap 220,685 B） |
+| `release/SeeUForensicsAgentPlus-0.2.3-x64-portable.exe` | 189,518,082 B |
+| `release/win-unpacked` 总计 | 803,583,838 B（≈766 MiB） |
+
+打包命令与 0.2.2 相同：`npx electron-builder --win --x64 -c.directories.output=release-023`（用户机上 0.1.7 portable 在运行，不能先 `rm -rf release`），随后把 `win-unpacked`、两个 exe、blockmap 搬进 `release/`、删掉 0.2.2 的三个文件。
+
+asar 自检（`@electron/asar.listPackage`）：19,647 entries，必需路径 14/14 命中（`plugins/seeu-theme/{index,client}.js + theme.css`、`plugins/seeu-case-index/{index,client}.js`、`tools/ges-index/{typed,cross,build}.mjs`、`dist/renderer/{local-model,loading,error}.html`、`resources/forensics/cordis.patch.yml`、`resources/forensics/local-model.example.json`）。**注意 `tools/local-model.mjs` 不在 asar 里是正常的**：它被 esbuild 打进 `dist/main.cjs`（`dist/main.cjs` 内含 `tools/local-model.mjs` 的分节注释），打包运行时不需要这个源文件。
+
+启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`，避免杀掉用户正在用的实例）：
+
+- 目录版 `verify-launch --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9355` → `"ok": true, "elapsedMs": 5102`；
+- portable `--exe release/SeeUForensicsAgentPlus-0.2.3-x64-portable.exe --port 9356 --timeout 180000` → `"ok": true, "elapsedMs": 37572`。
+
+打包态功能回归（全部用 `SEEU_UI_EXE` + 独立 `SEEU_DSH_HOME` / `SEEU_USER_DATA`）：
+
+- 面板：`node scripts/e2e/m2-ui-check.mjs` → `m2ok:true`、`searchOk:true`、`evNames:true`、`errors:[]`；
+- 设置页：`node scripts/e2e/settings-check.mjs --exe "<win-unpacked exe>"` → `ok:true`（页面来自 `app.asar/dist/renderer/local-model.html`，`presetApplied:true`、`budgetText`「固定开销估算：约 6.6k tokens…」、`copiedDiagnostics:true`、网关自报窗口 `32768`、`errors:[]`）；
+- 导出：`SEEU_EXPORT_E2E_PORT=9357 node scripts/e2e/export-check.mjs` → `ok:true`（记录 14,996 / 实体 1,888 / 表 7,025 / 时间线 3,235 字符）。
+
+**排障记录**：第一次跑打包态设置页 e2e 报 `preload 桥未暴露 window.seeu.localModel`，但同一 exe 用 CDP 手工探测时 `window.seeu` 的键齐全（`info/onStatus/retry/openLogs/openWorkspace/openLocalModelSettings/quit/writeClipboard/localModel`）。这是上一轮中断的 CDP 会话占着 9351 端口、脚本连到了旧页面导致的**偶发**问题；换干净进程重跑即通过。以后 e2e 失败先看 `/json/list` 里是否有多个 Chromium 残留，再确认不是代码问题。

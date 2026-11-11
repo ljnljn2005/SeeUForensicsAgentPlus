@@ -1374,3 +1374,14 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `node scripts/e2e/m2-ui-check.mjs` → `m2ok:true / searchOk:true / errors:[]`（面板不受影响）。
 
 遗留：`CONTEXT_BUDGET` 是随包实测常量，官方工具描述变化或精简预设增删工具后要重新跑 `npm run test:e2e:tools` 更新（脚本已输出 `budget.toolsChars / systemChars`）。
+
+### 20.27 第 25 轮：v0.2.3 打包与打包态回归
+
+本轮把 0.2.2 之后累积的五批前台/本地模型改动（`227527b` 命中高亮与浅色验证、`ab9f39a` 位置记忆与时间线/跨案导出、`2ab21f9` 最近案件 chip、`1f55615` 精简预设、`2ad11fc` 固定开销估算与网关错误提示）打成一个可交付版本。
+
+- 版本 0.2.3；`node scripts/build.mjs` + `npm run check:overlay` + `npm test`（42/42）通过。
+- 打包：`npx electron-builder --win --x64 -c.directories.output=release-023`（用户 0.1.7 portable 在运行，不能先删 `release/`），产物 211,926,785 B（NSIS）/ 189,518,082 B（portable）/ asar 168,751,123 B（19,647 entries），搬入 `release/` 并清掉 0.2.2 三件。
+- 打包态回归：目录版 5102 ms、portable 37572 ms；`m2-ui-check` `m2ok/searchOk/evNames` 全 true；`settings-check` 全绿（含 `budgetText`、网关自报窗口 32768）；`export-check` 四种清单字符数与 dev 一致。
+- 顺带在 `scripts/e2e/local-tools-e2e.mjs` 的 mock 里记录 \`strictTrue/strictAny\` 并投影进 `firstRequest`，实测当前请求 `strictAny: 0`（dsh/pi-ai 没有给本地路由加 `strict` schema，无需 `supportsStrictMode: false`）。
+- 踩坑：打包态设置页 e2e 第一次报「preload 桥未暴露」，实为上一轮中断的 CDP 会话占 9351 端口连到旧页面；手工 CDP 探测确认 `window.seeu` 键齐全，换干净进程重跑即过——以后 e2e 先排 CDP 残留。
+- 遗留：`tools/local-model.mjs` 不进 asar（已被 esbuild 打进 `dist/main.cjs`），文档里已注明；仍未拿到用户真实网关地址，真机联调未做；视觉验收仍待用户确认。

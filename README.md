@@ -57,18 +57,30 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.2.2**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.2.3**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 766 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,731,959 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
-| `release/SeeUForensicsAgentPlus-0.2.2-x64.exe`（NSIS 安装包） | 211,923,744 B（blockmap 220,936 B） |
-| `release/SeeUForensicsAgentPlus-0.2.2-x64-portable.exe` | 189,545,900 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,583,838 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,751,123 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
+| `release/SeeUForensicsAgentPlus-0.2.3-x64.exe`（NSIS 安装包） | 211,926,785 B（blockmap 220,685 B） |
+| `release/SeeUForensicsAgentPlus-0.2.3-x64-portable.exe` | 189,518,082 B |
 
-实测冷启动到 dsh UI：目录版 4109 ms；portable 首次 39.4s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+实测冷启动到 dsh UI：目录版 5102 ms；portable 首次 37.6s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
+
+### v0.2.3 改了什么
+
+- **命中高亮**：检索结果与记录视图里查询词用强调色底高亮（`<mark class="seeu-hl">`），跟随深浅主题；
+- **浅色主题验收**：会话区排版 e2e 支持 `--theme=light`，深浅两套都跑通（浅色强调色 `#0E7490`、底色 `rgb(245,247,250)`）；
+- **位置记忆**：面板记住上次的标签页与索引库，下次打开直接回到上次视图；
+- **欢迎页「最近案件」chip**：取索引里 `builtAt` 最新的一条，一键进面板；
+- **时间线/跨案导出**：【复制时间线清单】【复制重合实体清单】；
+- **本地模型精简预设**：新增「取证分析（本地模型精简）」，工具描述 27 → 12（26,687 → 10,229 字符），首个请求固定开销 45,099 → 26,946 字符（≈20.5k → 12.2k tokens，省约 8.2k）；
+- **固定开销估算**：设置页实时显示「工具 + 系统提示 ≈ 多少 tokens、窗口还剩多少给对话」，32k 窗口下精简预设剩 80%、完整预设剩 55%；
+- **网关失败中文提示**：`ECONNREFUSED` / `ERR_UNSAFE_PORT` / 超时 / 401 / 404 / 5xx / 缺 apiKey 各给一句可操作提示；
+- **测试**：`npm test` 42 个纯函数单测；`scripts/e2e/` 14 个端到端脚本。
 
 ### v0.2.2 改了什么
 
