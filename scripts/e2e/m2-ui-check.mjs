@@ -180,6 +180,29 @@ const openTab = async (label) => {
 report.tabRecordsClick = await openTab('记录')
 text = await bodyText()
 report.recordsText = text.slice(text.indexOf('记录'), text.indexOf('记录') + 700)
+// 记录视图筛选：检材下拉（按名称找选项）+ 起止日期输入
+report.recordsBeforeCount = Number((text.match(/记录 (\d+) 条/) || [])[1] ?? 0)
+report.recordsFilterPick = await ev(`(() => {
+  const sel = [...document.querySelectorAll('select')].find(s => [...s.options].some(o => /LEUNG_YL_mobile\\.zip/.test(o.textContent)))
+  if (!sel) return 'no-select'
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set
+  setter.call(sel, '3')
+  sel.dispatchEvent(new Event('change', { bubbles: true }))
+  const btn = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === '查询')
+  if (btn) btn.click()
+  return 'ok'
+})()`)
+await sleep(3500)
+text = await bodyText()
+report.recordsAfterCount = Number((text.match(/记录 (\d+) 条/) || [])[1] ?? 0)
+report.recordsFilterText = (text.match(/记录 \d+ 条/) || [''])[0]
+report.recordsFilterOk = report.recordsFilterPick === 'ok' && report.recordsBeforeCount > 0 && report.recordsAfterCount > 0 && report.recordsAfterCount < report.recordsBeforeCount && /LEUNG_YL_mobile\.zip/.test(text)
+await ev(`(() => {
+  const btn = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === '清空')
+  if (btn) btn.click()
+  return 'cleared'
+})()`)
+await sleep(2500)
 report.tabEntityClick = await openTab('实体')
 text = await bodyText()
 report.entityText = text.slice(text.indexOf('实体'), text.indexOf('实体') + 700)
@@ -189,7 +212,7 @@ report.timelineText = text.slice(text.indexOf('时间线'), text.indexOf('时间
 report.tabTablesClick = await openTab('表')
 text = await bodyText()
 report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
-report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true
+report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true
 
 // ---------- 浅色主题回归（SEEU_E2E_THEME=light；暗色为默认） ----------
 if (process.env.SEEU_E2E_THEME === 'light') {

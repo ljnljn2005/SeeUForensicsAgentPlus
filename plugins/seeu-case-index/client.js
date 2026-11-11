@@ -378,6 +378,25 @@ window.__ModuleLoader__.load({
       const [offset, setOffset] = useState(0);
       const [copying, setCopying] = useState(false);
       const [note, setNote] = useState('');
+      // 检材下拉（名称来自 /evidences），用户不用记 eid
+      const [evList, setEvList] = useState([]);
+      useEffect(() => {
+        let alive = true;
+        if (!db) { setEvList([]); return undefined; }
+        (async () => {
+          try {
+            const body = await api('/evidences', { db });
+            if (alive) setEvList(body?.evidences ?? []);
+          } catch {
+            if (alive) setEvList([]);
+          }
+        })();
+        return () => { alive = false; };
+      }, [db]);
+      const evName = (eid) => {
+        const hit = evList.find((ev) => Number(ev.eid) === Number(eid));
+        return hit && hit.name ? hit.name : '检材 ' + eid;
+      };
       useEffect(() => { setDraft(base); setApplied(base); setOffset(0); }, [base]);
       const { data, error, loading } = useLoad(() => api('/records', { db, ...applied, limit: PAGE, offset }), [db, applied, offset]);
       const apply = () => { setOffset(0); setApplied({ ...draft }); };
@@ -418,10 +437,21 @@ window.__ModuleLoader__.load({
       };
       return h('div', { style: S.card },
         h('div', { style: { ...S.row, gap: 6 } },
-          narrowInput(draft.eid, (v) => setDraft((d) => ({ ...d, eid: v })), '检材号 eid', { width: 84, onEnter: apply }),
+          h('select', {
+            style: { ...S.input, flex: 'none', width: 200 },
+            value: draft.eid ?? '',
+            disabled: !db,
+            title: '按检材筛选：下拉里就是火眼的检材名称',
+            onChange: (e) => setDraft((d) => ({ ...d, eid: e.target.value })),
+            onKeyDown: (e) => { if (e.key === 'Enter') apply(); },
+          },
+            h('option', { value: '' }, '全部检材'),
+            ...evList.map((ev) => h('option', { key: ev.eid, value: String(ev.eid) }, '检材 ' + ev.eid + (ev.name ? ' · ' + ev.name : '') + (ev.platform ? ' · ' + ev.platform : '')))),
           narrowInput(draft.app, (v) => setDraft((d) => ({ ...d, app: v })), '应用 app', { width: 96, onEnter: apply }),
           narrowInput(draft.category, (v) => setDraft((d) => ({ ...d, category: v })), '类别 category', { width: 104, onEnter: apply }),
           narrowInput(draft.q, (v) => setDraft((d) => ({ ...d, q: v })), '关键词 q', { width: 140, onEnter: apply }),
+          narrowInput(draft.from, (v) => setDraft((d) => ({ ...d, from: v })), '起 2025-04-01', { width: 108, onEnter: apply }),
+          narrowInput(draft.to, (v) => setDraft((d) => ({ ...d, to: v })), '止 2025-04-30', { width: 108, onEnter: apply }),
           actionButton('查询', apply, { primary: true }),
           hasFilter ? actionButton('清空', clear) : null),
         applied.from || applied.to ? h('div', { style: { ...S.noticeInfo, padding: '4px 8px' } }, `时间范围 ${applied.from || '…'} ~ ${applied.to || '…'}（由时间线钻取带入）`) : null,
@@ -446,7 +476,7 @@ window.__ModuleLoader__.load({
               title: `第 ${r.line} 行，点一下看引用句柄`,
               onClick: () => onCite(r.id),
             },
-              h('span', { style: { ...S.tag, flex: 'none' } }, `${r.eid}·${r.app}`),
+              h('span', { style: { ...S.tag, flex: 'none' }, title: '检材 ' + r.eid }, `${evName(r.eid)} · ${r.app}`),
               h('span', { className: 'seeu-row-time', style: S.rowTime }, r.ts ?? ''),
               h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, r.cat ?? ''),
               h('span', { style: S.ellipsis }, highlight(`${r.actor ? `${r.actor}：` : ''}${r.text ?? ''}`, applied.q)),

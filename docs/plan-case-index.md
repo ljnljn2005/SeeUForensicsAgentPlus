@@ -1602,3 +1602,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 打包：`npx electron-builder --win --x64 -c.directories.output=release-025`（后台作业，约 12 分钟）；产物 NSIS 211,931,937 B / portable 189,540,572 B / app.asar 168,777,657 B（19,647 entries）；asar 自检 15 路径 `missing: []`。
 - 打包态验证：目录版 4088 ms、portable 51586 ms；面板 e2e `m2ok:true` 且 `briefVisible/briefRefreshOk:true`（打包态注入状态与刷新按钮都真实可用）；设置页 e2e `ok:true`（精简预设、预热、窗口超限、缺模型提示全绿）。
 - 遗留：`briefState` 进程内保存；打包态面板 e2e 会顺带写一次真实的 `<DSH_HOME>/AGENTS.md`（用的是隔离 home，无副作用）。
+
+## 20.41 记录视图筛选：检材下拉 + 起止日期（v0.2.6 起）
+
+- 问题：检索视图早就有「检材下拉 + 应用 + 起止日期」，但记录视图仍然是 4 个手输框（检材号 eid 要自己记），而且日期只能从时间线钻取带入，不能直接输入。
+- 实现（只改 `plugins/seeu-case-index/client.js` 的 `RecordsView`）：`useEffect` 拉 `/evidences` 得到 `evList`，检索 eid 输入框换成 `<select>`（选项「检材 N · 名称 · 平台」+「全部检材」）；新增「起 2025-04-01」「止 2025-04-30」两个输入框直接驱动后端 `from/to`（后端 `records()` 早已支持 `eid/app/category/q/from/to`，无需改 SQL）；结果行标签由 `eid·app` 改为「检材名 · 应用」（`title` 保留 `检材 N`）。
+- 验证（`m2-ui-check` 新增断言，真实案件库）：未筛选 `记录 22777 条` → 检材下拉选 `检材 3 · LEUNG_YL_mobile.zip` → 点【查询】 → `记录 8443 条`，结果行含 `LEUNG_YL_mobile.zip`，`recordsFilterOk: true`，`m2ok: true`、`errors: []`；`export-check` 回归 `ok:true`（记录清单 14,996 字符等不变）；`npm test` 43/43。
+- 遗留：应用/类别仍是手输（可考虑改下拉，数据量大时按需加载）；日期按字符串比较，跨时区记录需自己换算。
