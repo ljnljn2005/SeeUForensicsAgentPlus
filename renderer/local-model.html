@@ -88,6 +88,10 @@
   #probe.err { border-color: rgba(248,113,113,.35); color: var(--err); }
   pre#preview { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--dim); font-size: 11px; line-height: 1.6; overflow: auto; max-height: 180px; display: none; }
   footer { margin-top: 18px; color: var(--dim); font-size: 11px; line-height: 1.7; border-top: 1px solid var(--border); padding-top: 12px; }
+
+    details.adv { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: rgba(255,255,255,0.02); }
+    details.adv > summary { cursor: pointer; font-size: 12px; color: var(--fg2); font-weight: 600; }
+    details.adv[open] > summary { margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -144,6 +148,35 @@
       <div class="hint">建议 8192；太大易触发网关 OOM。</div>
     </div>
   </div>
+
+  <details class="adv">
+    <summary>高级：超时与重试（低并发本地网关）</summary>
+    <div class="row2">
+      <div class="field">
+        <label for="timeoutSec">请求超时（秒）</label>
+        <input type="number" id="timeoutSec" min="10" step="10" placeholder="600" />
+        <div class="hint">本地 32B 首次 prefill 可能几十秒，默认 600 秒。</div>
+      </div>
+      <div class="field">
+        <label for="streamIdleSec">流式空闲超时（秒）</label>
+        <input type="number" id="streamIdleSec" min="30" step="30" placeholder="600" />
+        <div class="hint">两个分片之间最长等待；网关卡住时靠它中断。</div>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="retryMaxRetries">失败重试次数</label>
+        <input type="number" id="retryMaxRetries" min="0" max="10" step="1" placeholder="3" />
+        <div class="hint">dsh 默认 5 次；单机网关建议 3 次，避免排队更久。</div>
+      </div>
+      <div class="field">
+        <label for="titleMaxOutputTokens">标题生成上限（tokens）</label>
+        <input type="number" id="titleMaxOutputTokens" min="64" step="64" placeholder="512" />
+        <div class="hint">会话标题用的小请求，默认 512，省本地算力。</div>
+      </div>
+    </div>
+    <div class="hint">留空即用默认值；改完记得保存并重启应用。</div>
+  </details>
 
   <div class="check">
     <input type="checkbox" id="useAsDefault" />
@@ -227,7 +260,22 @@
       contextWindow: Number.isFinite(contextWindow) && contextWindow > 0 ? contextWindow : undefined,
       maxTokens: Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : undefined,
       useAsDefault: $('useAsDefault').checked,
+      timeoutMs: secToMs($('timeoutSec').value),
+      streamIdleTimeoutMs: secToMs($('streamIdleSec').value),
+      retryMaxRetries: numOrUndef($('retryMaxRetries').value),
+      titleMaxOutputTokens: numOrUndef($('titleMaxOutputTokens').value),
     }
+  }
+
+  /** 秒 → 毫秒；空/非法返回 undefined（交给默认值）。 */
+  function secToMs(value) {
+    const n = Number(value)
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 1000) : undefined
+  }
+
+  function numOrUndef(value) {
+    const n = Number(value)
+    return Number.isFinite(n) && n >= 0 ? Math.round(n) : undefined
   }
 
   function fillForm(config) {
@@ -244,6 +292,10 @@
     $('contextWindow').value = c.contextWindow || 131072
     $('maxTokens').value = c.maxTokens || 8192
     $('useAsDefault').checked = c.useAsDefault === true || c.defaultModel !== undefined
+    $('timeoutSec').value = c.timeoutMs ? Math.round(c.timeoutMs / 1000) : 600
+    $('streamIdleSec').value = c.streamIdleTimeoutMs ? Math.round(c.streamIdleTimeoutMs / 1000) : 600
+    $('retryMaxRetries').value = Number.isFinite(c.retryMaxRetries) ? c.retryMaxRetries : 3
+    $('titleMaxOutputTokens').value = c.titleMaxOutputTokens || 512
   }
 
   /** 能力自检结果：模型列表 / 基础对话 / 工具调用逐项展示。 */

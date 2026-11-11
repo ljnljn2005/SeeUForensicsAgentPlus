@@ -239,6 +239,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 **首次打开**（一个索引库都没有）时，面板顶部会显示「三步开始」引导：
 先在火眼跑完检材解析并记下案件目录 → 粘进输入框点【建库 / 更新】（约 3–5 分钟，只写 `.seeu-index`）→ 用 树 / 检索 / 记录 / 实体 / 时间线 / 表 查看并用「引用」回查。
 `npm run test:e2e:panel-empty` 在空目录场景验证这张引导卡。
+若打开的是旧版本建的库（`schema_version` 与当前工具不一致），KPI 下方会显示黄色提示「建议点【建库 / 更新】重建」——旧库可能缺字段或查不到新类别。
 
 1. **建库 / 更新**：填案件目录（火眼案件目录，`case-index.db` 会写进其下的 `.seeu-index\`），点【建库 / 更新】。
    进度条实时显示 探测 → 枚举 → 抓取 i/N（百分比、已用时间、预计剩余）→ 校验 → 替换；可取消，失败不会破坏旧库。
@@ -388,6 +389,8 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 - 每个模型 `input: [text]`、`reasoningEfforts: false`（本地模型一般不支持思考档位）；
 - `retryPolicy: { mode: normal, maxRetries: 3 }`（覆盖 dsh 默认的 5 次）；
 - 顶层 `session-title-llm` 覆盖：`maxOutputTokens: 512, timeoutMs: 20000`（每次新会话多一次标题请求，本地模型要省）。
+
+**设置页的「高级：超时与重试」**（折叠区）可调四个数：请求超时 `timeoutMs`（默认 600 秒）、流式空闲超时 `streamIdleTimeoutMs`（默认 600 秒）、失败重试次数 `retryMaxRetries`（默认 3）、标题生成上限 `titleMaxOutputTokens`（默认 512）。留空即用默认值，改完保存并重启。
 
 ### 9.2 长上下文与低并发调优
 

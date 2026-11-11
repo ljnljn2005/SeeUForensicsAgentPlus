@@ -1054,3 +1054,24 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 回归 `npm run test:e2e:ui`（面板七标签真实数据）仍 `m2ok: true`、`errors: []`。
 
 **遗留**：引导卡只看「有没有库」，不区分「有库但库是旧版本 schema」；后者要靠 `manifest.json` 的 `schemaVersion` 提示（已在 `/stats` 暴露，面板暂未展示）。
+
+### 20.11 第 12 轮：旧库 schema 提示 + 设置页高级超时参数
+
+**问题**
+
+1. 索引库是派生数据，schema 会随版本升级（当前 `SCHEMA_VERSION = 4`）。用户升级应用后打开旧库时，面板照常显示 KPI 与树，但缺失的列/表会被静默当成空值——比报错更危险（取证场景）。
+2. 本地网关的超时/重试在 `local-model.json` 里可配，但设置页没有入口，用户只能手改 JSON。
+
+**实现**
+
+- `tools/ges-index/query.mjs`：`tree(db,'root')` 增加 `schemaVersion`（读 `meta.schema_version`）、`currentSchemaVersion`（来自 `parse.mjs` 的 `SCHEMA_VERSION`）、`needsRebuild`（两者不一致且有 meta 值）。
+- `plugins/seeu-case-index/client.js`：KPI 下方新增 `S.noticeWarn` 黄色提示条，仅 `view.needsRebuild` 时渲染：「索引库 schema vX 与当前工具 vY 不一致：建议点「建库 / 更新」重建，旧库可能缺字段或查不到新类别。」
+- `renderer/local-model.html`：新增 `<details class="adv">`「高级：超时与重试（低并发本地网关）」折叠区，四个字段 `timeoutSec`（秒→`timeoutMs`）、`streamIdleSec`（→`streamIdleTimeoutMs`）、`retryMaxRetries`、`titleMaxOutputTokens`；`readForm()` 用 `secToMs()`/`numOrUndef()` 把空值转 `undefined`（交给 `normalizeLocalModel` 填默认），`fillForm()` 回填现有值（默认 600/600/3/512）。
+
+**验证**
+
+- 预览 API：`/tree?db=…&node=root` → `{"schemaVersion":"4","current":4,"needsRebuild":false,"records":22777,"evidences":5}`（真案件库，schema 一致）。
+- `npm run test:e2e:settings` 仍全绿：`{"ok":true,…,"preview: patch 1086 字符，含 retryPolicy=true","测试连接: HTTP 200…","保存/重新读取: 一致","拉取模型: …","错误网关: 按预期失败","errors":[]}`。
+- `node --check plugins/seeu-case-index/client.js` → SYNTAX-OK。
+
+**遗留**：面板只提示不一致，不提供「一键重建」（建库 3–5 分钟，需用户确认案件目录可写）；`/stats` 已带 `meta.schema_version`，CLI 侧可用 `index:stats` 查看。

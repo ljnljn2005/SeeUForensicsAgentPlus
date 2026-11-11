@@ -86,6 +86,7 @@ window.__ModuleLoader__.load({
       noticeOk: { padding: '6px 10px', borderRadius: R_SM, border: '1px solid color-mix(in srgb, ' + C_OK + ' 35%, transparent)', background: 'color-mix(in srgb, ' + C_OK + ' 10%, transparent)', color: C_OK, fontSize: 11.5 },
       noticeErr: { padding: '6px 10px', borderRadius: R_SM, border: '1px solid color-mix(in srgb, ' + C_ERR + ' 35%, transparent)', background: 'color-mix(in srgb, ' + C_ERR + ' 10%, transparent)', color: C_ERR, fontSize: 11.5 },
       noticeInfo: { padding: '6px 10px', borderRadius: R_SM, border: '1px solid ' + C_L1, background: 'color-mix(in srgb, ' + C_BG3 + ' 60%, transparent)', color: C_FG2, fontSize: 11.5 },
+      noticeWarn: { padding: '6px 10px', borderRadius: R_SM, border: '1px solid color-mix(in srgb, #FBBF24 40%, transparent)', background: 'color-mix(in srgb, #FBBF24 12%, transparent)', color: '#FBBF24', fontSize: 11.5 },
       rowTime: { flex: 'none', color: C_FG3, fontFamily: FONT_CODE, fontSize: 11, whiteSpace: 'nowrap' },
       crumbOn: { padding: '3px 8px', borderRadius: 999, border: '1px solid ' + C_ACC_LINE, borderLeft: '3px solid ' + C_ACC, background: C_ACC_SOFT, color: C_FG, fontSize: 11.5, fontWeight: 600 },
     };
@@ -971,6 +972,9 @@ window.__ModuleLoader__.load({
         kpiItems
           ? h(KpiStrip, { items: kpiItems })
           : h('div', { style: S.noticeInfo }, '选择索引库后，这里显示案件名、检材数、记录数、实体数、库大小与生成时间。'),
+        view && view.needsRebuild
+          ? h('div', { style: S.noticeWarn }, `索引库 schema v${view.schemaVersion ?? '?'} 与当前工具 v${view.currentSchemaVersion ?? '?'} 不一致：建议点「建库 / 更新」重建，旧库可能缺字段或查不到新类别。`)
+          : null,
 
         h('div', { style: S.panel },
           h('div', { style: S.row },

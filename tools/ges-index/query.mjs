@@ -3,7 +3,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { CASE_DATA_ROOT } from './parse.mjs';
+import { CASE_DATA_ROOT, SCHEMA_VERSION } from './parse.mjs';
 import { TYPED_TABLES } from './typed.mjs';
 import { ges } from './ges.mjs';
 
@@ -121,9 +121,13 @@ function evidenceName(db, eid) {
 export function tree(db, node = 'root') {
   const { one, all } = helpers(db);
   if (!node || node === 'root') {
+    const schemaVersion = one("select v from meta where k='schema_version'")?.v ?? null;
     return {
       node: 'root',
       case: one("select v from meta where k='case_number'")?.v,
+      schemaVersion,
+      currentSchemaVersion: SCHEMA_VERSION,
+      needsRebuild: schemaVersion !== null && String(schemaVersion) !== String(SCHEMA_VERSION),
       name: one("select v from meta where k='case_name'")?.v,
       totals: {
         evidences: one('select count(*) n from evidence').n || one('select count(distinct eid) n from artifact').n,
