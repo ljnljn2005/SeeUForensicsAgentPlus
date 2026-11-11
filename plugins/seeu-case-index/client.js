@@ -1026,7 +1026,13 @@ window.__ModuleLoader__.load({
         })();
         return () => { alive = false; };
       }, [db]);
-      const [copyNote, setCopyNote] = useState('');
+
+      // 检索结果行显示检材名称（而不是只有 eid）：研判时看到的是文件名，不是数字
+      const evLabel = (eid) => {
+        const hit = evList.find((ev) => Number(ev.eid) === Number(eid));
+        if (hit && hit.name) return hit.name;
+        return '检材 ' + eid;
+      };      const [copyNote, setCopyNote] = useState('');
       const [overviewNote, setOverviewNote] = useState('');
       const [result, setResult] = useState(null);
       const [detail, setDetail] = useState(null);
@@ -1515,7 +1521,7 @@ window.__ModuleLoader__.load({
                     style: { display: 'flex', alignItems: 'baseline', gap: 8, minHeight: 30, padding: '5px 8px', borderBottom: '1px solid ' + C_L1, cursor: 'pointer', fontSize: 12.5 },
                     onClick: () => showCite(r.id),
                   },
-                    h('span', { style: { ...S.tag, flex: 'none' } }, `${r.eid}·${r.app}`),
+                    h('span', { style: { ...S.tag, flex: 'none' }, title: '检材 ' + r.eid }, `${evLabel(r.eid)} · ${r.app}`),
                     h('span', { style: S.rowTime }, r.ts ?? ''),
                     h('span', { style: S.ellipsis }, highlight(r.snip, result.query)))))
                 : h(EmptyState, { title: '没有命中', text: '换个关键词再试；≥3 字走 FTS5 全文索引，2 字自动退化为 LIKE。' }))

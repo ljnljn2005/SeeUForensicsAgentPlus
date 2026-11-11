@@ -155,6 +155,8 @@ report.searchEnter = report.searchTyped
 await sleep(7000)
 text = await bodyText()
 report.searchOk = /引擎 (trigram|like) · \d+ 命中/.test(text)
+// 检索结果行的检材标签应是名称（如 LEUNG_YL_mobile.zip），而不是只有 eid
+report.searchEvNames = /(CHAN_MH_mobile\.zip|LEUNG_YL_mobile\.zip|FUNG_CC_mobile\.zip|IQ_Coin_Type_Transactions\.zip|AP3_LEUNG_YL_USB\.E01)/.test(text)
 const idx = text.indexOf('引擎')
 report.searchText = idx >= 0 ? text.slice(idx, idx + 800) : text.slice(0, 600)
 

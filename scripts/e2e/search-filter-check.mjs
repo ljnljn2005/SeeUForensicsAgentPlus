@@ -122,9 +122,13 @@ const setInput = (placeholderPart, value) => evaluate(`(() => {
 const readSearchRows = () => evaluate(`(() => {
   const rows = Array.from(document.querySelectorAll('.seeu-row.is-clickable'))
   return rows.map((el) => {
-    const tag = (el.firstElementChild?.textContent || '').trim()
-    const m = tag.match(/^(\\d+)·(.*)$/)
-    return m ? { eid: Number(m[1]), app: m[2], text: (el.textContent || '').slice(0, 120) } : null
+    const tagEl = el.firstElementChild
+    const tag = (tagEl?.textContent || '').trim()
+    const title = (tagEl?.getAttribute('title') || '').trim()
+    const m = title.match(/^检材\\s*(\\d+)$/)
+    const eid = m ? Number(m[1]) : null
+    const app = tag.includes('·') ? tag.split('·').pop().trim() : ''
+    return eid ? { eid, app, tag, text: (el.textContent || '').slice(0, 120) } : null
   }).filter(Boolean)
 })()`)
 
