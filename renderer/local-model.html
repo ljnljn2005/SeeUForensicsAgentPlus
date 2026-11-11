@@ -266,9 +266,14 @@
     if (probe.ok) {
       const models = Array.isArray(probe.models) && probe.models.length > 0 ? probe.models.join(', ') : '网关未返回模型列表'
       const missing = Array.isArray(probe.missing) && probe.missing.length > 0 ? probe.missing : []
-      const suffix = missing.length > 0 ? `｜配置的模型 ${missing.join(', ')} 不在网关列表` : ''
+      const mismatch = probe.mismatch && probe.mismatch.gateway > 0 ? probe.mismatch : null
+      const k = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n))
+      const notes = []
+      if (missing.length > 0) notes.push(`配置的模型 ${missing.join(', ')} 不在网关列表`)
+      if (mismatch) notes.push(`配置窗口 ${k(mismatch.configured)} 超过网关自报的 ${k(mismatch.gateway)}，超出部分请求会被拒`)
+      const suffix = notes.length > 0 ? `｜${notes.join('；')}` : ''
       probeEl.textContent = `启动探测：可用 · ${models} · ${probe.baseURL} · ${at}${suffix}`
-      probeEl.className = missing.length > 0 ? 'hint warn' : 'hint ok'
+      probeEl.className = notes.length > 0 ? 'hint warn' : 'hint ok'
     } else {
       probeEl.textContent = `启动探测：不可用 · ${probe.error || '未知错误'} · ${probe.baseURL} · ${at}（仍可用官方模型）`
       probeEl.className = 'hint err'

@@ -28,6 +28,7 @@ import {
   previewLocalModelPatch,
   probeableLocalModel,
   testLocalGateway,
+  contextWindowMismatch,
   writeLocalModelConfig,
 } from './local-model.js'
 import { installBundledSkills } from './skills.js'
@@ -148,6 +149,8 @@ interface LocalModelProbeState {
   readonly models: string[]
   /** 配置里写了、但网关 /v1/models 没返回的模型 id（通常是模型改名或抄错）。 */
   readonly missing?: string[]
+  /** 配置的上下文窗口超过网关自报能力时给出两者数值。 */
+  readonly mismatch?: { configured: number; gateway: number }
   readonly error?: string
   readonly at: string
 }
@@ -187,12 +190,14 @@ async function probeLocalModelGateway(reason: 'startup' | 'manual' = 'startup'):
     const probe = await testLocalGateway({ baseURL, apiKey, timeoutMs: 4000 })
     const ids = (probe.models ?? []).map((item) => item.id ?? item.name ?? '').filter(Boolean)
     const missing = target.models.filter((id) => !ids.includes(id))
+    const mismatch = contextWindowMismatch(target.contextWindow, target.models, probe.models)
     localModelProbeState = probe.ok
       ? {
           ok: true,
           baseURL,
           models: ids,
           ...(missing.length === 0 ? {} : { missing }),
+          ...(mismatch === null ? {} : { mismatch }),
           at: new Date().toISOString(),
         }
       : { ok: false, baseURL, models: [], ...(probe.error === undefined ? {} : { error: probe.error }), at: new Date().toISOString() }
@@ -202,6 +207,9 @@ async function probeLocalModelGateway(reason: 'startup' | 'manual' = 'startup'):
       logShell(`local model probe: ${baseURL} 可用（${ids.join(', ') || '网关未返回模型列表'}）`)
       if (missing.length > 0) {
         logShell(`local model probe: 配置的模型 ${missing.join(', ')} 不在网关列表里（网关有：${ids.join(', ')}）`)
+      }
+      if (mismatch !== null) {
+        logShell(`local model probe: 配置的上下文窗口 ${mismatch.configured} 超过网关自报的 ${mismatch.gateway}，超出部分请求会被拒`)
       }
       return localModelProbeState
     }

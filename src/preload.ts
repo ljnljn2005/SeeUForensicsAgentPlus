@@ -39,6 +39,8 @@ export interface LocalModelProbeState {
   readonly error?: string
   readonly at: string
   readonly missing?: string[]
+  /** 配置的上下文窗口超过网关自报能力时给出两者数值。 */
+  readonly mismatch?: { configured: number; gateway: number }
 }
 
 export interface LocalModelView {

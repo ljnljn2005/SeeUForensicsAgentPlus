@@ -284,6 +284,30 @@ export function modelContextWindow(entry) {
 }
 
 /** 把 /v1/models 的 data[] 归一化成 { id, name, contextWindow? }。 */
+/**
+ * 配置的上下文窗口是否超过网关自报能力。
+ * 超了意味着超出部分请求会被网关拒绝（常见报错 context length exceeded），应提醒用户改小。
+ * @param {number} contextWindow 本地配置的窗口
+ * @param {string[]} modelIds 配置里的模型 id
+ * @param {{ id?: string, contextWindow?: number }[]} gatewayModels /v1/models 解析结果
+ * @returns {{ configured: number, gateway: number } | null}
+ */
+export function contextWindowMismatch(contextWindow, modelIds, gatewayModels) {
+  const num = (value) => {
+    const n = typeof value === 'number' ? value : Number(value)
+    return Number.isFinite(n) ? n : 0
+  }
+  const ids = (modelIds ?? []).map(String)
+  const known = (gatewayModels ?? []).filter(
+    (item) => item && ids.includes(String(item.id)) && num(item.contextWindow) >= 2048,
+  )
+  if (known.length === 0) return null
+  const gateway = Math.min(...known.map((item) => num(item.contextWindow)))
+  const configured = num(contextWindow)
+  if (configured <= 0 || configured <= gateway) return null
+  return { configured, gateway }
+}
+
 export function normalizeGatewayModels(data) {
   if (!Array.isArray(data)) return []
   const out = []

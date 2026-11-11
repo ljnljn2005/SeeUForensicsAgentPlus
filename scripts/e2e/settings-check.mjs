@@ -324,6 +324,23 @@ try {
   }
   log('缺失模型', report.probeMissing.join(','))
 
+  // 配置窗口 131072 > 网关自报 32768：探测应给出 mismatch，并在页面黄字提示
+  report.probeMismatch = ghostProbe?.mismatch ?? null
+  if (!report.probeMismatch || report.probeMismatch.configured !== 131072 || report.probeMismatch.gateway !== 32768) {
+    throw new Error('配置窗口超过网关自报时没有返回 mismatch：' + JSON.stringify(ghostProbe))
+  }
+  report.probeText = await evaluate(client, `(async () => {
+    const t0 = Date.now()
+    while (Date.now() - t0 < 3000) {
+      const el = document.getElementById('probe')
+      if (el && /超过网关自报/.test(el.textContent)) return el.textContent
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    return (document.getElementById('probe') || {}).textContent || ''
+  })()`)
+  if (!/超过网关自报/.test(report.probeText)) throw new Error('设置页没有显示窗口超限提示：' + report.probeText)
+  log('窗口超限', report.probeText)
+
   const bad = await evaluate(client, `window.seeu.localModel.test({ baseURL: 'http://127.0.0.1:19999/v1' })`)
   report.badGatewayRejected = bad?.ok === false
   report.badGatewayHint = bad?.hint

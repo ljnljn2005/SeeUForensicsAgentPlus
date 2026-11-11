@@ -22,7 +22,10 @@ import {
   localModelWarnings,
   normalizeGatewayModels,
   normalizeLocalModel,
+  contextWindowMismatch,
 } from '../tools/local-model.mjs'
+
+export { contextWindowMismatch }
 
 export interface LocalModelPrepared {
   /** 生成出来的补丁文件；未启用时为 undefined（不要传给 dsh）。 */
@@ -115,7 +118,7 @@ export function prepareLocalModel(options: PrepareOptions = {}): LocalModelPrepa
 /** 启动探测用：把 env/文件配置归一化，未启用或配置非法都返回 undefined。 */
 export function probeableLocalModel(
   configFile = localModelConfigFile(),
-): { baseURL: string; apiKey?: string; models: string[] } | undefined {
+): { baseURL: string; apiKey?: string; models: string[]; contextWindow: number } | undefined {
   try {
     const raw = readLocalModelConfig(configFile)
     if (raw === undefined) return undefined
@@ -123,8 +126,8 @@ export function probeableLocalModel(
     if (!normalized.enabled) return undefined
     const models = normalized.models.map((model: { id: string }) => model.id)
     return normalized.apiKey === undefined
-      ? { baseURL: normalized.baseURL, models }
-      : { baseURL: normalized.baseURL, apiKey: normalized.apiKey, models }
+      ? { baseURL: normalized.baseURL, models, contextWindow: normalized.contextWindow }
+      : { baseURL: normalized.baseURL, apiKey: normalized.apiKey, models, contextWindow: normalized.contextWindow }
   } catch {
     return undefined
   }

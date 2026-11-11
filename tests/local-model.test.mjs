@@ -14,6 +14,7 @@ import {
   localModelWarnings,
   estimateContextBudget,
   explainGatewayError,
+  contextWindowMismatch,
 } from '../tools/local-model.mjs'
 
 const require = createRequire(import.meta.url)
@@ -258,4 +259,13 @@ test('explainGatewayError：常见网关错误都有中文可操作提示', () =
   assert.match(explainGatewayError('HTTP 404: not found'), /404|路径/)
   assert.match(explainGatewayError(''), /确认网关地址/)
   assert.match(explainGatewayError('some unknown failure'), /诊断信息/)
+})
+
+test('contextWindowMismatch 只在配置超过网关自报能力时返回数值', () => {
+  const gw = [{ id: 'qwen', contextWindow: 32768 }, { id: 'other', contextWindow: 131072 }]
+  assert.deepEqual(contextWindowMismatch(131072, ['qwen'], gw), { configured: 131072, gateway: 32768 })
+  assert.equal(contextWindowMismatch(32768, ['qwen'], gw), null)
+  assert.equal(contextWindowMismatch(16384, ['qwen'], gw), null)
+  assert.equal(contextWindowMismatch(131072, ['missing'], gw), null)
+  assert.equal(contextWindowMismatch(131072, ['qwen'], [{ id: 'qwen' }]), null)
 })
