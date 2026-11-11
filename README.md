@@ -117,7 +117,9 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 │  └─ kill-app.mjs     # 清理残留实例（打包/验证前先跑，避免单实例锁导致 exit 0）
 ├─ docs/
 │  ├─ forensics-profile.md  # overlay 机制、验证命令与实测证据、扩展方式、局限
+│  ├─ plan-case-index.md    # 火眼全解析结果入库 + dsh 只查库 的实施计划与实测
 │  └─ packaging.md          # 打包说明
+├─ tools/ges-index/    # 火眼案件「全解析结果」→ 本地 SQLite 索引（建库 + 树状查询）
 ├─ electron-builder.yml
 └─ package.json
 ```
@@ -162,7 +164,25 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 - **打包体积**：asar 约 168MB（含完整 dsh 运行时与原生依赖）；后续可按需裁剪 test/example 文件与未用到的本地组件（libreoffice/sherpa 等）。
 - **更新通道**：未接入，`electron-builder.yml` 里 `publish: null`；要接官方 nightly 通道需另配 feed 与签名（见 `docs/packaging.md`）。
 
-## 8. 许可与来源
+## 8. 案件索引工具（tools/ges-index）
+
+火眼（GoldenEyes/GES）本身会产出「全解析结果」（`/case/检材分析数据/**` 下的 `data.csv` / `chat.txt`）。
+`tools/ges-index` 把这些结果一次性抓成本地 SQLite 索引，后续 dsh 会话**只查库**、不调 `ges.exe`，
+按树状渐进式披露逐层钻取，并给可回火眼核验的 `Goldeneyes://` 引用：
+
+```bash
+npm run index:build -- --case-dir "E:\forensics\W盘_2919d298-…"   # 建库（本案 370 叶约 4–6 分钟，DB 约 53 MiB）
+npm run index:tree -- "ev:3"                                     # root → ev → app → acc → cat → art → cite
+npm run index:stats
+npm run index:verify -- --sample 20                              # 随机回火眼核对正文与基址
+```
+
+- 只读火眼：仅调用 `case ls / case open / status / glob / read`；唯一写入是 `<案件目录>\.seeu-index\`。
+- 索引库 `case-index.db` 带 `manifest.json`（指纹/统计/耗时/失败清单），校验通过才原子替换旧库。
+- 本案实测：370/370 叶、22,777 条记录、1,594 条消息、8,185 个实体、0 失败、引用回查 20/20 一致。
+- 设计、schema、里程碑与实测明细见 `docs/plan-case-index.md`；用法见 `tools/ges-index/README.md`。
+
+## 9. 许可与来源
 
 - 外壳代码：MIT。
 - `dsh` 运行时：来自 npm `@deepseek-ai/dsh`（DeepSeek AI 开源，MIT）；本仓库不修改其源码，仅通过官方 profile/patch 机制扩展。

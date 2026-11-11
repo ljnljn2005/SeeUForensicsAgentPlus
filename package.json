@@ -21,7 +21,11 @@
     "prepackage:dir": "node scripts/check-overlay.mjs",
     "prepackage:win": "node scripts/check-overlay.mjs",
     "package:dir": "node scripts/build.mjs && electron-builder --win --x64 --dir",
-    "package:win": "node scripts/build.mjs && electron-builder --win --x64"
+    "package:win": "node scripts/build.mjs && electron-builder --win --x64",
+    "index:build": "node tools/ges-index/cli.mjs build",
+    "index:tree": "node tools/ges-index/cli.mjs tree",
+    "index:stats": "node tools/ges-index/cli.mjs stats",
+    "index:verify": "node tools/ges-index/cli.mjs verify"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.1.0",

@@ -7,6 +7,9 @@ release/
 .DS_Store
 Thumbs.db
 
+# 火眼案件索引库（由 tools/ges-index 生成，属于案件数据，不入仓库）
+.seeu-index/
+
 # 本地覆盖（可选）
 .env
 .env.local

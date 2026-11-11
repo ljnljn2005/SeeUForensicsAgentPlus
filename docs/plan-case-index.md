@@ -294,6 +294,25 @@ ges-index build --case <case_number|--case-dir <dir>> [--scope all|parsed|relate
 
 **性能目标**：本案 370 叶 / 约 5 万行 → **≤ 6 分钟**（含读 337 个 CSV + 33 个 chat.txt）；增量（`--update`，按 artifact 指纹比对）≤ 60 秒。
 
+### 6.1 M1 实现状态（as-built，2026-11-11）
+
+实现落在 `tools/ges-index/`（随仓库提交，不进 electron-builder 打包白名单）：
+
+| 文件 | 作用 |
+|---|---|
+| `ges.mjs` | `ges.exe` 定位（`SEEU_GES_EXE` → skill 目录 → PATH）、执行、JSON 解析、`glob` 分页、`read` 分页（解析基址行与 `N  正文` 行号） |
+| `parse.mjs` | 路径分类（holder/eid/app/account/category/subcat）、CSV 行解析、chat.txt 解析（摘要行/空发言人/`〔原文记录ID〕`）、实体正则、DDL |
+| `cli.mjs` | `build` + 查询命令（`tree`/`search`/`cite`/`stats`/`verify`）+ `manifest.json` |
+| `README.md` | 使用说明 |
+
+与 §5/§6 规格的差异（有意为之，M2 再补）：
+
+1. **只建通用层**：`meta/case_info/evidence/artifact/record/record_fts/msg/chat_meta/entity/ingest_log`。`column_map` 与 typed 投影表（contact/txn/exif/…）**推迟到 M2**——`record.text` 已整行保存，`fields_json` 存原始中文列，重投影不需要重新抓取。
+2. **命令面收敛为 5 个**：`tree`（主入口）、`search`（≥3 字符 FTS5 trigram，否则 LIKE 回退）、`cite`、`stats`、`verify`；`records` 由 `tree "art:<id>"` 承担，`overview` = `tree root`，`timeline`/`entity`/`marks`/`notes`/`ocr` 推迟（M2/M3/M6）。
+3. `--scope`/`--update`/`--ocr` 未实现；当前只有全量 `--rebuild`（默认）与 `--resume`（断点续跑）、`--out`、`--concurrency`、`--limit-leaves`（冒烟）。
+4. 库路径：`<case_dir>\.seeu-index\case-index.db`（`--out`/`--db` 可覆盖）；建库目录不可写 → 退出码 3 + `{"ok":false,"code":"E_CASE_DIR_READONLY"}`。
+5. npm 脚本：`npm run index:build` / `index:tree` / `index:stats` / `index:verify`。
+
 ---
 
 ## 7. 查询面：`ges-index query` + dsh 技能契约
@@ -415,7 +434,7 @@ create table cross_file(id integer primary key, sha256 text, case_number text, e
 | 里程碑 | 内容 | 人天 | 验收标准 |
 |---|---|---|---|
 | **M0 可行性 spike** ✅ 已完成 | 抓 1 个检材（eid3 全部叶子）→ 落 SQLite；测 read 分页吞吐、基址覆盖率、chat/CSV 解析正确性 | 0.5（实耗 ~2 h） | ✅ 139/139 叶、8,443 记录、0 失败、20/20 引用回查一致（详见 §13） |
-| **M1 建库器骨架** | 探测/枚举/抓取/`record`+`artifact`+`ingest_log`；`--rebuild` 原子替换；并发抓取 2–4 | 1.5 | 本案全量（370 叶）≤ 12 min；DB ≤ 120 MB；失败清单为空 |
+| **M1 建库器骨架** ✅ 已完成（2026-11-11） | 探测/枚举/抓取/`record`+`artifact`+`ingest_log`；`--rebuild` 原子替换；并发抓取 2–4 | 1.5（实耗 ~4 h） | ✅ 本案全量 370 叶、22,777 记录、0 失败、DB 52.8 MiB、242–329 s、`verify` 20/20（详见 §14） |
 | **M2 投影 + 实体 + 引用** | `column_map` 首批映射（通讯录/账号/Exif/通话/短信/微信/WhatsApp/Safari/基本信息 16 类）；`entity` 抽取；`citation` | 2 | typed 表覆盖 ≥ 90% 记录；实体命中可跨检材查询 |
 | **M3 查询 CLI + 技能** | 8 个 query 子命令 + `ges-case-index` SKILL.md + token 预算测试 | 1 | 单查询 P50 < 100 ms；输出 ≤ 2 KB；技能说明 ≤ 60 行 |
 | **M4 桌面集成** | 【更新索引】按钮、进度、设置案件目录、只读查询进程 | 1 | 从 0 到可查询全程 GUI 完成；取消/失败不损坏旧库 |
@@ -538,3 +557,61 @@ ges read …/图片Exif信息/data.csv → 基址 …/162000000001；615 行
 ges read …/好友消息/陳民浩(85254877240@s.whatsapp.net)/chat.txt → 基址 …/229000000201；[摘要]+消息行
 ges search "…" → ERROR：res/vector_search/tree.pkl 不存在（未做向量入库）
 ```
+
+---
+
+## 14. M1 建库器实测（2026-11-11，已通过）
+
+工具：`tools/ges-index`（Node 24 + 内置 `node:sqlite`，零依赖）；案件 `2919d298-…`（5 检材）。
+
+### 14.1 全量建库（`build --case-dir <案件目录>`）
+
+| 指标 | 实测 |
+|---|---|
+| 叶子 | **370/370**（337 `data.csv` + 33 `chat.txt`），5 个检材 |
+| artifact / record | 370 / **22,777** |
+| 消息 / 会话 | **1,594** 条 / **33** 个 chat.txt |
+| 实体 | 8,185（火眼 9 类实体 CSV + 正则抽取） |
+| citable | **320** 有基址 / **50** 无基址（全部 `实体分类/*`、`检材信息` 等无句柄叶子） |
+| 失败 | **0** |
+| DB 体积 | **52.79 MiB** |
+| 耗时 | **242 s**（输出到工作区） / **329 s**（输出到 `E:` 案件目录，慢在磁盘写） |
+| 完整性 | `pragma integrity_check` ok；覆盖率校验通过（artifact==leaves 且 0 失败） |
+| 产物 | `E:\forensics\W盘_2919d298-…\.seeu-index\case-index.db` + `manifest.json` |
+
+对照计划目标：≤12 min ✅、DB ≤120 MB ✅、失败清单空 ✅。
+
+### 14.2 查询实测
+
+| 查询 | 结果 |
+|---|---|
+| `tree`（root） | 309 B 级；5 检材、370 artifacts、时间范围 **2016-12-11 ~ 2025-05-16**（已剔除 ISO 入库时间列） |
+| `tree "ev:3"` | 8 个应用；WhatsApp 66 artifacts / 基本信息 27 / 微信 18 / 苹果健康 12 / 实体分类 9 / Safari 5 / Exif 1 |
+| `tree "app:3|WhatsApp"` | 账号层 `U+1F495~Ling~U+1F495U+1F3B6(85260927726@s.whatsapp.net)` |
+| `tree "acc:…"` | 16 个类别（群聊消息 8 文件 / 336 行、好友消息 3 / 435 行…） |
+| `tree "cat:…群聊消息"` | 8 个 chat 文件，含行数与 citable |
+| `tree "art:343"` | 10/195 条记录，`next:"art:343:1"` 可翻页；群系统消息空发言人正常入库 |
+| `tree "cite:21697"` | `[[1]](Goldeneyes://…/229000000926#2)` + 回查命令 |
+| `search -q "陳民浩"` | FTS5 trigram，10+ 命中，含 `«…»` 高亮 |
+| `search -q "加密"` | 2 字 → LIKE 回退，10 命中（含「是否加密,是」） |
+| `search -q "85254877240"` | FTS5，命中 WhatsApp 联系人/手机联系人/短信 |
+| `verify --sample 20` | **20/20** 行内容逐字一致、**20/20** 基址一致 |
+
+### 14.3 M1 期间修掉的问题（已写回代码）
+
+1. `ges glob` 必须用 `--pattern`（不是位置参数）。
+2. 群聊 `[摘要]` 行没有「（本机发送N条）」，本机段必须可选。
+3. 群系统消息发言人为空（`` `` ``），发言人正则必须允许空。
+4. 基址正则把结尾 `〕` 吃进 `base_handle` → 引用比对失败；改为 `/Goldeneyes:\/\/[^\s〕]+/`。
+5. **时间列必须只取事件时间**：`创建时间/更新时间/修改时间` 是入库 ISO 时间，混进 `record.ts` 会让时间线跨到 2026 年；已从 `TS_COLS` 移除。
+6. `-q` 这类单横线短选项此前被当成位置参数（查询词变成 `-q`），已统一解析 `-x`/`--x`。
+7. 应用层 `accounts` 统计把空账号也算 1 个 → 改为只统计非空账号。
+
+### 14.4 M1 遗留 → M2/M3
+
+- typed 投影表 + `column_map` + `citation` 表（M2）。
+- `timeline` / `entity` / `marks` / `notes` / `ocr` 查询与 `关联分析/标记数据/笔记数据` 入库（M2）。
+- `--update` 增量（按 artifact 指纹）：当前重建一次 ~5 分钟，比赛场景可接受，增量优先级降低。
+- dsh 技能 `resources/forensics/skills/ges-case-index/SKILL.md`（M3，约 50 行、常驻 ~800 token）。
+- 桌面【更新索引】按钮与进度条（M4）。
+
