@@ -1514,3 +1514,19 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 `REPORT` 关键字段：`"warmupApiOk":true,"warmupElapsedMs":4,"warmupOk":true,"warmupText":"预热完成：qwen2.5-32b-instruct 已加载（首次响应 4 ms），回复「pong」；现在开新会话就不用等加载了。"`；`npm test` 43/43；`node scripts/build.mjs` 通过。
 
 遗留：预热只发一次，网关若按最短空闲时间卸载模型（部分 vLLM 配置）会重新变冷；超时固定 5 分钟，超大模型（70B+ 磁盘冷读）可能不够，后续可做成可配置。
+
+### 20.35 第 33 轮：检索筛选的检材改为下拉
+
+**问题**：检索筛选的「检材号 eid」是手输框。研判者看到的是「检材 3 · LEUNG_YL_mobile.zip」，手输时要自己记 eid↔名称的对应，输错就筛出空结果且没有提示。
+
+**实现**（只改 `plugins/seeu-case-index/client.js`）：
+
+- `Panel` 新增 `evList` 状态与 `useEffect`：`db` 变化时调 `/evidences?db=`，取 `body.evidences`（字段 `eid/name/holder/platform/type/recordCount/label`），失败置空，`alive` 标记防卸载后 setState；
+- 检索筛选行把 `narrowInput(filters.eid, …)` 换成 `h('select')`：首项「全部检材」，其余每项文案 `检材 <eid> · <name> · <platform>`（缺名称/平台时自动省略），`onChange` 写 `filters.eid`，回车触发检索，未选库时 disabled；`title` 提示「下拉里就是火眼的检材名称，不用记 eid」；
+- `scripts/e2e/search-filter-check.mjs`：改按 `option.value === String(eid)` 找 select、设值后 `dispatchEvent(new Event('change',{bubbles:true}))`；`afterClear` 读含「全部检材」选项的 select 的 value。
+
+**验证**：
+
+`node scripts/e2e/search-filter-check.mjs` → `"ok": true`、`"eidFilled": true`、`"filterApplied": true`、`"filteredRows": 12`、`"filteredAllMatch": true`、`"copyNote":"已复制 12 条引用清单"`、`"pageTotal": 41`、`"exportAllCount": 41`、`"errors": []`；`npm test` 43/43；`m2-ui-check`（`SEEU_DEV_MULTI=1`）→ `"errors": []`。
+
+遗留：检材下拉的数据来自 `/evidences`，索引库 schema < 4 时 `name/platform` 为空，下拉只剩「检材 N」（建议按旧库提示重建）；下拉只在检索视图，记录/表视图的筛选仍是手输。

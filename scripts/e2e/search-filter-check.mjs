@@ -195,7 +195,16 @@ try {
   const eid = base[0].eid
   report.filterEid = eid
 
-  report.eidFilled = await setInput('检材号 eid', String(eid))
+  // 检材筛选从「手输 eid」改成「下拉选检材名」：按 option value 选中再触发 change
+  report.eidFilled = await evaluate(`(() => {
+    const sel = Array.from(document.querySelectorAll('select')).find((s) =>
+      Array.from(s.options).some((o) => o.value === '${eid}'))
+    if (!sel) return false
+    sel.value = '${eid}'
+    sel.dispatchEvent(new Event('change', { bubbles: true }))
+    return sel.value
+  })()`)
+  report.eidFilled = report.eidFilled === String(eid)
   report.filterApplied = await clickText('按筛选检索')
   await sleep(2000)
   const filtered = await readSearchRows()
@@ -228,8 +237,9 @@ try {
   report.cleared = await clickText('清空筛选')
   await sleep(600)
   report.afterClear = await evaluate(`(() => {
-    const el = Array.from(document.querySelectorAll('input')).find((i) => (i.placeholder || '').includes('检材号 eid'))
-    return el ? el.value : null
+    const sel = Array.from(document.querySelectorAll('select')).find((s) =>
+      Array.from(s.options).some((o) => o.value === ''))
+    return sel ? sel.value : null
   })()`)
 
   report.exportAllOk = !report.pageTotal || report.pageTotal <= report.baseRows ||

@@ -1011,6 +1011,21 @@ window.__ModuleLoader__.load({
       const [query, setQuery] = useState('');
       // 检索筛选：检材 / 应用 / 起止日期（后端 search() 原生支持，空值不传）
       const [filters, setFilters] = useState({ eid: '', app: '', from: '', to: '' });
+      // 检索筛选用的检材下拉：从 /evidences 拿「eid + 名称 + 平台」，用户不用记 eid
+      const [evList, setEvList] = useState([]);
+      useEffect(() => {
+        let alive = true;
+        if (!db) { setEvList([]); return undefined; }
+        (async () => {
+          try {
+            const body = await api('/evidences', { db });
+            if (alive) setEvList(body?.evidences ?? []);
+          } catch {
+            if (alive) setEvList([]);
+          }
+        })();
+        return () => { alive = false; };
+      }, [db]);
       const [copyNote, setCopyNote] = useState('');
       const [overviewNote, setOverviewNote] = useState('');
       const [result, setResult] = useState(null);
@@ -1455,7 +1470,17 @@ window.__ModuleLoader__.load({
               actionButton('检索', doSearch, { primary: true, disabled: !db || busy === 'search' }),
               busy === 'search' ? h(LoadingLine, { text: '检索中…' }) : null),
             h('div', { style: { ...S.row, gap: 6, marginTop: 6 } },
-              narrowInput(filters.eid, (v) => setFilters((f) => ({ ...f, eid: v })), '检材号 eid', { width: 84, disabled: !db, onEnter: doSearch }),
+              h('select', {
+                style: { ...S.input, flex: 'none', width: 200, cursor: db ? 'pointer' : 'default' },
+                value: filters.eid,
+                disabled: !db,
+                title: '按检材筛选：下拉里就是火眼的检材名称，不用记 eid',
+                onChange: (e) => setFilters((f) => ({ ...f, eid: e.target.value })),
+                onKeyDown: (e) => { if (e.key === 'Enter') doSearch(); },
+              },
+                h('option', { value: '' }, '全部检材'),
+                ...evList.map((ev) => h('option', { key: ev.eid, value: String(ev.eid) },
+                  '检材 ' + ev.eid + (ev.name ? ' · ' + ev.name : '') + (ev.platform ? ' · ' + ev.platform : '')))),
               narrowInput(filters.app, (v) => setFilters((f) => ({ ...f, app: v })), '应用 app（精确）', { width: 116, disabled: !db, onEnter: doSearch }),
               narrowInput(filters.from, (v) => setFilters((f) => ({ ...f, from: v })), '起始 2025-04-01', { width: 112, disabled: !db, onEnter: doSearch }),
               narrowInput(filters.to, (v) => setFilters((f) => ({ ...f, to: v })), '结束 2025-04-30', { width: 112, disabled: !db, onEnter: doSearch }),
