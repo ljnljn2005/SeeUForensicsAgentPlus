@@ -11,7 +11,7 @@
  * 退出码 0 = 通过（打印 JSON 摘要）；1 = 失败（打印原因与日志尾部）。
  */
 
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -94,7 +94,13 @@ let lastError = ''
 try {
   while (Date.now() < deadline) {
     await sleep(1000)
-    if (child.exitCode !== null) throw new Error(`应用提前退出（exit ${String(child.exitCode)}）`)
+    if (child.exitCode !== null) {
+      const exit = String(child.exitCode)
+      const hint = exit === '0'
+        ? '：exit 0 通常是单实例锁生效（已有 SeeUForensicsAgentPlus 实例在运行），先退出所有实例再重试'
+        : '：查看 %APPDATA%\\SeeUForensicsAgentPlus\\logs\\ 下的日志'
+      throw new Error(`应用提前退出（exit ${exit}）${hint}`)
+    }
     try {
       pages = await fetchJson(`http://127.0.0.1:${port}/json/list`)
       const appPage = pages.find((page) => page.type === 'page' && /^http:\/\/127\.0\.0\.1:\d+\//.test(page.url ?? ''))
@@ -129,10 +135,18 @@ try {
     pages: pages.map((page) => ({ type: page.type, url: page.url, title: page.title })),
   }, null, 2))
 } finally {
-  try { child.kill() } catch { /* 忽略 */ }
+  // 收尾要点：先按进程树 taskkill，再等主进程退出。
+  // 顺序反过来（先 child.kill()）会出现「主进程已死、renderer/GPU 子进程成孤儿」，
+  // 残留进程会占住单实例锁，导致下一次验证直接 exit 0。
   if (child.pid !== undefined) {
-    spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' }).on('error', () => {})
+    try {
+      spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
+    } catch { /* 忽略 */ }
   }
+  if (child.exitCode === null) {
+    try { child.kill('SIGKILL') } catch { /* 忽略 */ }
+  }
+  await sleep(500)
   if (stderr.trim() !== '') {
     const tail = stderr.trim().split(/\r?\n/).slice(-25).join('\n')
     console.error(`[verify] 子进程 stderr 尾部：\n${tail}`)

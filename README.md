@@ -55,16 +55,21 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.1.1**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 768 MiB） |
-| `release/win-unpacked/resources/app.asar` | 167,872,527 B |
-| `release/SeeUForensicsAgentPlus-0.1.0-x64.exe`（NSIS 安装包） | 211,755,996 B |
-| `release/SeeUForensicsAgentPlus-0.1.0-x64-portable.exe` | 189,438,201 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 769 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,374,857 B（330/330 个 `@deepseek-ai` 包齐全） |
+| `release/SeeUForensicsAgentPlus-0.1.1-x64.exe`（NSIS 安装包） | 211,853,609 B |
+| `release/SeeUForensicsAgentPlus-0.1.1-x64-portable.exe` | 189,488,499 B |
 
-实测冷启动到 dsh UI 可达约 4.1s（`verify-launch.mjs` 三轮：4074 / 4164 / 4101 ms）；更细的打包说明见 `docs/packaging.md`。
+实测冷启动到 dsh UI：目录版 3056 ms；portable 首次 42.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期）。更细的打包说明见 `docs/packaging.md`。
+
+> **v0.1.1 修复了什么**：v0.1.0 的安装包/portable 启动即报
+> `ERR_MODULE_NOT_FOUND: Cannot find package '@deepseek-ai/cordis-plugin-group'`。
+> 原因是 electron-builder 不收集 `peerDependencies`，21 个 dsh 服务接口包没进 asar。
+> 已把 21 个 peer-only 包写进 `dependencies`（详见 §5 第 6 条与 `docs/packaging.md` §5.1）。**请改用 0.1.1 的产物。**
 
 ## 3. 目录结构
 
@@ -115,6 +120,8 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
    `dsh --patch <overlay> --profile web --host 127.0.0.1 --port 0 --no-open`（`--host/--port/--no-open` 透传给 web app），否则会报 `error: --profile <name> is required`。
 4. **端口与 token 由 dsh 自己决定**：`--port 0` 让 OS 选空闲端口，就绪行 `dsh web: http://127.0.0.1:<port>/?token=<token>` 从 stdout 解析；窗口只加载这个带 token 的 URL。不监听外网（`--host 127.0.0.1`）。
 5. **外壳不注入业务代码**：窗口里就是官方 dsh Web UI。取证定制落在 overlay（prompt/preset/遥测开关）与外壳层（品牌、工作区、日志、权限），因此可以跟随官方运行时升级。
+6. **peer 依赖必须显式写进 `dependencies`。** dsh 用 cordis DI，很多 `@deepseek-ai/dsh-*` 只以 `peerDependencies` 声明（如 `@deepseek-ai/cordis-plugin-group`）。electron-builder 只沿 `dependencies`/`optionalDependencies` 收集 node_modules，**忽略 peer**，所以开发态能跑、打包版却报
+   `ERR_MODULE_NOT_FOUND: Cannot find package '@deepseek-ai/cordis-plugin-group'`。本项目把 21 个 peer-only 包（精确版本）写进了根 `package.json`；升级 `@deepseek-ai/dsh` 后必须重跑 `docs/packaging.md` §5.1 的 `330/330` 自检，按缺失清单补齐。
 
 ## 6. 退出与容错
 

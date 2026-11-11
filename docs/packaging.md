@@ -188,6 +188,43 @@ asar 内容实测（2026-11-11，Electron 44.7.0 轮，`@electron/asar listPacka
 `npmRebuild: false`：所有原生模块都是 N-API / 预编译产物，打包机不需要
 VS Build Tools；若将来引入必须针对 Electron ABI 重编译的模块，改回 `true`。
 
+### 5.1 必须显式声明进 `dependencies` 的 peer 包（打包启动失败的头号原因）
+
+`@deepseek-ai/*` 运行时大量使用 cordis 的 DI：**服务接口包只被声明为
+`peerDependencies`**（例如 `@deepseek-ai/dsh-app-boot` 的
+`peerDependencies: { "@deepseek-ai/cordis-plugin-group": "~1.1.0" }`）。
+npm 7+ 会把 peer 装进 `node_modules`，所以开发态（`electron .` 读完整
+`node_modules`）完全正常；但 **electron-builder 只沿
+`dependencies`/`optionalDependencies` 收集 node_modules，忽略
+`peerDependencies`**，于是这些包不会进 asar，打包后启动直接崩：
+
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@deepseek-ai/cordis-plugin-group'
+  imported from ...\resources\app.asar\node_modules\@deepseek-ai\dsh-app-boot\lib\index.js
+```
+
+本仓库因此把 21 个 peer-only 包显式写进根 `package.json` 的 `dependencies`
+（版本与 dsh 0.2.2-rc.1 对齐，`cordis-plugin-group` 为 1.1.0）：`cordis-plugin-group`、
+`dsh-anonymous-user-id`、`dsh-attachment`、`dsh-bash-local`、`dsh-compaction`、
+`dsh-deepseek-account`、`dsh-fs`、`dsh-jobs`、`dsh-llm-deepseek`、`dsh-ptc-runtime`、
+`dsh-sandbox`、`dsh-scope`、`dsh-sdk-protocol`、`dsh-session-persistence`、
+`dsh-session-query`、`dsh-session-telemetry`、`dsh-session-title-llm`、`dsh-shell`、
+`dsh-spill`、`dsh-util-workspace-path`、`dsh-workflow`。
+
+自检方法（应为 `local 330 / asar 330`，差值 0）：
+
+```bash
+node -e "const fs=require('node:fs'),a=require('@electron/asar').listPackage('release/win-unpacked/resources/app.asar');
+const inAsar=new Set(a.map(p=>p.replace(/\\\\/g,'/')).filter(p=>/^\/node_modules\/@deepseek-ai\/[^\/]+$/.test(p)).map(p=>p.split('/')[3]));
+const local=fs.readdirSync('node_modules/@deepseek-ai').filter(n=>fs.existsSync('node_modules/@deepseek-ai/'+n+'/package.json'));
+console.log(local.length,inAsar.size,'missing:',local.filter(n=>!inAsar.has(n)).join(','))"
+```
+
+注意：在 `files` 里加 `node_modules/@deepseek-ai/*/**` 之类的 glob **无效** ——
+electron-builder 会先用依赖图过滤 node_modules，glob 只在过滤结果内生效
+（本项目实测仍是 309/330）。升级 `@deepseek-ai/dsh` 后必须重跑上面的自检，
+按缺失列表补齐 `dependencies`。
+
 ## 6. 体积现状
 
 以 2026-11-11 最终轮（Electron 44.7.0，修正 `files` 白名单 + `src/main.ts` 标题锁之后）为准。
@@ -198,18 +235,21 @@ VS Build Tools；若将来引入必须针对 Electron ABI 重编译的模块，�
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 | 234.9 MiB | Electron 主程序（含 rcedit 写入的图标/版本资源） |
-| `release/win-unpacked/resources/app.asar` | 167,872,527 | 160.1 MiB | JS + 资源 + node_modules 生产依赖（19,460 个 asar 条目） |
-| `release/win-unpacked/`（整个目录） | — | 768 MiB | 含 Electron 运行时、locales、`app.asar.unpacked` 原生模块（`du -sh`） |
+| `release/win-unpacked/resources/app.asar` | 168,374,857 | 160.6 MiB | JS + 资源 + node_modules 生产依赖（19,621 个 asar 条目，`@deepseek-ai` 330/330） |
+| `release/win-unpacked/`（整个目录） | — | 769 MiB | 含 Electron 运行时、locales、`app.asar.unpacked` 原生模块（`du -sm`） |
 
 `npm run package:win` 额外产出（同一轮）：
 
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
-| `release/SeeUForensicsAgentPlus-0.1.0-x64.exe` | 211,755,996 | 201.9 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
-| `release/SeeUForensicsAgentPlus-0.1.0-x64.exe.blockmap` | 220,491 | 215 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
-| `release/SeeUForensicsAgentPlus-0.1.0-x64-portable.exe` | 189,438,201 | 180.7 MiB | 免安装单文件（自解压运行） |
+| `release/SeeUForensicsAgentPlus-0.1.1-x64.exe` | 211,853,609 | 202.0 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
+| `release/SeeUForensicsAgentPlus-0.1.1-x64.exe.blockmap` | 220,687 | 215.5 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
+| `release/SeeUForensicsAgentPlus-0.1.1-x64-portable.exe` | 189,488,499 | 180.7 MiB | 免安装单文件（自解压运行） |
 
-即：安装包约 **202 MiB**、portable 约 **181 MiB**，解包目录约 **768 MiB**。
+即：安装包约 **202 MiB**、portable 约 **181 MiB**，解包目录约 **769 MiB**。
+
+> v0.1.0 的同名产物（`app.asar` 167,872,527 B、缺失 21 个 peer 包）启动即崩，
+> 已被 v0.1.1 取代，不要再用；体积差异（+502 KB）正是补进来的 21 个包。
 
 体积构成大头：Electron 运行时本体（exe + DLL/pak/icudtl）、`app.asar` 中
 `@deepseek-ai/*` 与 office/语音/终端相关依赖、`app.asar.unpacked` 中
@@ -293,6 +333,28 @@ node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus
 ```
 
 asar 内已确认 overlay 与取证技能随包（见 §4 实测清单）。
+
+### v0.1.1 回归验证（补齐 peer 包之后，2026-11-11）
+
+```json
+// --dir 产物（release/win-unpacked/SeeUForensicsAgentPlus.exe，port 9341）
+{ "ok": true, "elapsedMs": 3056, "title": "SeeUForensicsAgentPlus",
+  "url": "http://127.0.0.1:49687/?token=..." }
+```
+
+```json
+// portable 单文件（release/SeeUForensicsAgentPlus-0.1.1-x64-portable.exe，port 9343）
+{ "ok": true, "elapsedMs": 42489, "title": "SeeUForensicsAgentPlus",
+  "url": "http://127.0.0.1:63754/?token=..." }
+```
+
+portable 首次 42.5s 属预期：它要先把约 800MB 负载解压到 `%TEMP%\<随机名>`
+（目录版 3s 是直接跑已解包目录）。两者都能在 UI 稳定后正常进入 dsh Web UI。
+
+**排障提示（单实例锁）**：若 `verify-launch.mjs` 报
+`应用提前退出（exit 0）`，几乎总是因为已有实例在跑（Electron 单实例锁让新进程
+直接 quit）。先 `tasklist | grep -i seeu` 清理残留，再重试；脚本现已改为先
+`taskkill /PID <pid> /T /F` 再等退出，并在 exit 0 时直接给出该提示。
 
 **已知品牌局限（发布前需知晓）**：上面两条 JSON 恰好体现同一件事——`?token=` 与
 `document.title` 在 UI 稳定后都会变：客户端会去掉 URL 里的 token（变为
