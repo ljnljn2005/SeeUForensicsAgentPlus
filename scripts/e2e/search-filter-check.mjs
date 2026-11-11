@@ -10,6 +10,7 @@
  * 产出：一行 REPORT JSON。
  */
 import { spawn, execFileSync } from 'node:child_process'
+import { mkdirSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { request } from 'node:http'
 import { join } from 'node:path'
 
@@ -19,6 +20,7 @@ const exeOverride = process.env.SEEU_UI_EXE
 const electron = exeOverride || join(root, 'node_modules', 'electron', 'dist', 'electron.exe')
 const CASE_DIR = process.env.SEEU_CASE_DIR || 'E:\\forensics\\W盘_2919d298-f083-4a81-9c12-bd4ca393bcc5'
 const KEYWORD = process.env.SEEU_SEARCH_KEYWORD || '加密'
+const EXPORT_DIR = process.env.SEEU_EXPORT_DIR || join(root, '.dev', 'search-exports')
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 function get(url, timeout = 3000) {
@@ -38,6 +40,9 @@ function get(url, timeout = 3000) {
 const env = { ...process.env }
 delete env.ELECTRON_RUN_AS_NODE
 env.SEEU_DEV_MULTI = '1'
+rmSync(EXPORT_DIR, { recursive: true, force: true })
+mkdirSync(EXPORT_DIR, { recursive: true })
+env.SEEU_EXPORT_DIR = EXPORT_DIR
 if (process.env.SEEU_NO_KILL !== '1') {
   try {
     execFileSync('taskkill', ['/F', '/IM', exeOverride ? 'SeeUForensicsAgentPlus.exe' : 'electron.exe', '/T'], { stdio: 'ignore' })
@@ -237,6 +242,28 @@ try {
     head: clip.split('\n').slice(0, 3).join(' | '),
   }
 
+  // 检索结果导出 CSV：当前筛选下应导出同样多的行，落盘文件带 BOM/表头
+  report.csvClicked = await clickText('导出 CSV')
+  await sleep(3000)
+  const csvBody = String((await evaluate('document.body.innerText')) ?? '')
+  const csvMatch = csvBody.match(/已导出\s*(\d+)\s*行/)
+  report.csvNote = csvMatch ? csvMatch[0] : ''
+  report.csvRows = csvMatch ? Number(csvMatch[1]) : 0
+  try {
+    const files = readdirSync(EXPORT_DIR).filter((f) => f.startsWith('检索导出-') && f.endsWith('.csv')).sort()
+    const latest = files.length ? join(EXPORT_DIR, files[files.length - 1]) : null
+    if (latest) {
+      const text = readFileSync(latest, 'utf8')
+      report.csvFile = {
+        bytes: statSync(latest).size,
+        bom: text.charCodeAt(0) === 0xfeff,
+        hasHeader: text.includes('检材号,检材名称,应用'),
+        dataLines: text.trimEnd().split(/\r?\n/).length - 1,
+        hasTs: /\d{4}-\d{2}-\d{2}/.test(text),
+      }
+    }
+  } catch (e) { report.csvError = String(e?.message ?? e) }
+
   // 清空筛选后筛选框应为空
   report.cleared = await clickText('清空筛选')
   await sleep(600)
@@ -254,6 +281,9 @@ try {
   report.ok = report.panelOpened && report.scanned && report.tabOpened && report.queryFilled &&
     report.searched && report.baseRows > 0 && report.highlightOk && report.pagedOk && report.exportAllOk && report.filterApplied && report.filteredRows > 0 &&
     report.filteredAllMatch && report.filterNarrowed && report.copyNoteShown &&
+    report.csvClicked === true && report.csvRows === report.filteredRows &&
+    report.csvFile?.bom === true && report.csvFile?.hasHeader === true &&
+    report.csvFile?.dataLines === report.filteredRows &&
     report.clipboard.len > 0 && report.clipboard.hasHeader && report.clipboard.hasCite &&
     report.afterClear === '' && errors.length === 0
   if (!report.ok) report.errors.push('部分断言未通过')

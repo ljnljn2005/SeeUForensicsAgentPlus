@@ -1720,3 +1720,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 打包态 e2e 全绿：面板 `m2-ui-check`（`m2ok:true`，筛选/分页/时间线/会话语境/树过滤/KPI 全 true）；导出 `export-check`（记录 CSV 20,000 行 4,608,566 B BOM 正常、表 CSV 745 行 143,621 B；概览/记录/时间线清单不变）；设置页 `settings-check`（精简预设、开销估算、网关自报窗口、预热、标题开关、浅色）；跨案 `cross-case-check`（2 案、30 条重合实体）。
 - 坑与上轮相同：`SEEU_UI_EXE` 必须 Windows 路径；`SEEU_DEV_MULTI=1` 不能漏（否则被用户实例的单实例锁挡住、拿不到页面）。
 - 文档：README §2 产物表换 0.2.7 + 「### v0.2.7 改了什么」；`docs/packaging.md` 追加本节对应内容；预览重启后 token 变化，等用户视觉验收 + 真实网关。
+
+---
+
+## 20.55 检索结果导出 CSV（v0.2.8，未打包）
+
+- 动机：检索视图此前只能【复制引用清单】（Markdown，逐条回查句柄）与【导出全部 N 条】，要把命中丢进表格排序/统计还得自己粘；记录/表视图在 v0.2.7 已有 CSV，检索视图缺一条。
+- 实现（只改 `plugins/seeu-case-index/client.js`，复用 v0.2.7 的 `saveCsvText`）：
+  - `Panel` 内新增 `exportSearchCsv()`：以当前 `result.query` + `filters`（`eid/app/from/to`）为条件，从已返回的首页结果起按 `limit:200` 翻页取满，上限 20000 行；
+  - 列与记录 CSV 同构：`检材号,检材名称,应用,账号,类别,时间,行号,记录ID,摘要`（检材名用 `evLabel()` 换成火眼里的名字，摘要压掉换行）；
+  - 客户端按 RFC 4180 转义（逗号/引号/换行加引号并双写），文本前补 `\uFEFF`、行尾 CRLF（`fetch().text()` 会吃 BOM，必须在客户端补）；文件名 `检索导出-<UTC时间戳>.csv`；
+  - 成功后提示「已导出 N 行（共 M 条，单次最多 20000 行）：<路径>」；web 预览（无 Electron 桥）回退浏览器下载；
+  - 结果头部按钮：`复制引用清单` / `导出全部 N 条` / `导出 CSV`。
+- 验证：`npm run test:e2e:search`（真实案件库，关键词「加密」→ 筛检材 3 得 12 条 → 点【导出 CSV】→ 用 `readdirSync/readFileSync` 读回落盘文件）→ `"csvClicked":true,"csvNote":"已导出 12 行","csvRows":12,"csvFile":{"bytes":2961,"bom":true,"hasHeader":true,"dataLines":12,"hasTs":true}`，`ok:true`；`m2-ui-check` `m2ok:true / errors:[]`；`npm test` 55/55；`check:overlay` OK。
+- 遗留：CSV 从 `result.query` 取关键词，若用户改了输入框但没点检索，导出仍是上次检索的条件（与复制清单一致）；20000 行上限写死，未做成配置项。

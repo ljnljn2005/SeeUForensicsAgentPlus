@@ -1431,6 +1431,55 @@ window.__ModuleLoader__.load({
         setFilters({ eid: '', app: '', from: '', to: '' });
       }, []);
 
+      /** 把当前检索结果（含筛选）整批导出 CSV，Excel 可直接打开。 */
+      const exportSearchCsv = async () => {
+        const current = result?.rows ?? [];
+        if (!db || !current.length) return;
+        setBusy('csv');
+        setError('');
+        setCopyNote('');
+        const q = result?.query ?? query;
+        const extra = {};
+        if (String(filters.eid ?? '').trim()) extra.eid = Number(filters.eid);
+        if (String(filters.app ?? '').trim()) extra.app = String(filters.app).trim();
+        if (String(filters.from ?? '').trim()) extra.from = String(filters.from).trim();
+        if (String(filters.to ?? '').trim()) extra.to = String(filters.to).trim();
+        const total = Number(result?.total ?? current.length);
+        const cap = Math.min(total, 20000);
+        try {
+          const rows = [...current];
+          let offset = rows.length;
+          while (rows.length < cap) {
+            const page = await api('/search', { db, q, limit: 200, offset, ...extra });
+            if (!page?.rows?.length) break;
+            rows.push(...page.rows);
+            offset += page.rows.length;
+          }
+          const use = rows.slice(0, cap);
+          const cell = (v) => {
+            const s = v === undefined || v === null ? '' : String(v);
+            return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+          };
+          const lines = [['检材号', '检材名称', '应用', '账号', '类别', '时间', '行号', '记录ID', '摘要'].map(cell).join(',')];
+          for (const r of use) {
+            lines.push([
+              r.eid, evLabel(r.eid), r.app, r.account, r.cat, r.ts, r.line, r.id,
+              String(r.snip ?? '').replace(/\s+/g, ' ').trim(),
+            ].map(cell).join(','));
+          }
+          const text = '\uFEFF' + lines.join('\r\n') + '\r\n';
+          const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+          const saved = await saveCsvText('检索导出-' + stamp + '.csv', text);
+          if (saved && saved.ok === false) throw new Error(saved.error || '保存失败');
+          const trunc = total > use.length ? `（共 ${total} 条，单次最多 20000 行）` : '';
+          setCopyNote(`已导出 ${use.length} 行${trunc}` + (saved?.path ? '：' + saved.path : '') + '（UTF-8 BOM，Excel 可直接打开）');
+        } catch (e) {
+          setError('导出 CSV 失败：' + String(e.message ?? e));
+        } finally {
+          setBusy('');
+        }
+      };
+
       /** 统一的复制出口：Electron 走 preload 桥，纯 web 预览退回 navigator.clipboard。 */
       const copyText = useCallback(async (text) => {
         const value = String(text ?? '');
@@ -1831,6 +1880,9 @@ window.__ModuleLoader__.load({
                   : null,
                 (result.total ?? 0) > (result.rows ?? []).length
                   ? actionButton(busy === 'copy' ? '复制中…' : `导出全部 ${Math.min(result.total, 200)} 条`, () => exportCitations(true), { disabled: busy === 'copy' })
+                  : null,
+                (result.rows ?? []).length
+                  ? actionButton(busy === 'csv' ? '导出中…' : '导出 CSV', exportSearchCsv, { disabled: busy === 'csv' })
                   : null,
                 h('span', { style: { ...S.muted, marginLeft: 'auto' } }, '点一条看引用句柄。')),
               copyNote ? h('div', { style: S.noticeInfo }, copyNote) : null,
