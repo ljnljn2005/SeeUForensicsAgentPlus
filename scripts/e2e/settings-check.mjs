@@ -226,6 +226,19 @@ try {
   })`)
   report.litePresetOptional = fullPreview?.ok === true && !/agent-preset-registry/.test(fullPreview.patch)
   if (!report.litePresetOptional) throw new Error('关掉精简预设后仍生成了 registry 行')
+
+  // 流式带用量：勾复选框 → 页面自己重新 preview 时应出现 supportsUsageInStreaming: true
+  await evaluate(client, `(() => {
+    const box = document.getElementById('usageInStreaming')
+    box.checked = true
+    box.dispatchEvent(new Event('change', { bubbles: true }))
+    return true
+  })()`)
+  await sleep(700)
+  const usagePreview = await evaluate(client, `document.getElementById('preview').textContent || ''`)
+  report.usagePreview = /supportsUsageInStreaming:\s*true/.test(String(usagePreview))
+  if (!report.usagePreview) throw new Error('勾选流式用量后 preview 未打开 supportsUsageInStreaming')
+  log('流式用量', 'preview 已切到 supportsUsageInStreaming: true')
   log('preview', `patch ${preview.patch.length} 字符，含 retryPolicy=${report.previewHasRetryPolicy}`)
 
 
@@ -279,7 +292,8 @@ try {
     contextWindow: 131072,
     maxTokens: 8192,
     useAsDefault: true,
-    litePreset: true
+    litePreset: true,
+    usageInStreaming: true
   })`)
   if (saved?.ok !== true) throw new Error(`保存失败：${JSON.stringify(saved)}`)
   if (!existsSync(CONFIG)) throw new Error(`保存后配置文件不存在：${CONFIG}`)
@@ -287,6 +301,8 @@ try {
   report.savedModels = written.models.map((m) => m.id)
   report.litePresetSaved = written.litePreset === true
   if (!report.litePresetSaved) throw new Error('保存的配置里 litePreset 不是 true')
+  report.usageSaved = written.usageInStreaming === true
+  if (!report.usageSaved) throw new Error('保存的配置里 usageInStreaming 不是 true')
   log('保存', `写入 ${CONFIG}，模型 ${report.savedModels.join(',')}`)
 
   const reread = await evaluate(client, 'window.seeu.localModel.get()')

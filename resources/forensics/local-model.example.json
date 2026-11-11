@@ -13,5 +13,7 @@
   "titleMaxOutputTokens": 512,
   "titleTimeoutMs": 20000,
   "timeoutMs": 600000,
-  "streamIdleTimeoutMs": 600000
+  "streamIdleTimeoutMs": 600000,
+  "litePreset": true,
+  "usageInStreaming": false
 }

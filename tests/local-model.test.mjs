@@ -223,6 +223,20 @@ test('normalizeGatewayModels 归一化 /v1/models 响应', () => {
   assert.deepEqual(normalizeGatewayModels(undefined), [])
 })
 
+test('usageInStreaming 默认关闭，打开后 compat.supportsUsageInStreaming=true', () => {
+  const off = normalizeLocalModel({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm' }] })
+  assert.equal(off.usageInStreaming, false)
+  assert.ok(localModelPatch({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm' }] }).includes('supportsUsageInStreaming: false'))
+
+  const on = normalizeLocalModel({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm' }], usageInStreaming: true })
+  assert.equal(on.usageInStreaming, true)
+  const yamlText = localModelPatch({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm' }], usageInStreaming: true })
+  assert.ok(yamlText.includes('supportsUsageInStreaming: true'))
+  // 用户在 compat 里显式覆盖仍优先
+  const forced = localModelPatch({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm' }], usageInStreaming: true, compat: { supportsUsageInStreaming: false } })
+  assert.ok(forced.includes('supportsUsageInStreaming: false'))
+})
+
 test('litePreset 默认开启：patch 里把默认预设指到 seeu-lite', () => {
   const patch = localModelPatch({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm' }] })
   assert.ok(patch.includes('- id: agent-preset-registry'))

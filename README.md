@@ -459,6 +459,7 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 | `contextWindow` / `maxTokens` | `131072` / `8192` | 生成 patch 时的默认上下文与单次输出上限 |
 | `useAsDefault` | `false` | 为 `true` 时覆盖 `agent-default-model`，新会话直接用它 |
 | `litePreset` | `true` | 新会话默认用「取证分析（本地模型精简）」预设（工具表约 12 个，省约 8k tokens 固定开销）；`false` 时回到完整取证预设 |
+| `usageInStreaming` | `false` | 让网关在流式响应里带回 token 用量（`stream_options.include_usage`）；打开后会话里才显示「用量 N tok」，vLLM / LM Studio / llama.cpp 新版一般支持，老网关可能 400 |
 | `timeoutMs` / `streamIdleTimeoutMs` | `600000` | 本地模型首 token 可能很慢，默认给 10 分钟 |
 | `retryMaxRetries` | `3` | 低并发网关的失败重试次数（dsh 默认 5 次，排队时会放大成 5 次长超时） |
 | `titleMaxOutputTokens` / `titleTimeoutMs` | `512` / `20000` | 会话标题生成的输出上限与超时（本地模型不值得给 4096 tokens） |
@@ -468,13 +469,15 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 生成的行固定：
 
 - `api: openai-completions`（OpenAI 兼容协议）；
-- `compat: { supportsUsageInStreaming: false, maxTokensField: max_tokens, supportsStore: false, supportsDeveloperRole: false }`——不带 `stream_options.include_usage`（部分本地网关会 400），用 `max_tokens` 而不是 `max_completion_tokens`，不发 `store` 字段，系统提示走 `system` 角色而不是 OpenAI 新的 `developer` 角色（vLLM/Ollama/LM Studio 一类网关对这几个字段很敏感，最保守的请求体实测只有 `model,messages,stream,max_tokens,tools`）；需要时可在 `local-model.json` 的 `compat` 里逐项覆盖；
+- `compat: { supportsUsageInStreaming: <取 usageInStreaming>, maxTokensField: max_tokens, supportsStore: false, supportsDeveloperRole: false }`——默认不带 `stream_options.include_usage`（部分本地网关会 400），`usageInStreaming: true` 时才带（流式末段回 usage，会话里显示 token 用量）；用 `max_tokens` 而不是 `max_completion_tokens`，不发 `store` 字段，系统提示走 `system` 角色而不是 OpenAI 新的 `developer` 角色（vLLM/Ollama/LM Studio 一类网关对这几个字段很敏感，最保守的请求体实测只有 `model,messages,stream,max_tokens,tools`）；需要时可在 `local-model.json` 的 `compat` 里逐项覆盖；
 - 每个模型 `input: [text]`、`reasoningEfforts: false`（本地模型一般不支持思考档位）；
 - `retryPolicy: { mode: normal, maxRetries: 3 }`（覆盖 dsh 默认的 5 次）；
 - 顶层 `session-title-llm` 覆盖：`maxOutputTokens: 512, timeoutMs: 20000`（每次新会话多一次标题请求，本地模型要省）；
 - `litePreset: true`（默认）时追加 `agent-preset-registry` 行，把默认预设指到 `seeu-lite`（见 §9.2）。
 
 启动探测会同时比对**配置窗口 vs 网关自报窗口**：如果配置的上下文窗口比网关 `/v1/models` 自报的更大（例如配了 131072、但 vLLM 实际只有 32768），探测行会用黄字提示「配置窗口 131.1k 超过网关自报的 32.8k，超出部分请求会被拒」，日志里也有同样一条；这是最常见的一类「聊两句就报错」原因。拉取模型列表时网关若自报窗口，会自动把表单填成实际值。
+
+**token 用量显示**：勾选设置页的「流式响应带 token 用量」（`usageInStreaming`）后，请求会带 `stream_options: {include_usage: true}`，网关在流式末段返回 usage，dsh 的 token 计量/上下文占比才有数（实测 mock 网关：`用量 22 tok`）；默认关闭是因为老网关收到这个字段可能直接 400。
 
 设置页还会在「精简工具集」下方实时显示**固定开销估算**（工具描述 + 系统提示 ≈ 多少 tokens、窗口还剩多少留给对话），勾选/取消精简预设或改窗口时会立刻变化；测试连接/拉取模型失败时除了原始错误，会附一句可操作的中文提示（网关没启动 / 端口被占 / apiKey 错 / 超时 / 404 路径不对 / ERR_UNSAFE_PORT 等）。
 

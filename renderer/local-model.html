@@ -212,6 +212,14 @@
     </label>
   </div>
 
+  <div class="check">
+    <input type="checkbox" id="usageInStreaming" />
+    <label for="usageInStreaming">
+      流式响应带 token 用量（stream_options.include_usage）
+      <div class="hint">打开后会话里才能看到 token 用量/上下文占比；vLLM、LM Studio、llama.cpp 新版一般支持，老网关可能直接报 400，打不开就保持关闭。</div>
+    </label>
+  </div>
+
   <div class="hint" id="budget" style="margin:2px 0 10px"></div>
 
   <div class="actions">
@@ -303,6 +311,7 @@
       maxTokens: Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : undefined,
       useAsDefault: $('useAsDefault').checked,
       litePreset: $('litePreset').checked,
+      usageInStreaming: $('usageInStreaming').checked,
       timeoutMs: secToMs($('timeoutSec').value),
       streamIdleTimeoutMs: secToMs($('streamIdleSec').value),
       retryMaxRetries: numOrUndef($('retryMaxRetries').value),
@@ -336,6 +345,7 @@
     $('maxTokens').value = c.maxTokens || 8192
     $('useAsDefault').checked = c.useAsDefault === true || c.defaultModel !== undefined
     $('litePreset').checked = c.litePreset !== false
+    $('usageInStreaming').checked = c.usageInStreaming === true
     $('timeoutSec').value = c.timeoutMs ? Math.round(c.timeoutMs / 1000) : 600
     $('streamIdleSec').value = c.streamIdleTimeoutMs ? Math.round(c.streamIdleTimeoutMs / 1000) : 600
     $('retryMaxRetries').value = Number.isFinite(c.retryMaxRetries) ? c.retryMaxRetries : 3

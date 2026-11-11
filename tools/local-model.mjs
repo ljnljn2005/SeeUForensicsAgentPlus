@@ -31,6 +31,9 @@ const DEFAULTS = {
   // 本地模型默认用「取证分析（本地模型精简）」预设：工具表约 10 个、系统提示紧凑，
   // 固定开销从 ~33k 字符降到 ~11k（32k 窗口才留得下对话）。关掉则沿用完整取证预设。
   litePreset: true,
+  // 少数网关不支持 stream_options.include_usage（会直接 400），所以默认关闭；
+  // 打开后流式响应末尾会带回 usage，会话里的 token 用量/上下文占比才有数。
+  usageInStreaming: false,
 }
 
 export class LocalModelConfigError extends Error {
@@ -117,6 +120,7 @@ export function normalizeLocalModel(input = {}) {
     titleMaxOutputTokens: num(input.titleMaxOutputTokens, DEFAULTS.titleMaxOutputTokens),
     titleTimeoutMs: num(input.titleTimeoutMs, DEFAULTS.titleTimeoutMs),
     litePreset: input.litePreset !== false,
+    usageInStreaming: input.usageInStreaming === true || input.usageInStreaming === 'true',
     compat: input.compat !== null && typeof input.compat === 'object' ? input.compat : {},
     models: models.map((m) => ({
       id: m.id,
@@ -163,7 +167,7 @@ export function localModelPatch(cfg) {
   // 本地/自建网关的保守兼容档：不发 store、不用 developer 角色、不回传 usage 流事件，
   // 输出上限字段用 max_tokens。用户的 compat 覆盖这几个默认值。
   const compat = {
-    supportsUsageInStreaming: false,
+    supportsUsageInStreaming: c.usageInStreaming,
     maxTokensField: 'max_tokens',
     supportsStore: false,
     supportsDeveloperRole: false,

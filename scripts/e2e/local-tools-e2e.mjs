@@ -47,6 +47,7 @@ const mock = createServer((req, res) => {
           ? 'max_tokens'
           : Object.prototype.hasOwnProperty.call(body, 'max_completion_tokens') ? 'max_completion_tokens' : 'none',
         hasStreamOptions: Object.prototype.hasOwnProperty.call(body, 'stream_options'),
+        streamOptions: body.stream_options ?? null,
         hasStore: Object.prototype.hasOwnProperty.call(body, 'store'),
         hasToolResult,
         // 上下文预算：本地模型最关心「固定开销」占多少
@@ -125,6 +126,8 @@ env.SEEU_LOCAL_MODEL_JSON = JSON.stringify({
   apiKey: 'local',
   contextWindow: 131072,
   maxTokens: 8192,
+  // 打开「流式带用量」，验证 compat.supportsUsageInStreaming 会落到请求体
+  usageInStreaming: true,
 })
 try { execFileSync('taskkill', ['/F', '/IM', 'electron.exe', '/T'], { stdio: 'ignore' }) } catch { /* 无残留 */ }
 
@@ -295,12 +298,14 @@ const toolCardStyle = await ev(`(() => {
 })()`)
 const toolCardStyleOk = toolCardStyle.count === 0 ? true : (toolCardStyle.radius >= 10 && toolCardStyle.border !== 'rgba(0, 0, 0, 0)')
 
+// usageInStreaming=true 时 pi-ai 应在流式请求里带 stream_options.include_usage
+const usageRequested = first.hasStreamOptions === true && first.streamOptions?.include_usage === true
 // 默认本地模型配置会切到「取证分析（本地模型精简）」：工具表从 27 个降到约 12 个。
 const litePresetActive = (first.toolsCount ?? 99) <= 14
 // agent-instructions 应把 <工作区>/SEEU-CASE-BRIEF.md 读成会话指令（overlay 候选名之一）
 const briefSeen = shapes.some((x) => x.briefSeen === true)
 const summary = {
-  ok: gotReply && sawToolResult && (first.tools ?? 0) > 0 && first.maxTokensField === 'max_tokens' && first.hasStreamOptions === false && first.hasStore === false && toolCardStyleOk && litePresetActive && briefSeen,
+  ok: gotReply && sawToolResult && (first.tools ?? 0) > 0 && first.maxTokensField === 'max_tokens' && usageRequested && first.hasStore === false && toolCardStyleOk && litePresetActive && briefSeen,
   chatCalls,
   rounds: shapes.length,
   gotReply,
@@ -311,6 +316,8 @@ const summary = {
   toolCardStyleOk,
   litePresetActive,
   litePresetTools: first.toolsCount,
+  usageRequested,
+  streamOptions: first.streamOptions,
   briefSeen,
   briefChars: (shapes.find((x) => x.briefSeen) ?? {}).briefChars ?? 0,
 
@@ -320,6 +327,7 @@ const summary = {
     toolChoice: first.toolChoice,
     maxTokensField: first.maxTokensField,
     hasStreamOptions: first.hasStreamOptions,
+    streamOptions: first.streamOptions,
     hasStore: first.hasStore,
     strictTrue: first.strictTrue,
     strictAny: first.strictAny,

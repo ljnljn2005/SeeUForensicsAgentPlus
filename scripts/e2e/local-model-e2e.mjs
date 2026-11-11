@@ -17,6 +17,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // ── mock OpenAI 网关 ────────────────────────────────────────────────────────
 let chatCalls = 0
+let usageAsked = 0
 const mock = createServer((req, res) => {
   const chunks = []
   req.on('data', (c) => chunks.push(c))
@@ -32,6 +33,8 @@ const mock = createServer((req, res) => {
       let parsed = {}
       try { parsed = JSON.parse(body) } catch { /* 忽略 */ }
       const wantsStream = parsed.stream !== false
+      const wantsUsage = parsed.stream_options?.include_usage === true
+      if (wantsUsage) usageAsked += 1
       if (!wantsStream) {
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(JSON.stringify({
@@ -48,6 +51,7 @@ const mock = createServer((req, res) => {
         send({ id: 'mock-1', object: 'chat.completion.chunk', model: MODEL_ID, choices: [{ index: 0, delta: { content: piece }, finish_reason: null }] })
       }
       send({ id: 'mock-1', object: 'chat.completion.chunk', model: MODEL_ID, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })
+      if (wantsUsage) send({ id: 'mock-1', object: 'chat.completion.chunk', model: MODEL_ID, choices: [], usage: { prompt_tokens: 10, completion_tokens: 12, total_tokens: 22 } })
       res.end('data: [DONE]\n\n')
       return
     }
@@ -70,6 +74,8 @@ env.SEEU_LOCAL_MODEL_JSON = JSON.stringify({
   apiKey: 'local',
   contextWindow: 131072,
   maxTokens: 8192,
+  // 打开流式用量：验证网关回 usage 后会话里能看到 token 用量
+  usageInStreaming: true,
 })
 try { execFileSync('taskkill', ['/F', '/IM', 'electron.exe', '/T'], { stdio: 'ignore' }) } catch { /* 无残留 */ }
 
@@ -248,9 +254,16 @@ const afterSend = await ev(`(() => {
 })()`)
 console.log('[e2e] afterSend:', JSON.stringify(afterSend))
 
+const usageIdx = text.indexOf('用量')
+const usageText = usageIdx >= 0 ? text.slice(usageIdx, usageIdx + 40).split('\n')[0] : ''
+const usageShown = /用量\s*[:：]?\s*(?!0\b)\d+/.test(usageText)
+
 const summary = {
-  ok: got,
+  ok: got && usageShown && usageAsked > 0,
   chatCalls,
+  usageAsked,
+  usageText,
+  usageShown,
   gotReply: got,
   snippet: text.includes(REPLY.slice(0, 8)) ? text.slice(Math.max(0, text.indexOf('MOCK-OK') - 120), text.indexOf('MOCK-OK') + 200) : text.slice(-600),
   errors: consoleErrors.slice(0, 5),

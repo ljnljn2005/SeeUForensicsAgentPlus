@@ -1609,3 +1609,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 实现（只改 `plugins/seeu-case-index/client.js` 的 `RecordsView`）：`useEffect` 拉 `/evidences` 得到 `evList`，检索 eid 输入框换成 `<select>`（选项「检材 N · 名称 · 平台」+「全部检材」）；新增「起 2025-04-01」「止 2025-04-30」两个输入框直接驱动后端 `from/to`（后端 `records()` 早已支持 `eid/app/category/q/from/to`，无需改 SQL）；结果行标签由 `eid·app` 改为「检材名 · 应用」（`title` 保留 `检材 N`）。
 - 验证（`m2-ui-check` 新增断言，真实案件库）：未筛选 `记录 22777 条` → 检材下拉选 `检材 3 · LEUNG_YL_mobile.zip` → 点【查询】 → `记录 8443 条`，结果行含 `LEUNG_YL_mobile.zip`，`recordsFilterOk: true`，`m2ok: true`、`errors: []`；`export-check` 回归 `ok:true`（记录清单 14,996 字符等不变）；`npm test` 43/43。
 - 遗留：应用/类别仍是手输（可考虑改下拉，数据量大时按需加载）；日期按字符串比较，跨时区记录需自己换算。
+
+## 20.42 流式 token 用量（usageInStreaming，v0.2.6 起）
+
+- 问题：本地网关默认不带 `stream_options.include_usage`（保守兼容），代价是会话里 token 用量/上下文占比恒为 `0 tok`，用户看不出「还剩多少窗口」。
+- 实现：`tools/local-model.mjs` 增 `DEFAULTS.usageInStreaming=false`，`normalizeLocalModel()` 传 `usageInStreaming: input.usageInStreaming === true`，`localModelPatch()` 的 compat 由 `supportsUsageInStreaming: false` 改为 `supportsUsageInStreaming: c.usageInStreaming`（用户 `compat` 显式覆盖仍优先）；`renderer/local-model.html` 加复选框「流式响应带 token 用量（stream_options.include_usage）」，`readForm()`/`fillForm()` 接上；`resources/forensics/local-model.example.json` 补 `litePreset`/`usageInStreaming`。
+- 验证：`tests/local-model.test.mjs` 新增 1 例（默认 false、打开后 patch 里 true、`compat` 显式 false 仍优先）→ `npm test` **44/44**；`scripts/e2e/local-tools-e2e.mjs` 配置打开 `usageInStreaming`，mock 记录 `body.stream_options` → `"usageRequested":true,"streamOptions":{"include_usage":true}`；`scripts/e2e/local-model-e2e.mjs` 的 mock 按 `include_usage` 回流 usage 分片，页面出现 `用量 22 tok` → `REPORT {"ok":true,"chatCalls":2,"usageAsked":2,"usageText":"用量 22 tok","usageShown":true,…}`；`scripts/e2e/settings-check.mjs` 勾复选框后页面 preview 变 `supportsUsageInStreaming: true`（`usagePreview:true`），保存 JSON `usageInStreaming:true`（`usageSaved:true`）。
+- 遗留：不同网关对 usage 分片的字段/时机不一致（有的只在非流式回）；只影响「显示」，不影响对话。
