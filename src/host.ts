@@ -17,6 +17,7 @@ import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync 
 import { dirname, join } from 'node:path'
 import { dshCliEntry, dshHome, forensicsPatchPath, hostLogFile, workspaceDir } from './paths.js'
 import { DESKTOP_MARKER_ENV, PRODUCT_NAME } from './brand.js'
+import { prepareLocalModel } from './local-model.js'
 
 /** 首次启动可能需要初始化 profile，给足预算；超时视为启动失败。 */
 const READY_TIMEOUT_MS = 180_000
@@ -168,10 +169,15 @@ export class DshHost extends EventEmitter {
     //     否则会报 `error: --profile <name> is required`；
     //   - 其后的 --host/--port/--no-open 作为未知选项透传给 web app。
     const port = await pickFreePort()
+    // 本地模型（OpenAI 兼容网关）配置编译成第二份 patch，叠加在取证 overlay 之后：
+    // 后层覆盖前层，所以用户改 local-model.json 就能换网关/模型，无需动 asar。
+    const localModel = prepareLocalModel()
+    this.appendShellLog(localModel.summary)
     const args = [
       '--expose-internals',
       this.runtimeEntry,
       ...(this.patchPath !== undefined && existsSync(this.patchPath) ? ['--patch', this.patchPath] : []),
+      ...(localModel.patchPath !== undefined ? ['--patch', localModel.patchPath] : []),
       '--profile',
       'web',
       '--host',
@@ -189,6 +195,7 @@ export class DshHost extends EventEmitter {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       ...this.extraEnv,
+      ...localModel.env,
       ELECTRON_RUN_AS_NODE: '1',
       DSH_HOME: this.homeDir,
       [DESKTOP_MARKER_ENV]: '1',

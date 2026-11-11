@@ -26,6 +26,7 @@
 
 - **外壳职责**：窗口、托盘、中文菜单、单实例、权限收紧（全部拒绝）、外链走系统浏览器、加载页/故障页、优雅退出。
 - **运行时职责**：agent 循环、模型接入、工具（文件/搜索/shell/技能/session 等）、会话存储、Web UI。
+- **视觉层**：`plugins/seeu-theme/` 是一个 dsh 客户端插件 + 宿主样式注入——取证深色主题（青蓝强调色、中文字体栈）、侧栏/欢迎页 SeeU 品牌、页面标题替换；同时关闭官方 brand 插件避免双份。
 - **取证职责**：`resources/forensics/cordis.patch.yml` 以 dsh 官方 patch-list 机制叠加在 `web` profile 之上——关闭遥测/产品分析行，注入中文取证 persona，并把会话 preset（`preset-standard`）改成**取证专用工具面**：保留官方 22 项里的 19 项（子代理 / 工作流 / 后台作业 / 定时任务 / 目标 / plan / todo 都可用），去掉 `tool-web`（取证会话不联网）、`tool-plugin-manager`（可联网安装/移除插件包）与 `tool-plugin-market`（插件市场），`tool-fs` 收成只读。详见 [docs/forensics-profile.md](docs/forensics-profile.md)。
 
 ## 2. 快速开始
@@ -204,7 +205,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 - **账号登录**：沿用官方账号链路（未在 overlay 中关闭），首次使用需在 Web UI 内登录；离线/内网环境需另行配置模型接入。
 - **技能包默认未接入**：`resources/forensics/skills/*` 因 dsh 要求绝对路径而未写入 overlay，接入方式见 `docs/forensics-profile.md` 第 4 节（推荐启动前复制到 `$DSH_HOME/skills/`）。
-- **品牌文案**：Web UI 内的产品名/图标来自官方客户端包（`ui-brand-official` 行无 config），overlay 改不到，需在渲染层做替换。外壳侧已用 `page-title-updated` 拦截，让**窗口/任务栏标题**始终是 SeeUForensicsAgentPlus；但页面 `document.title`（CDP 可见）仍是官方的 `DeepSeek Harness`，且客户端加载后会去掉 URL 中的 `?token=`。
+- **品牌文案**：官方 brand 插件（`ui-brand-official`）已在 overlay 里 `disabled: true`，改由 `plugins/seeu-theme/` 注册侧栏与欢迎页品牌（「SeeU 取证」+ 盾牌/放大镜图标），并在客户端加载后用 MutationObserver 把页面 `document.title` 改成「SeeU 取证智能体增强版」。仍不可控的只有：首屏 HTML 里的静态 `<title>`（客户端 bundle 加载前短暂显示）、favicon、以及官方会话/设置页内的文案（同 locale 二次注册会抛错，不能覆盖）。外层窗口/任务栏标题由 `page-title-updated` 拦截，始终是 SeeUForensicsAgentPlus。
 - **打包体积**：asar 约 168MB（含完整 dsh 运行时与原生依赖）；后续可按需裁剪 test/example 文件与未用到的本地组件（libreoffice/sherpa 等）。
 - **更新通道**：未接入，`electron-builder.yml` 里 `publish: null`；要接官方 nightly 通道需另配 feed 与签名（见 `docs/packaging.md`）。
 
@@ -313,7 +314,71 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 
 注意：跨案结果是**线索级**信息，不是证据引用；写报告时要落到各案自己的 `base_handle`（面板里点提及行可直接取该案引用）。同步语义与排障见 `docs/plan-case-index.md` §18（按案删了重写、不自动清理已移除的案件、SQLITE_BUSY 等待 1–2 秒重试）。
 
-## 9. 许可与来源
+## 9. 本地模型（OpenAI 兼容网关）接入
+
+默认走官方 DeepSeek 账号链路；如果模型跑在本地/内网，只要网关兼容 **OpenAI**（`POST /v1/chat/completions` 支持 SSE 流式、`GET /v1/models`），改一个 JSON 就能接入——不用改代码、不用重打包。
+
+### 9.1 配置
+
+安装版：把 `resources/forensics/local-model.example.json` 复制到 `%APPDATA%\SeeUForensicsAgentPlus\local-model.json`，改 `baseURL` 与 `models[].id`：
+
+```json
+{
+  "enabled": true,
+  "route": "local-openai",
+  "displayName": "本地模型（OpenAI 兼容网关）",
+  "baseURL": "http://127.0.0.1:8000/v1",
+  "apiKey": "local",
+  "models": [{ "id": "qwen2.5-32b-instruct", "name": "Qwen2.5 32B（本地）" }],
+  "contextWindow": 131072,
+  "maxTokens": 8192,
+  "useAsDefault": true
+}
+```
+
+开发预览：`npm run dev:web -- --workspace "<案件目录>" --local-model resources/forensics/local-model.example.json`
+临时覆盖：环境变量 `SEEU_LOCAL_MODEL_JSON='<同一段 JSON>'`（优先级最高，自动化测试用这个）。
+
+| 字段 | 默认 | 说明 |
+| --- | --- | --- |
+| `enabled` | `true` | `false` 时忽略本配置，回到官方账号链路 |
+| `route` | `local-openai` | 路由名，必须小写连字符（dsh 要求，否则 `UNSTORABLE_PROVIDER_ID`） |
+| `displayName` | `本地模型（OpenAI 兼容网关）` | 显示在模型选择器里 |
+| `baseURL` | `http://127.0.0.1:8000/v1` | 网关根地址（要带 `/v1`，不含 `/chat/completions`） |
+| `apiKey` | `local` | 写进 `apiKeyEnv` 指定的环境变量（很多本地网关不校验，但不能为空） |
+| `apiKeyEnv` | `SEEU_LOCAL_LLM_API_KEY` | 外壳负责注入，dsh 经 credentials seam 读取 |
+| `model` / `models[]` | 必填 | `models` 可写 `{id,name,contextWindow,maxTokens}`；`contextWindow` 个人赛常用 131072（128k），团体赛 262144（256k） |
+| `contextWindow` / `maxTokens` | `131072` / `8192` | 生成 patch 时的默认上下文与单次输出上限 |
+| `useAsDefault` | `false` | 为 `true` 时覆盖 `agent-default-model`，新会话直接用它 |
+| `timeoutMs` / `streamIdleTimeoutMs` | `600000` | 本地模型首 token 可能很慢，默认给 10 分钟 |
+
+外壳启动时把它编译成 `<userData>\local-model.patch.yml`，作为**第二个 `--patch`** 传给 dsh（后层覆盖前层，优先级高于取证 overlay 与 profile），并注入 API key；启动日志（`%APPDATA%\SeeUForensicsAgentPlus\logs\shell.log`）会打印 `local-model: …` 摘要，`--dump-config` 能看到 `provider: local-openai`。
+
+生成的行固定：
+
+- `api: openai-completions`（OpenAI 兼容协议）；
+- `compat: { supportsUsageInStreaming: false, maxTokensField: max_tokens }`——不带 `stream_options.include_usage`（部分本地网关会 400），用 `max_tokens` 而不是 `max_completion_tokens`；
+- 每个模型 `input: [text]`、`reasoningEfforts: false`（本地模型一般不支持思考档位）。
+
+### 9.2 验证
+
+```bash
+node .probe/local-model-e2e.mjs
+```
+
+该脚本会：起一个 mock OpenAI 网关（`:18080`，SSE 分片回 `MOCK-OK…`）→ 用 `SEEU_LOCAL_MODEL_JSON` 拉起真 Electron → 用 CDP 点掉预览提示、在 composer 里输入并回车 → 断言 mock 收到请求且页面出现回复。通过时输出：
+
+```
+REPORT {"ok":true,"chatCalls":2,"gotReply":true,...,"errors":[]}
+```
+
+### 9.3 注意
+
+- **不要在同一行上用 settings 页改**：overlay 优先级更高时 dsh 会硬拒（`Configuration for "<id>" is overridden by a home patch or command-line overlay`）；换模型请改 `local-model.json` 后重启。
+- 模型选择器里的「设为默认」在 overlay 场景下会静默失败，默认模型请用 `useAsDefault: true`。
+- 网关必须支持流式 SSE；首 token 很慢的本地模型可把 `timeoutMs` 调到 900000。
+
+## 10. 许可与来源
 
 - 外壳代码：MIT。
 - `dsh` 运行时：来自 npm `@deepseek-ai/dsh`（DeepSeek AI 开源，MIT）；本仓库不修改其源码，仅通过官方 profile/patch 机制扩展。

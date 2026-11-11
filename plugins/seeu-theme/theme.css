@@ -1,0 +1,149 @@
+/*
+ * SeeU 取证主题 —— 皮肤与排版。
+ *
+ * 只覆盖 dsh 的设计 token（--dsw-alias-* / --dsw-static-* / 字体变量），不动组件 class：
+ * class 名是构建产物哈希，升级 dsh 就会变；token 是官方承诺的稳定契约。
+ *
+ * `!important` 是必要的：官方 ThemePresenter 会把当前主题的 token 逐条写到
+ * <body style>，内联样式优先级高于任何选择器。
+ *
+ * 命名注意：`--dsw-alias-brand-primary-new-colorprimary-new-color` 是官方历史上
+ * 拼重复的变量名，前端确实在用它，不要"修正"。
+ */
+
+/* ---------- 字体：中文优先（取证报告多为中文），等宽用于句柄/行号 ---------- */
+body {
+  --dsh-font-family-text-default: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC",
+    "Noto Sans SC", "Source Han Sans SC", system-ui, -apple-system, "Segoe UI", sans-serif !important;
+  --dsh-font-family-code-default: "Cascadia Mono", "Consolas", "JetBrains Mono",
+    ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  --dsh-font-family-code: var(--dsh-font-family-code-default) !important;
+  --dsw-font-family: var(--dsh-font-family-text-default) !important;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- 深色：深海蓝底 + 青蓝强调（长时间研判不刺眼） ---------- */
+body[data-ds-dark-theme] {
+  --dsw-alias-bg-base: #0A111E !important;
+  --dsw-alias-bg-layer-1: #0E1728 !important;
+  --dsw-alias-bg-layer-2: #131E33 !important;
+  --dsw-alias-bg-layer-3: #18253D !important;
+  --dsw-alias-bg-overlay: #1B2A45 !important;
+  --dsw-alias-bg-skeleton: rgba(148, 163, 184, 0.10) !important;
+  --dsw-alias-bg-mask-1: rgba(4, 8, 16, 0.55) !important;
+  --dsw-alias-bg-mask-2: rgba(4, 8, 16, 0.72) !important;
+
+  --dsw-alias-border-l1: rgba(34, 211, 238, 0.10) !important;
+  --dsw-alias-border-l2: rgba(148, 163, 184, 0.18) !important;
+  --dsw-alias-border-l3: rgba(148, 163, 184, 0.28) !important;
+  --dsw-alias-border-l4: rgba(148, 163, 184, 0.38) !important;
+
+  --dsw-alias-label-primary: #E6EDF7 !important;
+  --dsw-alias-label-secondary: #A9BBD1 !important;
+  --dsw-alias-label-tertiary: #8397B0 !important;
+  --dsw-alias-label-caption: #6F839C !important;
+  --dsw-alias-label-dimmed: #4A5B73 !important;
+
+  --dsw-alias-interactive-bg-hover: rgba(34, 211, 238, 0.09) !important;
+  --dsw-alias-interactive-bg-active: rgba(34, 211, 238, 0.16) !important;
+  --dsw-alias-brand-primary-new-colorprimary-new-color: #22D3EE !important;
+  --dsw-alias-bg-document-selection: rgba(34, 211, 238, 0.28) !important;
+  --dsw-alias-link: #4DD6EA !important;
+  --dsw-alias-focus-ring-color: rgba(34, 211, 238, 0.65) !important;
+
+  /* 状态色：取证里"命中/可疑/排除"要能一眼区分 */
+  --dsw-alias-state-business-primary: #22D3EE !important;
+  --dsw-alias-state-success-primary: #34D399 !important;
+  --dsw-alias-state-warning-primary: #FBBF24 !important;
+  --dsw-alias-state-error-primary: #F87171 !important;
+
+  /* 侧栏与代码块：比正文更深一层，形成"工作台"层次 */
+  --dsw-specific-sidebar-fill: #0C1626 !important;
+  --dsw-specific-sidebar-nav-item-active: rgba(34, 211, 238, 0.14) !important;
+  --dsw-alias-markdown-code-block: #0C1626 !important;
+  --dsw-alias-markdown-inline-code: rgba(34, 211, 238, 0.12) !important;
+  --dsw-specific-tooltip-bg: #1B2A45 !important;
+  --dsw-specific-toast-bg: #1B2A45 !important;
+
+  /* 强调色的静态档位（插画/图表/代码高亮直接引用静态色板） */
+  --dsw-static-deepseek-450: #22D3EE !important;
+  --dsw-static-deepseek-500: #0FB6D4 !important;
+  --dsw-static-deepseek-400: #67E8F9 !important;
+
+  --dsh-scrollbar-thumb: rgba(148, 163, 184, 0.32) !important;
+  --dsh-scrollbar-thumb-hover: rgba(34, 211, 238, 0.55) !important;
+  --dsh-scrollbar-thumb-border: transparent !important;
+}
+
+/* ---------- 浅色：纸白底 + 深青强调（截图与打印留档更清楚） ---------- */
+body:not([data-ds-dark-theme]) {
+  --dsw-alias-bg-base: #F5F7FA !important;
+  --dsw-alias-bg-layer-1: #FFFFFF !important;
+  --dsw-alias-bg-layer-2: #FFFFFF !important;
+  --dsw-alias-bg-layer-3: #EEF3F8 !important;
+  --dsw-alias-bg-overlay: #E7EEF6 !important;
+  --dsw-alias-bg-skeleton: rgba(15, 23, 42, 0.06) !important;
+
+  --dsw-alias-border-l1: rgba(15, 23, 42, 0.08) !important;
+  --dsw-alias-border-l2: rgba(15, 23, 42, 0.14) !important;
+  --dsw-alias-border-l3: rgba(15, 23, 42, 0.22) !important;
+  --dsw-alias-border-l4: rgba(15, 23, 42, 0.30) !important;
+
+  --dsw-alias-label-primary: #0B1220 !important;
+  --dsw-alias-label-secondary: #44546A !important;
+  --dsw-alias-label-tertiary: #64748B !important;
+  --dsw-alias-label-caption: #7C8AA0 !important;
+  --dsw-alias-label-dimmed: #96A3B5 !important;
+
+  --dsw-alias-interactive-bg-hover: rgba(14, 116, 144, 0.08) !important;
+  --dsw-alias-interactive-bg-active: rgba(14, 116, 144, 0.14) !important;
+  --dsw-alias-brand-primary-new-colorprimary-new-color: #0E7490 !important;
+  --dsw-alias-bg-document-selection: rgba(14, 116, 144, 0.22) !important;
+  --dsw-alias-link: #0E7490 !important;
+  --dsw-alias-focus-ring-color: rgba(14, 116, 144, 0.55) !important;
+
+  --dsw-alias-state-business-primary: #0E7490 !important;
+  --dsw-alias-state-success-primary: #047857 !important;
+  --dsw-alias-state-warning-primary: #B45309 !important;
+  --dsw-alias-state-error-primary: #B91C1C !important;
+
+  --dsw-specific-sidebar-fill: #FFFFFF !important;
+  --dsw-specific-sidebar-nav-item-active: rgba(14, 116, 144, 0.10) !important;
+  --dsw-alias-markdown-code-block: #F1F5F9 !important;
+  --dsw-alias-markdown-inline-code: rgba(14, 116, 144, 0.10) !important;
+  --dsw-specific-tooltip-bg: #0B1220 !important;
+  --dsw-specific-toast-bg: #0B1220 !important;
+
+  --dsw-static-deepseek-450: #0E7490 !important;
+  --dsw-static-deepseek-500: #155E75 !important;
+  --dsw-static-deepseek-400: #0891B2 !important;
+
+  --dsh-scrollbar-thumb: rgba(15, 23, 42, 0.24) !important;
+  --dsh-scrollbar-thumb-hover: rgba(14, 116, 144, 0.45) !important;
+  --dsh-scrollbar-thumb-border: transparent !important;
+}
+
+/* ---------- 统一细节 ---------- */
+body ::selection {
+  background: rgba(34, 211, 238, 0.30);
+}
+
+body:focus-visible,
+body *:focus-visible {
+  outline: 2px solid var(--dsw-alias-focus-ring-color, rgba(34, 211, 238, 0.55));
+  outline-offset: 1px;
+}
+
+/* 句柄/行号/代码：关连字，长句柄不至于撑破表格 */
+body code,
+body pre,
+body kbd,
+body samp {
+  font-variant-ligatures: none;
+}
+
+/* 滚动条做细一点，长列表（消息/记录）更好扫读 */
+body * {
+  scrollbar-width: thin;
+}

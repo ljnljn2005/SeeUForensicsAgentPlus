@@ -301,6 +301,30 @@ node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-un
 
 验证：启动后看 `logs\shell.log` 的 `skills: N 个（…）→ …\dsh-home\skills` 行，以及该目录下的 `.seeu-skills.json` 指纹。
 
+### 5.5 主题插件与本地模型配置（v0.2.0 起）
+
+**主题插件** `plugins/seeu-theme/`（宿主 `index.js` + `theme.css` + 客户端 `client.js`）与案件索引插件走同一条路：
+
+- `electron-builder.yml` 的 `files` 已含 `plugins/**`，`theme.css` 随之进 asar；
+- 宿主 half 用 `readFileSync(new URL('./theme.css', import.meta.url))` 读同包 CSS——asar 兼容层覆盖 `fs.readFileSync`，所以打包态可读；**这也是必须钉 Electron 44.7.0 的又一个理由**（回退系统 node 时 asar 不可读，主题会静默失效）；
+- overlay 末尾第二条 insert：`- id: seeu-theme` / `name: ../../plugins/seeu-theme/index.js`；同时 `- id: ui-brand-official` 置 `disabled: true`、`- id: locale` 设 `config.preference: zh`。
+
+自检（打包后，确认主题资产在包里）：
+
+```bash
+node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-unpacked/resources/app.asar').map(p=>p.replace(/\\/g,'/').replace(/^\/+/,''));console.log(['plugins/seeu-theme/index.js','plugins/seeu-theme/client.js','plugins/seeu-theme/theme.css'].filter(p=>!l.includes(p)))"
+```
+
+输出 `[]` 即齐全；再确认运行时注入成功：打开应用后 CDP 采样应为
+`{"title":"SeeU 取证智能体增强版","dark":true,"bgBase":"#0A111E","accent":"#22D3EE","themeStyle":true}`（见 `.probe/shot.mjs`）。
+
+**本地模型**：
+
+- 生成逻辑 `tools/local-model.mjs` 被 `src/local-model.ts` 静态 import，esbuild 已把它内联进 `dist/main.cjs`（`files` 只放行 `dist/**`，所以**不需要**单独放行 `tools/local-model.mjs`）；自检：
+  `grep -c "local-model.patch.yml" dist/main.cjs` 应为 `1`。
+- 用户配置在 `<userData>\local-model.json`（asar 外，升级/重装后仍在），示例随包放在 `resources/forensics/local-model.example.json`（`resources/**` 白名单已覆盖）。
+- 运行时生成的 `local-model.patch.yml` 也写在 `<userData>`，作为第二个 `--patch` 传给 dsh——不写 asar、不需要重打包即可换网关。
+
 ## 6. 体积现状
 
 以 2026-11-11 **v0.1.7** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验 + 案件索引插件 + M2 typed 层 + M5 跨案库）为准。

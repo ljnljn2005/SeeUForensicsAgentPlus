@@ -370,7 +370,10 @@ function registerIpc(): void {
 
 // ── 启动 ────────────────────────────────────────────────────────────────────
 
-const gotLock = app.requestSingleInstanceLock()
+// 开发/截图时允许并行实例（例如用户正开着安装版验收，开发态要另起一个窗口截图）。
+// 仅当显式设置 SEEU_DEV_MULTI=1 时生效，装出来的桌面版不受影响。
+const allowMultiInstance = process.env.SEEU_DEV_MULTI === '1'
+const gotLock = allowMultiInstance ? true : app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {

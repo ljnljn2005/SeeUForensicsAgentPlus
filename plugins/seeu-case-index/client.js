@@ -20,37 +20,141 @@ window.__ModuleLoader__.load({
       return body;
     };
 
+    // ---------- 主题 token（全部来自 seeu-theme，只在缺 token 时用暗色兜底；不硬编码主色） ----------
+    const C_FG = 'var(--dsw-alias-label-primary, #E6EDF7)';
+    const C_FG2 = 'var(--dsw-alias-label-secondary, #A9BBD1)';
+    const C_FG3 = 'var(--dsw-alias-label-tertiary, #8397B0)';
+    const C_BG0 = 'var(--dsw-alias-bg-base, #0A111E)';
+    const C_BG1 = 'var(--dsw-alias-bg-layer-1, #0E1728)';
+    const C_BG2 = 'var(--dsw-alias-bg-layer-2, #131E33)';
+    const C_BG3 = 'var(--dsw-alias-bg-layer-3, #18253D)';
+    const C_L1 = 'var(--dsw-alias-border-l1, rgba(34, 211, 238, 0.10))';
+    const C_L2 = 'var(--dsw-alias-border-l2, rgba(148, 163, 184, 0.18))';
+    const C_ACC = 'var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE)';
+    const C_ACC_SOFT = 'color-mix(in srgb, ' + C_ACC + ' 15%, transparent)';
+    const C_ACC_LINE = 'color-mix(in srgb, ' + C_ACC + ' 55%, transparent)';
+    const C_HOVER = 'var(--dsw-alias-interactive-bg-hover, rgba(34, 211, 238, 0.09))';
+    const C_ACTIVE = 'var(--dsw-alias-interactive-bg-active, rgba(34, 211, 238, 0.16))';
+    const C_OK = 'var(--dsw-alias-state-success-primary, #34D399)';
+    const C_WARN = 'var(--dsw-alias-state-warning-primary, #FBBF24)';
+    const C_ERR = 'var(--dsw-alias-state-error-primary, #F87171)';
+    const FONT_CODE = 'var(--dsh-font-family-code-default, ui-monospace, Consolas, monospace)';
+    const R_SM = 6;
+    const R_MD = 8;
+    const R_LG = 10;
+
     const S = {
-      wrap: { display: 'flex', flexDirection: 'column', gap: 12, minHeight: 320 },
+      wrap: { display: 'flex', flexDirection: 'column', gap: 14, minHeight: 320, color: C_FG, fontSize: 13 },
       row: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
-      input: { flex: '1 1 260px', padding: '6px 8px', borderRadius: 6, border: '1px solid color-mix(in srgb, currentColor 25%, transparent)', background: 'transparent', color: 'inherit', fontSize: 13 },
-      btn: { padding: '6px 12px', borderRadius: 6, border: '1px solid color-mix(in srgb, currentColor 25%, transparent)', background: 'color-mix(in srgb, currentColor 8%, transparent)', color: 'inherit', cursor: 'pointer', fontSize: 13 },
-      btnPrimary: { padding: '6px 12px', borderRadius: 6, border: 'none', background: '#247bbf', color: '#fff', cursor: 'pointer', fontSize: 13 },
-      muted: { opacity: 0.65, fontSize: 12 },
-      panel: { border: '1px solid color-mix(in srgb, currentColor 15%, transparent)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 },
-      card: { display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 },
-      list: { display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 260, overflow: 'auto', fontSize: 13 },
-      item: { padding: '4px 6px', borderRadius: 4, cursor: 'pointer', display: 'flex', gap: 8, alignItems: 'baseline' },
-      crumb: { padding: '2px 6px', borderRadius: 4, background: 'color-mix(in srgb, currentColor 10%, transparent)', cursor: 'pointer', fontSize: 12 },
-      mono: { fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace', fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' },
-      err: { color: '#d9534f', fontSize: 12 },
+      input: { flex: '1 1 260px', minWidth: 0, padding: '6px 9px', borderRadius: R_SM, border: '1px solid ' + C_L2, background: C_BG0, color: 'inherit', fontSize: 12.5, outline: 'none' },
+      btn: { padding: '5px 11px', borderRadius: R_SM, border: '1px solid ' + C_L2, background: 'transparent', color: C_FG2, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' },
+      btnPrimary: { padding: '5px 12px', borderRadius: R_SM, border: '1px solid transparent', background: C_ACC, color: C_BG0, cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' },
+      muted: { color: C_FG3, fontSize: 11.5 },
+      panel: { border: '1px solid ' + C_L1, borderRadius: R_LG, background: C_BG1, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 10 },
+      card: { display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 },
+      list: { display: 'flex', flexDirection: 'column', maxHeight: 320, overflow: 'auto' },
+      item: { padding: '5px 8px', borderRadius: R_SM, display: 'flex', gap: 8, alignItems: 'baseline', borderBottom: '1px solid ' + C_L1 },
+      crumb: { padding: '3px 8px', borderRadius: 999, border: '1px solid transparent', fontSize: 11.5, color: C_FG2, cursor: 'pointer' },
+      mono: { fontFamily: FONT_CODE, fontSize: 11.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: C_FG2 },
+      err: { color: C_ERR, fontSize: 12 },
       ellipsis: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-      seg: { display: 'flex', gap: 4, flexWrap: 'wrap' },
-      segOn: { padding: '4px 10px', borderRadius: 6, border: '1px solid #247bbf', background: '#247bbf', color: '#fff', cursor: 'pointer', fontSize: 12 },
-      segOff: { padding: '4px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, currentColor 25%, transparent)', background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: 12 },
-      filter: { width: 108, padding: '4px 6px', borderRadius: 5, border: '1px solid color-mix(in srgb, currentColor 25%, transparent)', background: 'transparent', color: 'inherit', fontSize: 12 },
-      tag: { padding: '0 6px', borderRadius: 9, background: 'color-mix(in srgb, currentColor 12%, transparent)', fontSize: 11, lineHeight: '16px', whiteSpace: 'nowrap' },
-      tableWrap: { overflow: 'auto', maxHeight: 320, border: '1px solid color-mix(in srgb, currentColor 15%, transparent)', borderRadius: 6 },
-      table: { borderCollapse: 'collapse', fontSize: 11, width: '100%' },
-      th: { textAlign: 'left', padding: '3px 6px', borderBottom: '1px solid color-mix(in srgb, currentColor 20%, transparent)', whiteSpace: 'nowrap', fontWeight: 600 },
-      td: { padding: '2px 6px', borderBottom: '1px solid color-mix(in srgb, currentColor 8%, transparent)', whiteSpace: 'nowrap', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'top' },
+      seg: { display: 'flex', gap: 3, flexWrap: 'wrap', padding: 3, borderRadius: R_LG, border: '1px solid ' + C_L1, background: C_BG1 },
+      segOn: { padding: '5px 11px', borderRadius: R_SM, border: '1px solid ' + C_ACC_LINE, background: C_ACC_SOFT, color: C_FG, cursor: 'pointer', fontSize: 12, fontWeight: 600 },
+      segOff: { padding: '5px 11px', borderRadius: R_SM, border: '1px solid transparent', background: 'transparent', color: C_FG2, cursor: 'pointer', fontSize: 12 },
+      filter: { width: 108, padding: '5px 7px', borderRadius: R_SM, border: '1px solid ' + C_L2, background: C_BG0, color: 'inherit', fontSize: 12, outline: 'none' },
+      tag: { padding: '0 6px', borderRadius: 999, background: 'color-mix(in srgb, currentColor 12%, transparent)', color: C_FG2, fontSize: 10.5, lineHeight: '16px', whiteSpace: 'nowrap' },
+      tableWrap: { overflow: 'auto', maxHeight: 320, border: '1px solid ' + C_L1, borderRadius: R_MD },
+      table: { borderCollapse: 'separate', borderSpacing: 0, fontSize: 11.5, width: '100%' },
+      th: { position: 'sticky', top: 0, zIndex: 1, textAlign: 'left', padding: '6px 8px', borderBottom: '1px solid ' + C_L2, whiteSpace: 'nowrap', fontWeight: 600, color: C_FG2, background: C_BG2 },
+      td: { padding: '4px 8px', borderBottom: '1px solid ' + C_L1, whiteSpace: 'nowrap', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'top' },
       trClick: { cursor: 'pointer' },
-      barTrack: { flex: 1, minWidth: 60, height: 10, borderRadius: 5, background: 'color-mix(in srgb, currentColor 12%, transparent)' },
-      barFill: { height: 10, borderRadius: 5, background: '#247bbf' },
-      statRow: { display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'baseline', fontSize: 12 },
-      statItem: { display: 'inline-flex', alignItems: 'baseline', gap: 3 },
-      statNum: { fontSize: 14, fontWeight: 600 },
+      barTrack: { flex: 1, minWidth: 60, height: 8, borderRadius: 999, background: 'color-mix(in srgb, currentColor 10%, transparent)', overflow: 'hidden' },
+      barFill: { height: 8, borderRadius: 999, background: C_ACC },
+      statRow: { display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'baseline' },
+      statItem: { display: 'inline-flex', alignItems: 'baseline', gap: 4 },
+      statNum: { fontSize: 16, fontWeight: 650, fontVariantNumeric: 'tabular-nums' },
+      tabs: { display: 'flex', gap: 3, flexWrap: 'wrap', padding: 3, borderRadius: R_LG, border: '1px solid ' + C_L1, background: C_BG1 },
+      tab: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', border: '1px solid transparent', borderRadius: R_SM, background: 'transparent', cursor: 'pointer', fontSize: 12, lineHeight: 1.35, color: C_FG2 },
+      tabOn: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 11px', border: '1px solid ' + C_ACC_LINE, borderRadius: R_SM, background: C_ACC_SOFT, cursor: 'pointer', fontSize: 12, lineHeight: 1.35, color: C_FG, fontWeight: 600 },
+      tabBadge: { padding: '0 5px', borderRadius: 999, fontSize: 10, lineHeight: '15px', fontVariantNumeric: 'tabular-nums', color: C_FG3, background: 'color-mix(in srgb, currentColor 12%, transparent)' },
+      kpis: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))', gap: 8 },
+      kpi: { minWidth: 0, padding: '8px 10px', borderRadius: R_MD, border: '1px solid ' + C_L1, background: C_BG2 },
+      kpiLabel: { fontSize: 10.5, letterSpacing: '0.04em', color: C_FG3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+      kpiValue: { marginTop: 2, fontSize: 17, fontWeight: 650, lineHeight: 1.25, fontVariantNumeric: 'tabular-nums', fontFamily: FONT_CODE, color: C_FG, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+      kpiText: { fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit' },
+      title: { fontSize: 13, fontWeight: 600, color: C_FG, display: 'inline-flex', alignItems: 'center', gap: 6 },
+      noticeOk: { padding: '6px 10px', borderRadius: R_SM, border: '1px solid color-mix(in srgb, ' + C_OK + ' 35%, transparent)', background: 'color-mix(in srgb, ' + C_OK + ' 10%, transparent)', color: C_OK, fontSize: 11.5 },
+      noticeErr: { padding: '6px 10px', borderRadius: R_SM, border: '1px solid color-mix(in srgb, ' + C_ERR + ' 35%, transparent)', background: 'color-mix(in srgb, ' + C_ERR + ' 10%, transparent)', color: C_ERR, fontSize: 11.5 },
+      noticeInfo: { padding: '6px 10px', borderRadius: R_SM, border: '1px solid ' + C_L1, background: 'color-mix(in srgb, ' + C_BG3 + ' 60%, transparent)', color: C_FG2, fontSize: 11.5 },
+      rowTime: { flex: 'none', color: C_FG3, fontFamily: FONT_CODE, fontSize: 11, whiteSpace: 'nowrap' },
+      crumbOn: { padding: '3px 8px', borderRadius: 999, border: '1px solid ' + C_ACC_LINE, borderLeft: '3px solid ' + C_ACC, background: C_ACC_SOFT, color: C_FG, fontSize: 11.5, fontWeight: 600 },
     };
+
+    // hover / 焦点 / 骨架 / 吸顶表头这些必须走 CSS（内联样式表达不了伪类）。
+    const STYLE_ID = 'seeu-case-index-style';
+    const CSS_TEXT = `
+.seeu-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 8px; }
+.seeu-kpi { min-width: 0; padding: 8px 10px; border-radius: var(--dsw-radius-md, 8px); border: 1px solid var(--dsw-alias-border-l1, rgba(34, 211, 238, 0.10)); background: var(--dsw-alias-bg-layer-2, #131E33); }
+.seeu-kpi-label { font-size: 10.5px; letter-spacing: .04em; color: var(--dsw-alias-label-tertiary, #8397B0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seeu-kpi-value { margin-top: 2px; font-size: 17px; font-weight: 650; line-height: 1.25; font-variant-numeric: tabular-nums; font-family: var(--dsh-font-family-code-default, ui-monospace, Consolas, monospace); color: var(--dsw-alias-label-primary, #E6EDF7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seeu-kpi-value.is-text { font-size: 12.5px; font-weight: 600; font-family: inherit; }
+.seeu-tabs { display: flex; gap: 3px; flex-wrap: wrap; padding: 3px; border-radius: var(--dsw-radius-lg, 10px); background: var(--dsw-alias-bg-layer-1, #0E1728); border: 1px solid var(--dsw-alias-border-l1, rgba(34, 211, 238, 0.10)); }
+.seeu-tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid transparent; border-radius: var(--dsw-radius-sm, 6px); background: transparent; color: var(--dsw-alias-label-secondary, #A9BBD1); font-size: 12px; line-height: 1.35; cursor: pointer; transition: background .12s ease, color .12s ease, border-color .12s ease; }
+.seeu-tab:hover { color: var(--dsw-alias-label-primary, #E6EDF7); background: var(--dsw-alias-interactive-bg-hover, rgba(34, 211, 238, 0.09)); }
+.seeu-tab[aria-selected='true'] { color: var(--dsw-alias-label-primary, #E6EDF7); font-weight: 600; border-color: color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE) 55%, transparent); background: color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE) 15%, transparent); }
+.seeu-tab-badge { padding: 0 5px; border-radius: 999px; font-size: 10px; line-height: 15px; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-tertiary, #8397B0); background: color-mix(in srgb, currentColor 12%, transparent); }
+.seeu-tab[aria-selected='true'] .seeu-tab-badge { color: var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE); background: color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE) 16%, transparent); }
+.seeu-tree { display: flex; flex-direction: column; gap: 1px; }
+.seeu-tree-row { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 3px 8px; border-left: 2px solid transparent; border-radius: var(--dsw-radius-sm, 6px); cursor: pointer; font-size: 12.5px; color: var(--dsw-alias-label-primary, #E6EDF7); }
+.seeu-tree-row:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(34, 211, 238, 0.09)); }
+.seeu-tree-row.is-active { border-left-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE); background: var(--dsw-alias-interactive-bg-active, rgba(34, 211, 238, 0.16)); }
+.seeu-tree-guide { flex: none; width: 1px; align-self: stretch; margin: 1px 2px; background: linear-gradient(180deg, var(--dsw-alias-border-l3, rgba(148, 163, 184, 0.28)), transparent); }
+.seeu-tree-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seeu-tree-meta { flex: none; color: var(--dsw-alias-label-tertiary, #8397B0); font-size: 11px; white-space: nowrap; }
+.seeu-tree-remark { flex: 1 1 0; min-width: 0; color: var(--dsw-alias-label-tertiary, #8397B0); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seeu-tree-count { flex: none; color: var(--dsw-alias-label-tertiary, #8397B0); font-size: 11px; font-variant-numeric: tabular-nums; }
+.seeu-rows { display: flex; flex-direction: column; }
+.seeu-row { display: flex; align-items: baseline; gap: 8px; min-height: 30px; padding: 5px 8px; border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(34, 211, 238, 0.10)); border-radius: var(--dsw-radius-sm, 6px); font-size: 12.5px; }
+.seeu-row.is-clickable { cursor: pointer; }
+.seeu-row.is-clickable:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(34, 211, 238, 0.09)); }
+.seeu-row-time { flex: none; color: var(--dsw-alias-label-tertiary, #8397B0); font-family: var(--dsh-font-family-code-default, ui-monospace, Consolas, monospace); font-size: 11px; white-space: nowrap; }
+.seeu-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 12px; border: 1px dashed var(--dsw-alias-border-l2, rgba(148, 163, 184, 0.18)); border-radius: var(--dsw-radius-md, 8px); background: color-mix(in srgb, var(--dsw-alias-bg-layer-2, #131E33) 60%, transparent); color: var(--dsw-alias-label-tertiary, #8397B0); font-size: 12px; text-align: center; }
+.seeu-empty-title { color: var(--dsw-alias-label-secondary, #A9BBD1); font-size: 12.5px; font-weight: 600; }
+.seeu-empty-text { line-height: 1.6; max-width: 460px; }
+.seeu-skel-row { height: 26px; border-radius: var(--dsw-radius-sm, 6px); background: var(--dsw-alias-bg-skeleton, rgba(148, 163, 184, 0.10)); animation: seeu-ci-pulse 1.1s ease-in-out infinite; }
+@keyframes seeu-ci-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+.seeu-spin { display: inline-block; width: 11px; height: 11px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--dsw-alias-label-tertiary, #8397B0) 35%, transparent); border-top-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE); animation: seeu-ci-spin 0.8s linear infinite; vertical-align: -2px; }
+@keyframes seeu-ci-spin { to { transform: rotate(360deg); } }
+.seeu-btn { border: 1px solid var(--dsw-alias-border-l2, rgba(148, 163, 184, 0.18)); background: transparent; color: var(--dsw-alias-label-secondary, #A9BBD1); border-radius: var(--dsw-radius-sm, 6px); padding: 5px 11px; font-size: 12px; cursor: pointer; transition: background .12s ease, color .12s ease, border-color .12s ease; }
+.seeu-btn:hover:not(:disabled) { color: var(--dsw-alias-label-primary, #E6EDF7); border-color: var(--dsw-alias-border-l3, rgba(148, 163, 184, 0.28)); background: var(--dsw-alias-interactive-bg-hover, rgba(34, 211, 238, 0.09)); }
+.seeu-btn:disabled { opacity: 0.5; cursor: default; }
+.seeu-btn.is-primary { border: 1px solid transparent; background: var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE); color: var(--dsw-alias-bg-base, #0A111E); font-weight: 600; }
+.seeu-btn.is-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.seeu-table-wrap { overflow: auto; max-height: 360px; border: 1px solid var(--dsw-alias-border-l1, rgba(34, 211, 238, 0.10)); border-radius: var(--dsw-radius-md, 8px); }
+.seeu-table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 11.5px; }
+.seeu-table thead th { position: sticky; top: 0; z-index: 1; text-align: left; padding: 6px 8px; white-space: nowrap; font-weight: 600; color: var(--dsw-alias-label-secondary, #A9BBD1); background: var(--dsw-alias-bg-layer-2, #131E33); border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(148, 163, 184, 0.18)); }
+.seeu-table tbody td { padding: 4px 8px; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; color: var(--dsw-alias-label-primary, #E6EDF7); border-bottom: 1px solid var(--dsw-alias-border-l1, rgba(34, 211, 238, 0.10)); }
+.seeu-table tbody tr:last-child td { border-bottom-color: transparent; }
+.seeu-table tbody tr.is-clickable { cursor: pointer; }
+.seeu-table tbody tr.is-clickable:hover td { background: var(--dsw-alias-interactive-bg-hover, rgba(34, 211, 238, 0.09)); }
+.seeu-crumb { padding: 3px 8px; border: 1px solid transparent; border-radius: 999px; font-size: 11.5px; color: var(--dsw-alias-label-secondary, #A9BBD1); cursor: pointer; }
+.seeu-crumb:hover { color: var(--dsw-alias-label-primary, #E6EDF7); background: var(--dsw-alias-interactive-bg-hover, rgba(34, 211, 238, 0.09)); }
+.seeu-crumb.is-active { color: var(--dsw-alias-label-primary, #E6EDF7); font-weight: 600; border-color: color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE) 45%, transparent); border-left: 3px solid var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE); background: color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE) 12%, transparent); }
+.seeu-scroll { scrollbar-width: thin; }
+`;
+
+    /** 样式只注入一次（唯一 id）；主题 token 由 seeu-theme 提供，深浅色自动适配。 */
+    function ensureStyle() {
+      if (typeof document === 'undefined' || !document.head) return;
+      if (document.getElementById(STYLE_ID)) return;
+      const tag = document.createElement('style');
+      tag.id = STYLE_ID;
+      tag.textContent = CSS_TEXT;
+      document.head.appendChild(tag);
+    }
+
+    // 工厂加载时就把样式挂上，避免首帧无样式闪烁。
+    ensureStyle();
 
     const fmtBytes = (n) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MiB` : n > 1024 ? `${(n / 1024).toFixed(0)} KiB` : `${n} B`);
 
@@ -71,7 +175,37 @@ window.__ModuleLoader__.load({
       ['month', '按月'],
     ];
 
-    const emptyHint = (text) => h('div', { style: S.muted }, text);
+    // ---------- 通用小组件：空态 / 骨架 / 加载 / KPI 卡 ----------
+    const EmptyState = ({ title, text, action }) => h('div', { className: 'seeu-empty', style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '16px 12px', border: '1px dashed ' + C_L2, borderRadius: R_MD, color: C_FG3, fontSize: 12, textAlign: 'center' } },
+      title ? h('div', { className: 'seeu-empty-title', style: { color: C_FG2, fontSize: 12.5, fontWeight: 600 } }, title) : null,
+      text ? h('div', { className: 'seeu-empty-text', style: { lineHeight: 1.6, maxWidth: 460 } }, text) : null,
+      action ? h('div', { style: { marginTop: 2 } }, action) : null);
+
+    const emptyHint = (text) => h(EmptyState, { text });
+
+    const Spin = () => h('span', { className: 'seeu-spin', style: { display: 'inline-block', width: 11, height: 11, borderRadius: '50%', border: '2px solid ' + 'color-mix(in srgb, ' + C_FG3 + ' 35%, transparent)', borderTopColor: C_ACC, animation: 'seeu-ci-spin .8s linear infinite', verticalAlign: -2 } });
+    // 兼容两种调用：h(LoadingLine, {text}) / LoadingLine('text')。
+    const LoadingLine = (props) => {
+      const text = typeof props === 'string' ? props : (props?.text ?? props?.children ?? '');
+      return h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, color: C_FG3, fontSize: 11.5 } }, h(Spin), text);
+    };
+    // 兼容 h(Skeleton, {n}) 与 Skeleton(n)。
+    const Skeleton = (props) => {
+      const n = typeof props === 'number' ? props : (props?.n ?? 3);
+      return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+        Array.from({ length: n }, (_, i) => h('div', { key: i, className: 'seeu-skel-row', style: { height: 26, borderRadius: R_SM, background: 'var(--dsw-alias-bg-skeleton, rgba(148, 163, 184, 0.10))' } })));
+    };
+
+    const KpiStrip = ({ items }) => h('div', { className: 'seeu-kpis', style: S.kpis }, items.map((it) => h('div', { key: it.label, className: 'seeu-kpi', style: S.kpi },
+      h('div', { className: 'seeu-kpi-label', style: S.kpiLabel }, it.label),
+      h('div', {
+        className: 'seeu-kpi-value' + (it.text ? ' is-text' : ''),
+        style: { ...S.kpiValue, ...(it.text ? S.kpiText : null) },
+        title: String(it.value ?? ''),
+      }, it.value ?? '—'))));
+
+    const buttonClass = (primary) => (primary ? 'seeu-btn is-primary' : 'seeu-btn');
+
     const cellText = (v) => (v === null || v === undefined ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v));
 
     /** 从 dbPath 里取出案件目录名（…/<案件>/.seeu-index/case-index.db）。 */
@@ -86,9 +220,11 @@ window.__ModuleLoader__.load({
       const o = opts ?? {};
       return h('button', {
         type: 'button',
-        style: o.primary ? S.btnPrimary : { ...S.btn, ...(o.style ?? {}) },
+        className: buttonClass(o.primary) + (o.className ? ` ${o.className}` : ''),
+        style: { ...(o.primary ? S.btnPrimary : S.btn), ...(o.style ?? {}) },
         onClick,
         disabled: !!o.disabled,
+        title: o.title,
       }, label);
     }
 
@@ -127,21 +263,39 @@ window.__ModuleLoader__.load({
       return { loading: state.loading, error: state.error, data: state.data, reload: run };
     }
 
-    function Tabs({ tab, onChange }) {
-      return h('div', { style: S.seg }, TABS.map(([key, label]) => h('button', {
-        key,
-        type: 'button',
-        style: tab === key ? S.segOn : S.segOff,
-        onClick: () => onChange(key),
-      }, label)));
+    /** pill 式分段控件；右侧数量 badge 形如「记录 22777」「跨案 3999」。 */
+    function Tabs({ tab, onChange, counts }) {
+      return h('div', { style: S.tabs, className: 'seeu-tabs', role: 'tablist' }, TABS.map(([key, label]) => {
+        const on = tab === key;
+        const n = counts ? counts[key] : null;
+        return h('button', {
+          key,
+          type: 'button',
+          role: 'tab',
+          'aria-selected': on ? 'true' : 'false',
+          className: 'seeu-tab' + (on ? ' is-active' : ''),
+          style: on ? S.tabOn : S.tab,
+          title: n != null ? `${label}：${n}` : label,
+          onClick: () => onChange(key),
+        }, label, n != null ? h('span', { className: 'seeu-tab-badge', style: S.tabBadge }, String(n)) : null);
+      }));
     }
 
+    const MetaRow = ({ label, children, mono }) => h('div', { style: { display: 'flex', gap: 8, alignItems: 'baseline', minWidth: 0 } },
+      h('span', { style: { flex: 'none', width: 40, color: C_FG3, fontSize: 11 } }, label),
+      h('div', { style: { minWidth: 0, flex: 1, ...(mono ? { ...S.mono, fontSize: 11 } : { color: C_FG, fontSize: 12.5, wordBreak: 'break-word' }) } }, children));
+
     function CiteDetail({ detail }) {
-      return h('div', { style: S.card },
-        h('div', { style: S.mono }, detail.citation ?? '（无溯源句柄：只能作为导航，不能作为证据引用）'),
-        h('div', { style: S.muted }, `${detail.path ?? ''} · 第 ${detail.line ?? '?'} 行 · ${detail.ts ?? ''}`),
-        detail.verifyCmd ? h('div', { style: S.muted }, `回查：${detail.verifyCmd}`) : null,
-        h('div', { style: S.mono }, detail.text ?? ''));
+      return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+        h(MetaRow, { label: '句柄', mono: true },
+          h('span', { style: { color: detail.citation ? C_ACC : C_FG3 } }, detail.citation ?? '（无溯源句柄：只能作为导航，不能作为证据引用）')),
+        h(MetaRow, { label: '位置' }, `${detail.path ?? ''} · 第 ${detail.line ?? '?'} 行`),
+        detail.ts ? h(MetaRow, { label: '时间' }, h('span', { style: { color: C_FG2 } }, String(detail.ts))) : null,
+        detail.verifyCmd ? h(MetaRow, { label: '回查', mono: true }, detail.verifyCmd) : null,
+        detail.text ? h('div', {
+          className: 'seeu-scroll',
+          style: { maxHeight: 220, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: FONT_CODE, fontSize: 11.5, lineHeight: 1.6, color: C_FG, background: C_BG0, border: '1px solid ' + C_L1, borderRadius: R_SM, padding: '8px 10px' },
+        }, detail.text) : null);
     }
 
     // ---------- 视图：记录（分页 + 筛选 + 点行看引用） ----------
@@ -167,34 +321,45 @@ window.__ModuleLoader__.load({
         setOffset(0);
       };
       const hasFilter = !!(applied.eid || applied.app || applied.category || applied.q || applied.from || applied.to);
+      const total = data?.total ?? 0;
+      const rows = data?.rows ?? [];
       return h('div', { style: S.card },
-        h('div', { style: S.row },
+        h('div', { style: { ...S.row, gap: 6 } },
           narrowInput(draft.eid, (v) => setDraft((d) => ({ ...d, eid: v })), '检材号 eid', { width: 84, onEnter: apply }),
           narrowInput(draft.app, (v) => setDraft((d) => ({ ...d, app: v })), '应用 app', { width: 96, onEnter: apply }),
           narrowInput(draft.category, (v) => setDraft((d) => ({ ...d, category: v })), '类别 category', { width: 104, onEnter: apply }),
           narrowInput(draft.q, (v) => setDraft((d) => ({ ...d, q: v })), '关键词 q', { width: 140, onEnter: apply }),
-          actionButton('查询', apply),
+          actionButton('查询', apply, { primary: true }),
           hasFilter ? actionButton('清空', clear) : null),
-        applied.from || applied.to ? h('div', { style: S.muted }, `时间范围 ${applied.from || '…'} ~ ${applied.to || '…'}（由时间线钻取带入）`) : null,
-        error ? h('div', { style: S.err }, error) : null,
-        loading && !data ? emptyHint('加载中…') : null,
-        !loading && !error && data && data.total === 0 ? emptyHint('没有匹配记录：清空关键词或换筛选条件再试。') : null,
-        data && data.total > 0 ? h('div', null,
-          h('div', { style: S.muted }, `记录 ${data.total} 条 · 当前 ${data.offset + 1}-${data.offset + data.returned}`),
-          h('div', { style: S.list }, data.rows.map((r) => h('div', {
-            key: r.id,
-            style: S.item,
-            title: `第 ${r.line} 行，点一下看引用句柄`,
-            onClick: () => onCite(r.id),
-          },
-            h('span', { style: { ...S.muted, minWidth: 78 } }, `${r.eid}·${r.app}`),
-            h('span', { style: { ...S.muted, minWidth: 130 } }, r.ts ?? ''),
-            h('span', { style: { ...S.muted, minWidth: 68 } }, r.cat ?? ''),
-            h('span', { style: S.ellipsis }, `${r.actor ? `${r.actor}：` : ''}${r.text ?? ''}`)))),
-          h('div', { style: { ...S.row, marginTop: 6 } },
+        applied.from || applied.to ? h('div', { style: { ...S.noticeInfo, padding: '4px 8px' } }, `时间范围 ${applied.from || '…'} ~ ${applied.to || '…'}（由时间线钻取带入）`) : null,
+        error ? h('div', { style: S.noticeErr }, `记录读取失败：${error}`) : null,
+        loading && !data ? h(Skeleton, { n: 4 }) : null,
+        !loading && !error && data && total === 0
+          ? h(EmptyState, { title: '没有匹配记录', text: '清空关键词或换筛选条件再试；也可以点「清空」回到全部记录。', action: hasFilter ? actionButton('清空筛选', clear) : null })
+          : null,
+        data && total > 0 ? h('div', null,
+          h('div', { style: { ...S.row, marginBottom: 4 } },
+            h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `记录 ${total} 条`),
+            h('span', { style: S.muted }, `当前 ${data.offset + 1}-${data.offset + data.returned}`),
+            loading ? h('span', { style: S.muted }, '更新中…') : null),
+          h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 420, overflow: 'auto' } },
+            rows.map((r) => h('div', {
+              key: r.id,
+              className: 'seeu-row is-clickable',
+              style: { display: 'flex', alignItems: 'baseline', gap: 8, minHeight: 30, padding: '5px 8px', borderBottom: '1px solid ' + C_L1, cursor: 'pointer', fontSize: 12.5 },
+              title: `第 ${r.line} 行，点一下看引用句柄`,
+              onClick: () => onCite(r.id),
+            },
+              h('span', { style: { ...S.tag, flex: 'none' } }, `${r.eid}·${r.app}`),
+              h('span', { className: 'seeu-row-time', style: S.rowTime }, r.ts ?? ''),
+              h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, r.cat ?? ''),
+              h('span', { style: S.ellipsis }, `${r.actor ? `${r.actor}：` : ''}${r.text ?? ''}`),
+              h('span', { style: { flex: 'none', color: C_ACC, fontSize: 11 } }, '引用 ›')))),
+          h('div', { style: { ...S.row, marginTop: 8 } },
             data.offset > 0 ? actionButton('上一页', () => setOffset(Math.max(0, data.offset - PAGE))) : null,
             data.next != null ? actionButton('下一页', () => setOffset(data.next)) : null,
-            h('span', { style: S.muted }, '点一条看引用句柄。'))) : null);
+            h('span', { style: S.muted }, `第 ${Math.floor(data.offset / PAGE) + 1} 页 · 点一条看引用句柄`)))
+          : null);
     }
 
     // ---------- 视图：实体（聚合 → 唯一命中下钻提及） ----------
@@ -223,52 +388,71 @@ window.__ModuleLoader__.load({
       const mention = data?.matched === 'mention';
       const hasFilter = !!(applied.kind || applied.q || applied.eid);
       return h('div', { style: S.card },
-        h('div', { style: S.row },
+        h('div', { style: { ...S.row, gap: 6 } },
           narrowInput(draft.kind, (v) => setDraft((d) => ({ ...d, kind: v })), '实体类型 kind', { width: 110, onEnter: apply }),
           narrowInput(draft.q, (v) => setDraft((d) => ({ ...d, q: v })), '值 / 关键词 q', { width: 150, onEnter: apply }),
           narrowInput(draft.eid, (v) => setDraft((d) => ({ ...d, eid: v })), '检材号 eid', { width: 84, onEnter: apply }),
-          actionButton('查询', apply),
+          actionButton('查询', apply, { primary: true }),
           hasFilter ? actionButton('清空', clear) : null),
-        kinds.length ? h('div', { style: { ...S.row, gap: 4 } },
-          h('span', { style: S.muted }, '实体类别：'),
-          kinds.slice(0, 12).map((k) => h('span', {
-            key: k.kind,
-            role: 'button',
-            title: '按该类别过滤',
-            style: { ...S.tag, cursor: 'pointer', border: applied.kind === k.kind ? '1px solid #247bbf' : '1px solid transparent' },
-            onClick: () => pickKind(k.kind),
-          }, `${k.kind} ${k.n}`))) : null,
-        error ? h('div', { style: S.err }, error) : null,
-        loading && !data ? emptyHint('加载中…') : null,
+        kinds.length ? h('div', { style: { ...S.row, gap: 5 } },
+          h('span', { style: S.muted }, '实体类别'),
+          kinds.slice(0, 14).map((k) => {
+            const on = applied.kind === k.kind;
+            return h('span', {
+              key: k.kind,
+              role: 'button',
+              title: '按该类别过滤',
+              style: {
+                ...S.tag, cursor: 'pointer', padding: '0 7px', lineHeight: '18px',
+                border: '1px solid ' + (on ? C_ACC_LINE : 'transparent'),
+                background: on ? C_ACC_SOFT : 'color-mix(in srgb, currentColor 10%, transparent)',
+                color: on ? C_ACC : C_FG2,
+              },
+              onClick: () => pickKind(k.kind),
+            }, `${k.kind} ${k.n}`);
+          })) : null,
+        error ? h('div', { style: S.noticeErr }, `实体读取失败：${error}`) : null,
+        loading && !data ? h(Skeleton, { n: 4 }) : null,
         !loading && !error && data && data.returned === 0
-          ? emptyHint(hasFilter ? '没有匹配实体：换个关键词或点「清空」。' : '该库没有实体数据（entity 表为空），先重建索引。')
+          ? h(EmptyState, {
+              title: hasFilter ? '没有匹配实体' : '该库没有实体数据',
+              text: hasFilter ? '换个关键词或点「清空」；实体值按归一化后的精确值匹配。' : 'entity 表为空：先点「建库 / 更新」重建索引，再回来查看。',
+              action: hasFilter ? actionButton('清空筛选', clear) : null,
+            })
           : null,
-        mention ? h('div', null,
-          h('div', { style: S.muted }, `精确命中 ${data.kind} = ${data.value} · ${data.returned} 条提及（跨 ${data.evidences ?? '-'} 个检材）`),
+        mention ? h('div', { style: S.card },
+          h('div', { style: S.noticeInfo }, `精确命中 ${data.kind} = ${data.value} · ${data.returned} 条提及（跨 ${data.evidences ?? '-'} 个检材）`),
           (data.mentions ?? []).length
-            ? h('div', { style: S.list }, data.mentions.map((m) => h('div', {
+            ? h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 420, overflow: 'auto' } },
+              data.mentions.map((m) => h('div', {
                 key: m.record,
-                style: S.item,
+                className: 'seeu-row is-clickable',
+                style: { display: 'flex', alignItems: 'baseline', gap: 8, minHeight: 30, padding: '5px 8px', borderBottom: '1px solid ' + C_L1, cursor: 'pointer', fontSize: 12.5 },
                 title: '点一下看引用句柄',
                 onClick: () => onCite(m.record),
               },
-                h('span', { style: { ...S.muted, minWidth: 78 } }, `${m.eid}·${m.app}`),
-                h('span', { style: { ...S.muted, minWidth: 130 } }, m.ts ?? ''),
-                h('span', { style: { ...S.muted, minWidth: 60 } }, m.cat ?? ''),
-                h('span', { style: S.ellipsis }, `第 ${m.line} 行`))))
-            : emptyHint('没有提及记录。'))
-        : rows.length ? h('div', null,
-            h('div', { style: S.muted }, `返回 ${data.returned} 条聚合 · 跨检材 ${data.crossEvidence ?? '-'} 条（点一行下钻提及）`),
-            h('div', { style: S.list }, rows.map((r) => h('div', {
+                h('span', { style: { ...S.tag, flex: 'none' } }, `${m.eid}·${m.app}`),
+                h('span', { style: S.rowTime }, m.ts ?? ''),
+                h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, m.cat ?? ''),
+                h('span', { style: S.ellipsis }, `第 ${m.line} 行`),
+                h('span', { style: { flex: 'none', color: C_ACC, fontSize: 11 } }, '引用 ›'))))
+            : h(EmptyState, { title: '没有提及记录', text: '该实体命中了聚合，但明细查询没有返回记录；换一个实体值再试。' }))
+        : rows.length ? h('div', { style: S.card },
+          h('div', { style: S.row },
+            h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `返回 ${data.returned} 条聚合`),
+            h('span', { style: S.muted }, `跨检材 ${data.crossEvidence ?? '-'} 条 · 点一行下钻提及`)),
+          h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 420, overflow: 'auto' } },
+            rows.map((r) => h('div', {
               key: `${r.kind}|${r.value}`,
-              style: S.item,
+              className: 'seeu-row is-clickable',
+              style: { display: 'flex', alignItems: 'baseline', gap: 8, minHeight: 30, padding: '5px 8px', borderBottom: '1px solid ' + C_L1, cursor: 'pointer', fontSize: 12.5 },
               title: '点一下下钻到提及记录',
               onClick: () => drill(r),
             },
-              h('span', { style: S.tag }, r.kind),
+              h('span', { style: { ...S.tag, flex: 'none' } }, r.kind),
               h('span', { style: S.ellipsis }, r.value),
-              h('span', { style: S.muted }, `${r.count} 次`),
-              h('span', { style: { ...S.muted, color: r.evidences > 1 ? '#c47f17' : undefined } }, r.evidences > 1 ? `跨 ${r.evidences} 检材` : `${r.evidences} 检材`)))))
+              h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, `${r.count} 次`),
+              h('span', { style: { flex: 'none', color: r.evidences > 1 ? C_WARN : C_FG3, fontSize: 11 } }, r.evidences > 1 ? `跨 ${r.evidences} 检材` : `${r.evidences} 检材`)))))
           : null);
     }
 
@@ -291,11 +475,13 @@ window.__ModuleLoader__.load({
       const max = rows.reduce((m, r) => Math.max(m, r.n ?? 0), 0) || 1;
       const bucketLabel = (BUCKETS.find(([key]) => key === applied.bucket) ?? BUCKETS[1])[1];
       const hasFilter = !!(applied.eid || applied.app || applied.from || applied.to);
+      const total = rows.reduce((s, r) => s + (r.n ?? 0), 0);
       return h('div', { style: S.card },
-        h('div', { style: S.row },
+        h('div', { style: { ...S.row, gap: 6 } },
           h('div', { style: S.seg }, BUCKETS.map(([key, label]) => h('button', {
             key,
             type: 'button',
+            className: 'seeu-btn' + (applied.bucket === key ? ' is-primary' : ''),
             style: applied.bucket === key ? S.segOn : S.segOff,
             onClick: () => pickBucket(key),
           }, label))),
@@ -303,25 +489,35 @@ window.__ModuleLoader__.load({
           narrowInput(draft.app, (v) => setDraft((d) => ({ ...d, app: v })), '应用 app', { width: 96, onEnter: apply }),
           narrowInput(draft.from, (v) => setDraft((d) => ({ ...d, from: v })), '起始 2025-04-01', { width: 112, onEnter: apply }),
           narrowInput(draft.to, (v) => setDraft((d) => ({ ...d, to: v })), '结束 2025-04-30', { width: 112, onEnter: apply }),
-          actionButton('查询', apply),
+          actionButton('查询', apply, { primary: true }),
           hasFilter ? actionButton('清空', clear) : null),
-        error ? h('div', { style: S.err }, error) : null,
-        loading && !data ? emptyHint('加载中…') : null,
+        error ? h('div', { style: S.noticeErr }, `时间线读取失败：${error}`) : null,
+        loading && !data ? h(Skeleton, { n: 4 }) : null,
         !loading && !error && data && data.returned === 0
-          ? emptyHint(hasFilter ? '该时间范围内没有带时间戳的记录。' : '该库没有可统计的时间戳（record.ts 为空），先重建索引。')
+          ? h(EmptyState, {
+              title: hasFilter ? '该时间范围内没有记录' : '该库没有可统计的时间戳',
+              text: hasFilter ? '放宽起止时间或清空筛选；时间格式示例 2025-04-01。' : 'record.ts 为空：先点「建库 / 更新」重建索引，再回来查看时间线。',
+              action: hasFilter ? actionButton('清空筛选', clear) : null,
+            })
           : null,
-        data && data.returned > 0 ? h('div', null,
-          h('div', { style: S.muted }, `${bucketLabel}分桶 · ${data.returned} 个时间段 · 点柱条钻取该时段记录`),
-          h('div', { style: S.list }, rows.map((r) => h('div', {
-            key: r.bucket,
-            style: S.item,
-            title: '点一下查看该时间段的记录',
-            onClick: () => onDrill({ eid: applied.eid, app: applied.app, from: r.bucket, to: `${r.bucket}~` }),
-          },
-            h('span', { style: { ...S.mono, minWidth: 112 } }, r.bucket),
-            h('div', { style: S.barTrack }, h('div', { style: { ...S.barFill, width: `${Math.max(2, Math.round((r.n / max) * 100))}%` } })),
-            h('span', { style: { ...S.muted, minWidth: 64, textAlign: 'right' } }, `${r.n} 记录`),
-            h('span', { style: S.muted }, `${r.eids} 检材 · ${r.apps} 应用`))))) : null);
+        data && data.returned > 0 ? h('div', { style: S.card },
+          h('div', { style: S.row },
+            h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `${bucketLabel}分桶`),
+            h('span', { style: S.muted }, `${data.returned} 个时间段`),
+            h('span', { style: { ...S.muted, marginLeft: 'auto' } }, `合计 ${total} 条记录 · 点柱条钻取该时段`)),
+          h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 460, overflow: 'auto' } },
+            rows.map((r) => h('div', {
+              key: r.bucket,
+              className: 'seeu-row is-clickable',
+              style: { display: 'flex', alignItems: 'center', gap: 10, minHeight: 30, padding: '5px 8px', borderBottom: '1px solid ' + C_L1, cursor: 'pointer', fontSize: 12.5 },
+              title: '点一下查看该时间段的记录',
+              onClick: () => onDrill({ eid: applied.eid, app: applied.app, from: r.bucket, to: `${r.bucket}~` }),
+            },
+              h('span', { style: { flex: 'none', minWidth: 104, color: C_FG2, fontFamily: FONT_CODE, fontSize: 11 } }, r.bucket),
+              h('div', { style: S.barTrack }, h('div', { style: { ...S.barFill, width: `${Math.max(2, Math.round((r.n / max) * 100))}%` } })),
+              h('span', { style: { flex: 'none', minWidth: 58, textAlign: 'right', color: C_FG, fontSize: 11, fontVariantNumeric: 'tabular-nums' } }, `${r.n} 记录`),
+              h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, `${r.eids} 检材 · ${r.apps} 应用`)))))
+          : null);
     }
 
     // ---------- 视图：typed 表（清单 + 宽表 + 分页） ----------
@@ -345,41 +541,50 @@ window.__ModuleLoader__.load({
         setApplied(next);
         setOffset(0);
       };
-      if (list.error) return h('div', { style: S.card }, h('div', { style: S.err }, list.error));
-      if (list.loading && !list.data) return h('div', { style: S.card }, emptyHint('加载表清单…'));
-      if (!tables.length) return h('div', { style: S.card }, emptyHint('该库没有 typed 数据（table 清单为空）：先点「建库 / 更新」重建索引。'));
+      if (list.error) return h('div', { style: S.card }, h('div', { style: S.noticeErr }, `表清单读取失败：${list.error}`));
+      if (list.loading && !list.data) return h('div', { style: S.card }, h(Skeleton, { n: 5 }));
+      if (!tables.length) return h('div', { style: S.card }, h(EmptyState, { title: '该库没有 typed 数据', text: 'table 清单为空：先点「建库 / 更新」重建索引，再回来查看联系人、短信、账号等结构化表。' }));
       const data = detail.data;
       const cols = data?.columns ?? [];
       const rows = data?.rows ?? [];
       return h('div', { style: S.card },
-        h('div', { style: S.row },
+        h('div', { style: { ...S.row, gap: 6 } },
           h('span', { style: S.muted }, '表'),
           h('select', {
-            style: { ...S.filter, width: 'auto', minWidth: 140, maxWidth: 220, cursor: 'pointer' },
+            style: { ...S.filter, width: 'auto', minWidth: 150, maxWidth: 240, cursor: 'pointer' },
             value: name,
             onChange: (e) => pick(e.target.value),
           }, tables.map((t) => h('option', { key: t.table, value: t.table }, `${t.label || t.table}（${t.rows}）`))),
           narrowInput(draft.eid, (v) => setDraft((d) => ({ ...d, eid: v })), '检材号 eid', { width: 84, onEnter: apply }),
           narrowInput(draft.q, (v) => setDraft((d) => ({ ...d, q: v })), '关键词 q', { width: 140, onEnter: apply }),
-          actionButton('查询', apply),
+          actionButton('查询', apply, { primary: true }),
           applied.q || applied.eid ? actionButton('清空', clear) : null),
-        detail.error ? h('div', { style: S.err }, detail.error) : null,
-        detail.loading && !data ? emptyHint('加载中…') : null,
-        data && data.total === 0 ? emptyHint('该表没有匹配行：清空关键词或换 eid 再试。') : null,
-        data && data.total > 0 ? h('div', null,
-          h('div', { style: S.muted }, `${data.label || name} · 共 ${data.total} 行 · 当前 ${data.offset + 1}-${data.offset + data.returned}`),
-          h('div', { style: S.tableWrap }, h('table', { style: S.table },
+        detail.error ? h('div', { style: S.noticeErr }, `表数据读取失败：${detail.error}`) : null,
+        detail.loading && !data ? h(Skeleton, { n: 5 }) : null,
+        data && data.total === 0
+          ? h(EmptyState, { title: '该表没有匹配行', text: '清空关键词或换 eid 再试；也可以切换到别的表。', action: applied.q || applied.eid ? actionButton('清空筛选', clear) : null })
+          : null,
+        data && data.total > 0 ? h('div', { style: S.card },
+          h('div', { style: S.row },
+            h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, data.label || name),
+            h('span', { style: S.muted }, `共 ${data.total} 行`),
+            h('span', { style: S.muted }, `当前 ${data.offset + 1}-${data.offset + data.returned}`),
+            detail.loading ? h('span', { style: S.muted }, '更新中…') : null,
+            h('span', { style: { ...S.muted, marginLeft: 'auto' } }, '点一行看引用句柄（record_id 为空的行不可引用）')),
+          h('div', { className: 'seeu-table-wrap seeu-scroll', style: S.tableWrap }, h('table', { className: 'seeu-table', style: S.table },
             h('thead', null, h('tr', null, cols.map((c) => h('th', { key: c, style: S.th }, c)))),
             h('tbody', null, rows.map((r, i) => h('tr', {
               key: r.id != null ? `r${r.id}` : `i${i}`,
+              className: r.record_id != null ? 'is-clickable' : undefined,
               style: r.record_id != null ? S.trClick : undefined,
               title: r.record_id != null ? '点一下看引用句柄' : '该行没有对应原文记录，不能引用',
               onClick: r.record_id != null ? () => onCite(r.record_id) : undefined,
             }, cols.map((c) => h('td', { key: c, style: S.td }, cellText(r[c])))))))),
-          h('div', { style: { ...S.row, marginTop: 6 } },
+          h('div', { style: { ...S.row, marginTop: 8 } },
             data.offset > 0 ? actionButton('上一页', () => setOffset(Math.max(0, data.offset - TABLE_PAGE))) : null,
             data.next != null ? actionButton('下一页', () => setOffset(data.next)) : null,
-            h('span', { style: S.muted }, '点一行看引用句柄（record_id 为空的行不可引用）。'))) : null);
+            h('span', { style: S.muted }, `第 ${Math.floor(data.offset / TABLE_PAGE) + 1} 页 · 列宽可横向滚动`)))
+          : null);
     }
 
     // ---------- 视图：跨案（中央库概览 / 同步 / 重合实体 Top / 实体值查询） ----------
@@ -468,31 +673,44 @@ window.__ModuleLoader__.load({
         // ---- 概览 + 同步 ----
         h('div', { style: S.panel },
           h('div', { style: S.row },
-            h('span', { style: { fontSize: 13, fontWeight: 600 } }, '跨案概览'),
-            h('span', { style: { ...S.muted, marginLeft: 'auto', ...S.ellipsis } }, `跨案库：${list.data?.crossPath ?? '…'}`),
-            actionButton(syncing ? '同步中…' : '同步全部案件', doSync, { primary: true, disabled: syncing })),
-          list.error ? h('div', { style: S.err }, `跨案库读取失败：${list.error}`) : null,
-          syncError ? h('div', { style: S.err }, `同步失败：${syncError}`) : null,
-          note ? h('div', { style: { ...S.muted, color: '#247bbf' } }, note) : null,
-          list.loading && !list.data ? emptyHint('加载跨案库…') : null,
-          stats ? h('div', { style: S.statRow },
-            h('span', { style: S.statItem }, h('span', { style: S.muted }, '案件'), h('span', { style: S.statNum }, String(stats.cases ?? 0))),
-            h('span', { style: S.statItem }, h('span', { style: S.muted }, '实体'), h('span', { style: S.statNum }, String(stats.entities ?? 0))),
-            h('span', { style: S.statItem }, h('span', { style: S.muted }, '跨案重合实体'), h('span', { style: S.statNum }, String(stats.sharedEntities ?? 0))),
-            h('span', { style: S.statItem }, h('span', { style: S.muted }, '镜像'), h('span', { style: S.statNum }, String(stats.images ?? 0))),
-            h('span', { style: S.muted }, `最近同步：${fmtTime(stats.lastSync)}`)) : null,
-          !list.loading && !list.error && !cases.length ? emptyHint('跨案库还没有案件：点「同步全部案件」把本机索引汇总进来。') : null,
-          cases.length ? h('div', null,
-            h('div', { style: S.muted }, `案件 ${cases.length} 个（案名 / 案号 / 记录数 / 同步时间）`),
-            h('div', { style: S.list }, cases.map((c) => h('div', { key: c.caseNumber, style: { ...S.item, cursor: 'default' }, title: c.caseDir ?? '' },
-              h('span', { style: { fontWeight: 600 } }, c.caseName || c.caseNumber || '(未命名案件)'),
-              h('span', { style: S.muted }, c.caseNumber ?? ''),
-              h('span', { style: S.muted }, `${c.records ?? 0} 记录`),
-              h('span', { style: { ...S.muted, marginLeft: 'auto' } }, fmtTime(c.syncedAt)))))) : null),
+            h('span', { style: S.title }, '跨案概览'),
+            h('span', { style: { ...S.muted, marginLeft: 'auto', maxWidth: '52%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: list.data?.crossPath ?? '' }, `跨案库：${list.data?.crossPath ?? '…'}`),
+            actionButton(syncing ? '同步中…' : '同步全部案件', doSync, { primary: true, disabled: syncing, title: '扫描本机索引并汇总到跨案库' })),
+          list.error ? h('div', { style: S.noticeErr }, `跨案库读取失败：${list.error}（检查跨案库路径，或先给一个案件建库）`) : null,
+          syncError ? h('div', { style: S.noticeErr }, `同步失败：${syncError}`) : null,
+          note ? h('div', { style: S.noticeOk }, note) : null,
+          list.loading && !list.data ? h(Skeleton, { n: 2 }) : null,
+          stats ? h('div', { style: S.card },
+            h(KpiStrip, { items: [
+              { label: '案件', value: String(stats.cases ?? 0) },
+              { label: '实体', value: String(stats.entities ?? 0) },
+              { label: '跨案重合实体', value: String(stats.sharedEntities ?? 0) },
+              { label: '镜像', value: String(stats.images ?? 0) },
+              { label: '最近同步', value: fmtTime(stats.lastSync), text: true },
+            ] }),
+            h('div', { style: S.muted }, `跨案库版本 v${stats.crossVersion ?? '?'} · 案件列表按同步时间倒序`)) : null,
+          !list.loading && !list.error && !cases.length
+            ? h(EmptyState, { title: '跨案库还没有案件', text: '先给至少一个案件建库，再点「同步全部案件」把本机索引汇总进来。' })
+            : null,
+          cases.length ? h('div', { style: S.card },
+            h('div', { style: S.row },
+              h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `案件 ${cases.length} 个`),
+              h('span', { style: S.muted }, '案名 / 案号 / 记录数 / 同步时间')),
+            h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 240, overflow: 'auto' } },
+              cases.map((c) => h('div', {
+                key: c.caseNumber,
+                className: 'seeu-row',
+                style: { display: 'flex', gap: 8, alignItems: 'baseline', minHeight: 30, padding: '5px 8px', borderBottom: '1px solid ' + C_L1, fontSize: 12.5 },
+                title: c.caseDir ?? '',
+              },
+                h('span', { style: { color: C_FG, fontWeight: 600, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, c.caseName || c.caseNumber || '(未命名案件)'),
+                h('span', { style: { ...S.tag, flex: 'none' } }, c.caseNumber ?? ''),
+                h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, `${c.records ?? 0} 记录`),
+                h('span', { style: { marginLeft: 'auto', ...S.rowTime } }, fmtTime(c.syncedAt)))))) : null),
         // ---- 重合实体 Top ----
         h('div', { style: S.panel },
           h('div', { style: S.row },
-            h('span', { style: { fontSize: 13, fontWeight: 600 } }, '重合实体 Top'),
+            h('span', { style: S.title }, '重合实体 Top'),
             h('span', { style: S.muted }, 'minCases'),
             narrowInput(minDraft, setMinDraft, '≥ 案数', { width: 56, onEnter: () => setMinCases(minDraft.trim() || '2') }),
             actionButton('刷新', () => setMinCases(minDraft.trim() || '2')),
@@ -502,65 +720,70 @@ window.__ModuleLoader__.load({
               value: kind,
               onChange: (e) => setKind(e.target.value),
             }, kindOptions.map(([v, l]) => h('option', { key: v || 'all', value: v }, l)))),
-          top.error ? h('div', { style: S.err }, `重合实体读取失败：${top.error}`) : null,
-          top.loading && !top.data ? emptyHint('加载重合实体…') : null,
+          top.error ? h('div', { style: S.noticeErr }, `重合实体读取失败：${top.error}`) : null,
+          top.loading && !top.data ? h(Skeleton, { n: 4 }) : null,
           top.data && !topRows.length
-            ? emptyHint(stats && stats.entities === 0
-              ? '跨案库还没有实体数据：点「同步全部案件」先汇总。'
-              : `没有跨 ≥${top.data.minCases ?? minCases} 案的实体：把 minCases 调低或换类型再试。`)
+            ? h(EmptyState, {
+                title: stats && stats.entities === 0 ? '跨案库还没有实体数据' : `没有跨 ≥${top.data.minCases ?? minCases} 案的实体`,
+                text: stats && stats.entities === 0
+                  ? '点「同步全部案件」先汇总本机案件索引，再回来看跨案重合实体。'
+                  : '把 minCases 调低或换类型再试；重合实体越少，说明跨案件关联越弱。',
+              })
             : null,
-          topRows.length ? h('div', null,
+          topRows.length ? h('div', { style: S.card },
             h('div', { style: S.muted }, `共 ${top.data?.returned ?? topRows.length} 条 · 点一行看各案提及（base_handle / recordId）`),
-            h('div', { style: S.tableWrap }, h('table', { style: S.table },
+            h('div', { className: 'seeu-table-wrap seeu-scroll', style: S.tableWrap }, h('table', { className: 'seeu-table', style: S.table },
               h('thead', null, h('tr', null,
                 ['类型', '值', '案件数', '提及次数'].map((c) => h('th', { key: c, style: S.th }, c)))),
               h('tbody', null, topRows.map((r) => h('tr', {
                 key: `${r.kind}|${r.valueNorm}`,
+                className: 'is-clickable',
                 style: S.trClick,
                 title: '点一下查该实体在不同案件的提及',
                 onClick: () => { setValueInput(r.valueNorm); setHit({ value: r.valueNorm, kind: r.kind }); },
               },
-                h('td', { style: S.td }, r.kind),
+                h('td', { style: S.td }, h('span', { style: S.tag }, r.kind)),
                 h('td', { style: { ...S.td, maxWidth: 260 } }, r.valueText || r.valueNorm),
-                h('td', { style: S.td }, String(r.caseCount ?? '')),
-                h('td', { style: S.td }, String(r.hits ?? '')))))))) : null),
+                h('td', { style: { ...S.td, color: C_ACC, fontVariantNumeric: 'tabular-nums' } }, String(r.caseCount ?? '')),
+                h('td', { style: { ...S.td, fontVariantNumeric: 'tabular-nums' } }, String(r.hits ?? '')))))))) : null),
         // ---- 实体值查询 ----
         h('div', { style: S.panel },
           h('div', { style: S.row },
-            h('span', { style: { fontSize: 13, fontWeight: 600 } }, '实体值查询'),
+            h('span', { style: S.title }, '实体值查询'),
             narrowInput(valueInput, setValueInput, '实体值，如 85254877240（回车查询）', { width: 220, onEnter: query }),
-            actionButton('查询', query),
+            actionButton('查询', query, { primary: true }),
             hit.value ? actionButton('清空', () => { setValueInput(''); setHit({ value: '', kind: '' }); }) : null),
-          found.error ? h('div', { style: S.err }, `实体查询失败：${found.error}`) : null,
-          found.loading && !found.data ? emptyHint('查询中…') : null,
-          !hit.value ? emptyHint('输入实体值（手机号 / 邮箱 / URL 等）后回车或点「查询」；也可点上面 Top 表的一行。') : null,
-          hit.value && found.data && !foundRows.length ? emptyHint(`没有命中实体「${hit.value}」：值是归一化后精确匹配，检查是否完整；也可用 Top 表下钻。`) : null,
-          foundRows.length ? h('div', { style: S.card }, foundRows.map((row) => h('div', { key: `${row.kind}|${row.value}`, style: S.card },
-            h('div', { style: S.row },
-              h('span', { style: S.tag }, row.kind),
-              h('span', { style: { ...S.mono, wordBreak: 'break-all' } }, row.value),
+          found.error ? h('div', { style: S.noticeErr }, `实体查询失败：${found.error}`) : null,
+          found.loading && !found.data ? h(LoadingLine, { text: '查询中…' }) : null,
+          !hit.value ? h(EmptyState, { title: '查一个实体值', text: '输入手机号 / 邮箱 / URL 等归一化后的值后回车或点「查询」；也可点上面 Top 表的一行下钻。' }) : null,
+          hit.value && found.data && !foundRows.length ? h(EmptyState, { title: `没有命中实体「${hit.value}」`, text: '值是归一化后精确匹配，检查是否完整（如手机号不含 +86）；也可用 Top 表下钻。' }) : null,
+          foundRows.length ? h('div', { style: S.card }, foundRows.map((row) => h('div', { key: `${row.kind}|${row.value}`, style: { ...S.card, gap: 8 } },
+            h('div', { style: { ...S.row, padding: '2px 0' } },
+              h('span', { style: { ...S.tag, flex: 'none' } }, row.kind),
+              h('span', { style: { ...S.mono, color: C_FG, wordBreak: 'break-all', fontSize: 12.5 } }, row.value),
               h('span', { style: S.muted }, `跨 ${row.caseCount} 案 · ${row.evidenceCount ?? '-'} 检材 · 提及 ${row.hits ?? 0} 次`),
-              row.lastTs ? h('span', { style: S.muted }, `最近 ${row.lastTs}`) : null),
-            (row.cases ?? []).map((g) => h('div', { key: `${row.kind}|${g.caseNumber}`, style: { ...S.card, borderLeft: '2px solid color-mix(in srgb, #247bbf 45%, transparent)', paddingLeft: 8 } },
+              row.lastTs ? h('span', { style: { ...S.rowTime, marginLeft: 'auto' } }, `最近 ${row.lastTs}`) : null),
+            (row.cases ?? []).map((g) => h('div', { key: `${row.kind}|${g.caseNumber}`, style: { display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px', borderLeft: '2px solid ' + C_ACC_LINE, borderRadius: '0 ' + R_MD + 'px ' + R_MD + 'px 0', background: C_BG2 } },
               h('div', { style: S.row },
-                h('span', { style: { fontWeight: 600 } }, g.caseName || g.caseNumber),
-                h('span', { style: S.muted }, g.caseNumber ?? ''),
+                h('span', { style: { fontWeight: 600, color: C_FG } }, g.caseName || g.caseNumber),
+                h('span', { style: { ...S.tag, flex: 'none' } }, g.caseNumber ?? ''),
                 (g.eids ?? []).length ? h('span', { style: S.muted }, `eid ${g.eids.join(', ')}`) : null,
-                dbByCase.get(g.caseNumber) ? h('span', { style: S.tag }, '可回查引用') : h('span', { style: { ...S.tag, opacity: 0.7 } }, '索引不在本机')),
+                dbByCase.get(g.caseNumber) ? h('span', { style: { ...S.tag, color: C_OK, background: 'color-mix(in srgb, ' + C_OK + ' 14%, transparent)' } }, '可回查引用') : h('span', { style: { ...S.tag, color: C_FG3 } }, '索引不在本机')),
               (g.mentions ?? []).length
-                ? h('div', { style: { ...S.list, maxHeight: 200 } }, (g.mentions ?? []).map((m, i) => h('div', {
+                ? h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 200, overflow: 'auto' } }, (g.mentions ?? []).map((m, i) => h('div', {
                   key: `${m.recordId ?? 'x'}|${m.lineNo ?? i}|${i}`,
-                  style: S.item,
+                  className: 'seeu-row is-clickable',
+                  style: { display: 'flex', alignItems: 'baseline', gap: 8, minHeight: 30, padding: '5px 8px', borderBottom: '1px solid ' + C_L1, cursor: 'pointer', fontSize: 12.5, background: 'transparent' },
                   title: `${m.citable === 0 ? '不可引用：' : ''}点一下看引用句柄（base_handle）`,
                   onClick: () => openMention(g.caseNumber, m),
                 },
-                  h('span', { style: { ...S.muted, minWidth: 64 } }, `E${m.eid ?? '?'}${m.app ? `·${m.app}` : ''}`),
-                  h('span', { style: { ...S.muted, minWidth: 118 } }, m.ts ?? ''),
-                  h('span', { style: { ...S.muted, minWidth: 54 } }, m.lineNo != null ? `第 ${m.lineNo} 行` : ''),
+                  h('span', { style: { ...S.tag, flex: 'none' } }, `E${m.eid ?? '?'}${m.app ? `·${m.app}` : ''}`),
+                  h('span', { style: S.rowTime }, m.ts ?? ''),
+                  h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, m.lineNo != null ? `第 ${m.lineNo} 行` : ''),
                   h('span', { style: S.ellipsis }, m.snippet ?? ''),
-                  m.recordId != null ? h('span', { style: S.tag }, `#${m.recordId}`) : null,
-                  m.baseHandle ? h('span', { style: { ...S.mono, fontSize: 10, opacity: 0.72 } }, m.baseHandle) : null)))
-                : emptyHint('（该案提及只保留最近 8 条，可能被截断）')))))) : null));
+                  m.recordId != null ? h('span', { style: { ...S.tag, flex: 'none' } }, `#${m.recordId}`) : null,
+                  m.baseHandle ? h('span', { style: { flex: 'none', fontFamily: FONT_CODE, fontSize: 10, color: C_FG3 } }, m.baseHandle) : null)))
+                : h('div', { style: S.muted }, '（该案提及只保留最近 8 条，可能被截断）')))))) : null));
     }
 
     function Panel() {
@@ -578,6 +801,10 @@ window.__ModuleLoader__.load({
       const [progress, setProgress] = useState(null);
       const [error, setError] = useState('');
       const [crumbs, setCrumbs] = useState([]);
+
+      // 跨案 badge 需要提前知道数量；失败静默（badge 不显示），不影响主流程。
+      const crossInfo = useLoad(() => api('/cross/list', {}), []);
+      useEffect(() => { ensureStyle(); }, []);
 
       const scan = useCallback(async (target) => {
         setError('');
@@ -605,6 +832,7 @@ window.__ModuleLoader__.load({
         setError('');
         try {
           const body = await api('/tree', { db: targetDb, node: targetNode });
+          if (targetNode === 'root') rootTotalsRef.current = body.totals ?? null;
           setView(body);
           setNode(targetNode);
         } catch (e) { setError(String(e.message ?? e)); } finally { setBusy(''); }
@@ -612,6 +840,7 @@ window.__ModuleLoader__.load({
 
       const loadNodeRef = useRef(null);
       loadNodeRef.current = loadNode;
+      const rootTotalsRef = useRef(null);
 
       // 挂载时自动扫描默认目录（工作区 + 上次会话的案件目录），不用手点。
       const firstScan = useRef(false);
@@ -702,18 +931,38 @@ window.__ModuleLoader__.load({
 
       const totals = view?.totals ?? null;
       const children = view?.children ?? null;
-      const noDbHint = emptyHint('先在「索引库」列表里点一个库，或填写案件目录后点「建库 / 更新」。');
+      const activeIndex = db ? (indexes.find((ix) => ix.dbPath === db) ?? null) : null;
+      const crossStats = crossInfo.data?.stats ?? null;
+      const tabCounts = {};
+      if (rootTotalsRef.current?.records != null) tabCounts.records = rootTotalsRef.current.records;
+      if (crossStats) tabCounts.cross = crossStats.sharedEntities ?? crossStats.cases;
+      const rootTotals = rootTotalsRef.current;
+      const kpiItems = db ? [
+        { label: '案件', value: activeIndex?.caseName ?? view?.name ?? caseNameOf(db), text: true },
+        { label: '检材', value: String(rootTotals?.evidences ?? '—') },
+        { label: '记录', value: String(rootTotals?.records ?? '—') },
+        { label: '实体', value: String(rootTotals?.entities ?? '—') },
+        { label: '库大小', value: activeIndex ? fmtBytes(activeIndex.sizeBytes ?? 0) : '—' },
+        { label: '生成时间', value: activeIndex?.builtAt ? fmtTime(activeIndex.builtAt) : '—', text: true },
+      ] : null;
+      const noDbHint = h(EmptyState, {
+        title: '未选择索引库',
+        text: '在顶部填写案件目录后点「扫描已有索引」或「建库 / 更新」，也可以在索引列表里点一个已有库。',
+      });
       const detailPanel = detail ? h('div', { style: S.panel },
         h('div', { style: S.row },
-          h('span', { style: { fontSize: 13, fontWeight: 600 } }, '引用详情'),
-          h('span', { style: { ...S.muted, marginLeft: 'auto' } }, busy === 'cite' ? '加载中…' : ''),
-          actionButton('关闭', () => setDetail(null))),
+          h('span', { style: S.title }, '引用详情'),
+          busy === 'cite' ? h(LoadingLine, { text: '回查中…' }) : null,
+          h('span', { style: { marginLeft: 'auto' } }, actionButton('关闭', () => setDetail(null)))),
         h(CiteDetail, { detail })) : null;
 
       return h('div', { style: S.wrap },
-        h('div', null,
-          h('div', { style: { fontSize: 15, fontWeight: 600 } }, '取证案件索引'),
-          h('div', { style: S.muted }, '把火眼案件的全解析结果建成只读索引库（SQLite），支持树导航、关键词检索、记录 / 实体 / 时间线 / 表 视图与跨案碰撞；引用可回查 Goldeneyes 句柄。')),
+        h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' } },
+          h('span', { style: { fontSize: 15, fontWeight: 650, color: C_FG, letterSpacing: '.2px' } }, '取证案件索引'),
+          h('span', { style: { ...S.muted, fontSize: 11 } }, '只读 SQLite 索引 · 树导航 / 检索 / 记录 / 实体 / 时间线 / 表 / 跨案碰撞 · 引用可回查 Goldeneyes 句柄')),
+        kpiItems
+          ? h(KpiStrip, { items: kpiItems })
+          : h('div', { style: S.noticeInfo }, '选择索引库后，这里显示案件名、检材数、记录数、实体数、库大小与生成时间。'),
 
         h('div', { style: S.panel },
           h('div', { style: S.row },
@@ -721,81 +970,125 @@ window.__ModuleLoader__.load({
               style: S.input, value: dir, placeholder: '案件目录，例如 E:\\forensics\\W盘_2919d298-f083-4a81-9c12-bd4ca393bcc5',
               onChange: (e) => setDir(e.target.value), spellCheck: false,
             }),
-            h('button', { style: S.btn, onClick: () => scan(dir.trim() || undefined), disabled: busy === 'build' }, '扫描已有索引'),
-            h('button', { style: S.btnPrimary, onClick: startBuild, disabled: busy === 'build' }, busy === 'build' ? '建库中…' : '建库 / 更新')),
-          progress ? h('div', null,
-            h('div', { style: { ...S.muted, marginBottom: 4 } },
-              `${progress.phase ?? ''} ${progress.total ? `${progress.completed}/${progress.total}` : ''} ${progress.percent ?? 0}%${progress.message ? ` · ${progress.message}` : ''}`),
-            h('div', { style: { height: 6, borderRadius: 3, background: 'color-mix(in srgb, currentColor 12%, transparent)' } },
-              h('div', { style: { height: 6, width: `${progress.percent ?? 0}%`, borderRadius: 3, background: '#247bbf', transition: 'width .3s' } }))) : null,
+            actionButton('扫描已有索引', () => scan(dir.trim() || undefined), { disabled: busy === 'build' }),
+            actionButton(busy === 'build' ? '建库中…' : '建库 / 更新', startBuild, { primary: true, disabled: busy === 'build' })),
+          progress ? h('div', { style: { ...S.card, gap: 6 } },
+            h('div', { style: S.row },
+              h('span', { style: { ...S.tag, flex: 'none', color: C_ACC } }, progress.phase ?? 'build'),
+              h('span', { style: S.muted }, `${progress.total ? `${progress.completed}/${progress.total}` : ''} ${progress.percent ?? 0}%${progress.message ? ` · ${progress.message}` : ''}`)),
+            h('div', { style: { height: 6, borderRadius: 3, background: C_L2, overflow: 'hidden' } },
+              h('div', { style: { height: '100%', width: `${progress.percent ?? 0}%`, borderRadius: 3, background: C_ACC, transition: 'width .3s' } }))) : null,
           indexes.length
-            ? h('div', { style: S.list },
-              indexes.map((ix) => h('div', {
-                key: ix.dbPath, style: { ...S.item, background: ix.dbPath === db ? 'color-mix(in srgb, #247bbf 16%, transparent)' : 'transparent' },
-                onClick: () => openIndex(ix),
-              },
-                h('span', { style: { fontWeight: 600 } }, ix.caseName ?? ix.caseNumber ?? basename(ix.caseDir)),
-                h('span', { style: S.muted }, ix.caseNumber ?? ''),
-                h('span', { style: S.muted }, fmtBytes(ix.sizeBytes ?? 0)),
-                h('span', { ...{ style: { ...S.muted, marginLeft: 'auto' } } }, ix.builtAt ? new Date(ix.builtAt).toLocaleString() : ''))))
-            : emptyHint('还没有索引：填案件目录后点「建库 / 更新」。')),
-        error ? h('div', { style: S.err }, error) : null,
+            ? h('div', { style: { ...S.card, gap: 4 } },
+              h('div', { style: S.row },
+                h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `索引库 ${indexes.length} 个`),
+                h('span', { style: S.muted }, '点一行切换当前库')),
+              h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 180, overflow: 'auto' } },
+                indexes.map((ix) => {
+                  const on = ix.dbPath === db;
+                  return h('div', {
+                    key: ix.dbPath,
+                    className: 'seeu-row is-clickable' + (on ? ' is-active' : ''),
+                    style: {
+                      display: 'flex', alignItems: 'baseline', gap: 8, minHeight: 30, padding: '5px 8px',
+                      borderBottom: '1px solid ' + C_L1, borderLeft: '2px solid ' + (on ? C_ACC : 'transparent'),
+                      background: on ? C_ACTIVE : 'transparent', cursor: 'pointer', fontSize: 12.5,
+                    },
+                    onClick: () => openIndex(ix),
+                  },
+                    h('span', { style: { color: C_FG, fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, ix.caseName ?? ix.caseNumber ?? basename(ix.caseDir)),
+                    ix.caseNumber ? h('span', { style: { ...S.tag, flex: 'none' } }, ix.caseNumber) : null,
+                    h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, fmtBytes(ix.sizeBytes ?? 0)),
+                    h('span', { style: { marginLeft: 'auto', ...S.rowTime } }, ix.builtAt ? fmtTime(ix.builtAt) : ''));
+                })))
+            : h(EmptyState, { title: '还没有索引库', text: '在顶部填入案件目录（火眼全解析结果目录），点「建库 / 更新」；已有索引库时可点「扫描已有索引」。' })),
+        error ? h('div', { style: S.noticeErr }, error) : null,
 
         h('div', { style: S.panel },
-          h('div', { style: S.row },
-            h(Tabs, { tab, onChange: switchTab }),
-            h('span', { style: { ...S.muted, marginLeft: 'auto' } }, db ? `当前库：${caseNameOf(db)}` : '未选择索引库')),
+          h('div', { style: { ...S.row, gap: 8 } },
+            h(Tabs, { tab, onChange: switchTab, counts: tabCounts }),
+            h('span', {
+              style: { ...S.muted, marginLeft: 'auto', maxWidth: '42%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+              title: db ?? '',
+            }, db ? `当前库：${caseNameOf(db)}` : '未选择索引库')),
 
           tab === 'tree' ? (view ? h('div', { style: S.card },
-            h('div', { style: S.row },
-              h('span', { style: S.crumb, onClick: () => goCrumb(-1) }, '案件'),
-              crumbs.map((c, i) => h('span', { key: `${c.node}-${i}`, style: S.crumb, onClick: () => goCrumb(i) }, c.label)),
-              h('span', { style: { ...S.muted, marginLeft: 'auto' } }, busy === 'tree' ? '加载中…' : '')),
-            totals ? h('div', { style: S.muted },
-              `检材 ${totals.evidences ?? '-'} · 文件 ${totals.artifacts ?? '-'} · 记录 ${totals.records ?? '-'} · 消息 ${totals.messages ?? '-'} · 实体 ${totals.entities ?? '-'}`) : null,
-            view.artifact ? h('div', { style: { ...S.mono, marginBottom: 6 } }, `${view.artifact.app} / ${view.artifact.cat} / ${view.artifact.sub}\n${view.artifact.path}（${view.artifact.lines} 行，${view.artifact.citable ? '可引用' : '不可引用'}）`) : null,
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', paddingBottom: 6, borderBottom: '1px solid ' + C_L1 } },
+              h('span', { style: S.crumb, onClick: () => goCrumb(-1), title: '回到根节点' }, '案件'),
+              crumbs.map((c, i) => h('span', {
+                key: `${c.node}-${i}`,
+                className: 'seeu-crumb' + (i === crumbs.length - 1 ? ' is-active' : ''),
+                style: i === crumbs.length - 1 ? S.crumbOn : S.crumb,
+                onClick: () => goCrumb(i),
+              }, '› ', c.label)),
+              busy === 'tree' ? h(LoadingLine, { text: '加载中…' }) : null,
+              h('span', { style: { marginLeft: 'auto', ...S.muted } }, node === 'root' ? '根节点' : node)),
+            h('div', { style: { ...S.row, gap: 10 } },
+              h('span', { style: { color: C_FG, fontSize: 12.5, fontWeight: 600 } }, view.name || view.case || '案件'),
+              view.case ? h('span', { style: { ...S.tag, flex: 'none' } }, view.case) : null,
+              view.timeRange ? h('span', { style: S.muted }, `${view.timeRange.f ?? '…'} ~ ${view.timeRange.t ?? '…'}`) : null,
+              view.evidence ? h('span', { style: S.muted }, [view.evidence.name, view.evidence.platform].filter(Boolean).join(' · ')) : null,
+              h('span', { style: { marginLeft: 'auto', ...S.muted } }, totals
+                ? `检材 ${totals.evidences ?? '-'} · 文件 ${totals.artifacts ?? '-'} · 记录 ${totals.records ?? '-'}`
+                : '')),
+            view.artifact ? h('div', {
+              style: {
+                fontFamily: FONT_CODE, fontSize: 11, color: C_FG2, background: C_BG2,
+                border: '1px solid ' + C_L1, borderRadius: R_MD + 'px', padding: '6px 8px', margin: '6px 0',
+                whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+              },
+            }, `${view.artifact.app} / ${view.artifact.cat} / ${view.artifact.sub}\n${view.artifact.path}（${view.artifact.lines} 行，${view.artifact.citable ? '可引用' : '不可引用'}）`) : null,
             children
-              ? h('div', { style: S.list },
-                children.map((c) => h('div', { key: c.id, style: S.item, onClick: () => drill(c.id, labelOf(c)) },
-                  h('span', { style: { flex: 1 } }, labelOf(c),
-                    c.remark ? h('span', { style: { ...S.muted, marginLeft: 8 } }, `备注：${String(c.remark).slice(0, 40)}`) : null),
-                  c.artifacts !== undefined ? h('span', { style: S.muted }, `${c.artifacts} 文件`) : null,
-                  c.records !== undefined ? h('span', { style: S.muted }, `${c.records} 记录`) : null,
-                  c.accounts ? h('span', { style: S.muted }, `${c.accounts} 账号`) : null,
-                  c.lines !== undefined ? h('span', { style: S.muted }, `${c.lines} 行`) : null,
-                  c.kind ? h('span', { style: S.muted }, c.kind) : null)))
+              ? h('div', { className: 'seeu-tree seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 460, overflow: 'auto' } },
+                children.map((c) => treeChildRow(c, drill)))
               : null,
-            view.records ? h('div', null,
-              h('div', { style: S.muted }, `${view.records.offset + 1}-${view.records.offset + view.records.returned} / ${view.records.total}`),
-              h('div', { style: S.list },
-                (view.records.rows ?? []).map((r) => h('div', { key: r.id, style: S.item, onClick: () => showCite(r.id) },
-                  h('span', { style: { ...S.muted, minWidth: 44 } }, `#${r.line}`),
-                  h('span', { style: { ...S.muted, minWidth: 132 } }, r.ts ?? ''),
-                  h('span', { style: { flex: 1 } }, r.text)))),
-              view.records.next ? h('button', { style: { ...S.btn, marginTop: 6 }, onClick: () => drill(view.records.next, '下一页') }, '下一页') : null,
-              h('div', { style: { ...S.muted, marginTop: 6 } }, '点一条看引用句柄。')) : null,
-            view.citation ? h('div', null,
-              h('div', { style: S.mono }, view.citation),
+            view.records ? h('div', { style: S.card },
+              h('div', { style: S.row },
+                h('span', { style: S.muted }, `${view.records.offset + 1}-${view.records.offset + view.records.returned} / ${view.records.total}`),
+                h('span', { style: { ...S.muted, marginLeft: 'auto' } }, '点一条看引用句柄。')),
+              h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 380, overflow: 'auto' } },
+                (view.records.rows ?? []).map((r) => h('div', {
+                  key: r.id,
+                  className: 'seeu-row is-clickable',
+                  style: { display: 'flex', alignItems: 'baseline', gap: 8, minHeight: 30, padding: '5px 8px', borderBottom: '1px solid ' + C_L1, cursor: 'pointer', fontSize: 12.5 },
+                  onClick: () => showCite(r.id),
+                },
+                  h('span', { style: { ...S.tag, flex: 'none' } }, `#${r.line}`),
+                  h('span', { style: S.rowTime }, r.ts ?? ''),
+                  h('span', { style: S.ellipsis }, r.text)))),
+              view.records.next ? h('div', { style: { marginTop: 8 } }, actionButton('下一页', () => drill(view.records.next, '下一页'))) : null) : null,
+            view.citation ? h('div', { style: { ...S.card, marginTop: 8 } },
+              h('div', { style: { fontFamily: FONT_CODE, fontSize: 11.5, color: C_ACC, wordBreak: 'break-all' } }, view.citation),
               h('div', { style: S.muted }, `回查命令：${view.verifyCmd}`)) : null)
             : emptyHint('建库或选中索引库后，这里按 检材 → 应用 → 分类 → 文件 → 记录 导航。')) : null,
 
           tab === 'search' ? h('div', { style: S.card },
-            h('div', { style: S.row },
+            h('div', { style: { ...S.row, gap: 6 } },
               h('input', {
                 style: S.input, value: query, placeholder: '关键词（≥3 字走 FTS5，2 字自动 LIKE）',
                 onChange: (e) => setQuery(e.target.value), onKeyDown: (e) => { if (e.key === 'Enter') doSearch(); },
                 spellCheck: false, disabled: !db,
               }),
-              actionButton('检索', doSearch, { disabled: !db || busy === 'search' })),
-            result ? h('div', null,
-              h('div', { style: S.muted }, `引擎 ${result.engine} · ${result.returned} 命中`),
-              h('div', { style: S.list },
-                (result.rows ?? []).map((r) => h('div', { key: r.id, style: S.item, onClick: () => showCite(r.id) },
-                  h('span', { style: { ...S.muted, minWidth: 96 } }, `${r.eid}·${r.app}`),
-                  h('span', { style: { ...S.muted, minWidth: 120 } }, r.ts ?? ''),
-                  h('span', { style: { flex: 1 } }, r.snip)))),
-              h('div', { style: { ...S.muted, marginTop: 6 } }, '点一条看引用句柄。'))
-              : emptyHint('输入关键词后回车或点「检索」。')) : null,
+              actionButton('检索', doSearch, { primary: true, disabled: !db || busy === 'search' }),
+              busy === 'search' ? h(LoadingLine, { text: '检索中…' }) : null),
+            !db ? noDbHint : null,
+            result ? h('div', { style: S.card },
+              h('div', { style: S.row },
+                h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `引擎 ${result.engine} · ${result.returned} 命中`),
+                h('span', { style: { ...S.muted, marginLeft: 'auto' } }, '点一条看引用句柄。')),
+              (result.rows ?? []).length
+                ? h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 460, overflow: 'auto' } },
+                  (result.rows ?? []).map((r) => h('div', {
+                    key: r.id,
+                    className: 'seeu-row is-clickable',
+                    style: { display: 'flex', alignItems: 'baseline', gap: 8, minHeight: 30, padding: '5px 8px', borderBottom: '1px solid ' + C_L1, cursor: 'pointer', fontSize: 12.5 },
+                    onClick: () => showCite(r.id),
+                  },
+                    h('span', { style: { ...S.tag, flex: 'none' } }, `${r.eid}·${r.app}`),
+                    h('span', { style: S.rowTime }, r.ts ?? ''),
+                    h('span', { style: S.ellipsis }, r.snip))))
+                : h(EmptyState, { title: '没有命中', text: '换个关键词再试；≥3 字走 FTS5 全文索引，2 字自动退化为 LIKE。' }))
+              : (db ? h(EmptyState, { title: '还没有检索', text: '输入关键词后回车或点「检索」；结果行可点开引用句柄。' }) : null)) : null,
 
           tab === 'records' ? (db ? h(RecordsView, { db, seed: recordSeed, onCite: showCite }) : noDbHint) : null,
           tab === 'entity' ? (db ? h(EntityView, { db, onCite: showCite }) : noDbHint) : null,
@@ -820,6 +1113,50 @@ window.__ModuleLoader__.load({
       if (node.startsWith('ev:')) return [`检材 ${node.slice(3)}`, view.evidence?.name, view.evidence?.platform].filter(Boolean).join(' · ');
       if (view.artifact) return `${view.artifact.cat}`;
       return node;
+    }
+
+    /** 树节点行：检材显示「检材 N · 名称 · 平台」+ 备注截断行，应用/分类/文件显示计数。 */
+    function treeChildRow(c, onDrill) {
+      const id = String(c.id ?? '');
+      const evIndex = id.startsWith('ev:') ? id.slice(3) : null;
+      const name = evIndex ? (c.name || `检材 ${evIndex}`) : (labelOf(c) || id);
+      const counts = [];
+      if (c.artifacts !== undefined) counts.push(`${c.artifacts} 文件`);
+      if (c.records !== undefined) counts.push(`${c.records} 记录`);
+      if (c.accounts) counts.push(`${c.accounts} 账号`);
+      if (c.lines !== undefined) counts.push(`${c.lines} 行`);
+      if (c.kind) counts.push(c.kind);
+      return h('div', {
+        key: c.id,
+        className: 'seeu-tree-row',
+        style: {
+          display: 'flex', alignItems: 'center', gap: 8, minHeight: 30, padding: '3px 8px',
+          borderLeft: '2px solid transparent', borderRadius: R_SM, cursor: 'pointer', fontSize: 12.5, color: C_FG,
+        },
+        title: evIndex ? `检材 ${evIndex}${c.platform ? ' · ' + c.platform : ''}${c.person ? ' · ' + c.person : ''}` : name,
+        onClick: () => onDrill(c.id, labelOf(c)),
+      },
+        h('span', {
+          className: 'seeu-tree-guide',
+          style: { flex: 'none', width: 1, alignSelf: 'stretch', margin: '1px 2px', background: 'linear-gradient(180deg, ' + C_L2 + ', transparent)' },
+        }),
+        evIndex ? h('span', { style: { ...S.tag, flex: 'none' } }, `检材 ${evIndex}`) : null,
+        h('span', {
+          className: 'seeu-tree-name',
+          style: { flex: 'none', maxWidth: '54%', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+        }, name),
+        evIndex && c.person ? h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, c.person) : null,
+        evIndex && c.platform ? h('span', { style: { flex: 'none', color: C_FG2, fontSize: 11 } }, c.platform) : null,
+        c.remark ? h('span', {
+          className: 'seeu-tree-remark',
+          style: { flex: '1 1 0', minWidth: 0, color: C_FG3, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+        }, `备注：${String(c.remark).slice(0, 40)}`) : null,
+        h('span', { style: { marginLeft: 'auto', display: 'flex', gap: 8, flex: 'none' } },
+          counts.map((t) => h('span', {
+            key: t,
+            className: 'seeu-tree-count',
+            style: { color: C_FG3, fontSize: 11, fontVariantNumeric: 'tabular-nums' },
+          }, t))));
     }
 
     return {

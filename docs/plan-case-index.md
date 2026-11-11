@@ -816,3 +816,41 @@ typed 表行数（实测）：`health_metric` 6,200、`exif` 4,518、`msg_csv` 4
 - 开发态预览：`npm run dev:web -- --workspace <案件目录>` 直接起 dsh web（技能复制到 `.dev/dsh-home/skills`、固定端口注入 `SEEU_INDEX_API`），`/seeu-index/evidences` 与 `/tree` 均返回带名称的结果。
 
 **遗留**：`size_bytes`/`sha256` 仍为空（取自「检材信息」CSV，需按实际表头再核对）；`.gec` 结构若随火眼版本变化，`readCaseConfig` 会静默降级为空表（建库不受影响，但名称退回 CSV 值）。
+
+## 20. 前端主题/品牌与本地模型接入（v0.2.0 起）
+
+### 20.1 前端主题与品牌
+
+**问题**：官方 `dsh-brand` 只是 `brandString/brandNumber` 的 nominal typing 工具，不含产品品牌配置；产品名/图标硬编码在 `dsh-web-frontend/dist/index.html` 与 `dsh-client-ui-brand-official`，overlay 改不到。
+
+**实现**（`plugins/seeu-theme/`，一个包两种 half）：
+
+- 宿主 half `index.js`：`readFileSync(new URL('./theme.css', import.meta.url))` 读同包 CSS，`ctx.on('webserver/index-inject', table => table.push({ kind: 'html', placement: 'head', html }), { prepend: true })` 注入首屏 `<style>`；同时 `ctx.inject(['webServer'], …)` 注册 `GET /seeu-theme/theme.css` 兜底。
+- 客户端 half `client.js`：`window.__ModuleLoader__.load({ id: '@seeu/theme', … })`，`inject: ['slots']`，注册 `sidebar.brand.mark`（盾牌+放大镜 SVG）、`sidebar.brand.name`（「SeeU 取证」）、`conversation.hero.brand.mark`；`takeTitle()` 用 MutationObserver 把 `document.title` 改成「SeeU 取证智能体增强版」（官方客户端会反复写回，观察 15s 后断开）。
+- 主题 token：`theme.css` 覆盖 `--dsw-alias-bg-*` / `label-*` / `border-*` / brand / interactive / state / 字体 / 滚动条，暗色取证蓝（bg-base `#0A111E`、accent `#22D3EE`），浅色对应（`#F5F7FA`、accent `#0E7490`）。**必须 `!important`**：官方 ThemePresenter 会把 token 逐条写成 body 内联样式（`dsh-client-ui-layout/lib/client.js:614-635`）。
+- overlay：末尾 `- insert: [{ id: seeu-theme, name: ../../plugins/seeu-theme/index.js }]`；并新增 `- id: ui-brand-official` + `disabled: true`（避免与 seeu-theme 同槽叠两份品牌）、`- id: locale` + `config: { preference: zh }`。
+
+**验证**：`.probe/shot.mjs`（dev，`SEEU_DEV_MULTI=1` + 独立 `SEEU_DSH_HOME`）暗色 `{"ok":true,"title":"SeeU 取证智能体增强版","dark":true,"bgBase":"#0A111E","accent":"#22D3EE","themeStyle":true}`；浅色 `{"ok":true,"dark":false,"bgBase":"#F5F7FA","accent":"#0E7490"}`。截图存 `.probe/shots/theme-dark.png`、`theme-light.png`。
+
+### 20.2 本地模型（OpenAI 兼容网关）
+
+**路径**：overlay 里 `- id: llm-pi-ai` 的 `config.providers` 声明路由（该行默认挂载但零路由休眠，supplying providers 是唯一开关，见 `dsh-base/cordis.patch.yml:128-136` 注释）+ 覆盖 `- id: agent-default-model`。**不要用 settings 页写同一行**：overlay 优先时 `dsh-config-editor/lib/index.js:121` 会硬拒。
+
+**实现**：
+
+- `tools/local-model.mjs`（纯 JS，外壳与 dev-web 共用）：`normalizeLocalModel()` 归一化配置（兼容 `model: 'id'` 与 `models: [...]`）、`localModelPatch()` 生成 YAML、`localModelEnv()` 生成 `{ [apiKeyEnv]: apiKey }`。
+- `src/local-model.ts`：读 `<userData>/local-model.json`（`SEEU_LOCAL_MODEL_JSON` 优先）→ 写 `<userData>/local-model.patch.yml`；配置错误只记摘要、不阻塞启动。
+- `src/host.ts`：取证 overlay 之后追加第二个 `--patch <local-model.patch.yml>`，合并 env。
+- 生成行固定：`api: openai-completions`、`compat: { supportsUsageInStreaming: false, maxTokensField: max_tokens }`、每模型 `input: [text]`、`reasoningEfforts: false`；默认 `contextWindow: 131072`（个人赛 128k）、`maxTokens: 8192`、`timeoutMs: 600000`；`useAsDefault: true` 时写 `agent-default-model`。
+- 示例配置：`resources/forensics/local-model.example.json`；dev-web 支持 `--local-model`。
+
+**验证**：`--dump-config` 1336 行、exit 0、`provider: local-openai`/`model: mock-14b`/`baseURL: http://127.0.0.1:18080/v1` 均在；`.probe/local-model-e2e.mjs`（mock OpenAI 网关 + 真 Electron + CDP）通过：`REPORT {"ok":true,"chatCalls":2,"gotReply":true,"errors":[]}`，页面出现「MOCK-OK：本地网关已连通，模型是 mock-14b」，模型 chip 显示「Mock 14B (本地)」，预设显示「取证分析（Forensics）」。
+
+**e2e 踩坑（CDP 驱动 composer）**：① 首屏有「预览版说明」提示卡，会挡住 composer，必须先点文本为「继续」的按钮；② composer 是 Lexical 的 `contenteditable` DIV（`textareas: 0`），直接改 `textContent` 无效，要 `Input.dispatchMouseEvent` 点击聚焦 + `Input.insertText` + `Input.dispatchKeyEvent` Enter；③ 判断是否真的输入成功：读 `document.activeElement.innerText`。
+
+### 20.3 遗留
+
+- 面板视觉改造已完成（v0.2.0）：`plugins/seeu-case-index/client.js` 1186 行——主题 token 化 `<style id="seeu-case-index-style">`、顶部 KPI 概览条（案件/检材/记录/实体/库大小/生成时间）、pill 标签栏 + 数量 badge、树行「检材 N · 名称 · 平台/人员 · 备注」+ 竖线 guide、统一 `seeu-row`/`Skeleton`/`LoadingLine`/`EmptyState`、表视图吸顶表头。验收 `.probe/m2-ui-check.mjs`：`m2ok: true`、`errors: []`（六标签真实数据，KPI 与 badge 正确）；`.probe/shot.mjs` 暗/浅两态截图正常。
+- 真实本地网关未联调（用户自备端点）；mock 已证明协议层与 UI 链路可用。
+- 模型选择器「设为默认」在 overlay 场景下静默失败，默认模型只能靠 `useAsDefault`。
+- `compaction-basic` 的 `headroomTokens`（默认 65536）对小上下文网关偏大，等真实网关联调后再决定是否随 preset 重写。

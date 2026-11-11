@@ -224,6 +224,16 @@
       - id: present
         name: '@deepseek-ai/dsh-tool-present'
 
+# ── 品牌与语言（覆盖官方行）──────────────────────────────────────────────────
+# 官方鲸鱼 logo + DSH 字标让位给 seeu-theme 的取证盾徽（同一槽位两份注册会叠在一起）。
+- id: ui-brand-official
+  disabled: true
+
+# 界面语言固定中文：取证报告、面板、设置页都按中文呈现（官方默认跟随浏览器语言）。
+- id: locale
+  config:
+    preference: zh
+
 # ── 案件索引插件（新增行，id 见 plugins/seeu-case-index）────────────────────
 # 相对路径以本文件所在目录（resources/forensics/）为基准，app-boot 会转成 file: URL：
 #   开发态 → <仓库根>/plugins/seeu-case-index/index.js
@@ -232,3 +242,10 @@
 - insert:
     - id: seeu-case-index
       name: ../../plugins/seeu-case-index/index.js
+
+# ── 取证主题插件（新增行，id 见 plugins/seeu-theme）────────────────────────
+# 纯客户端插件：覆盖 dsh 设计 token（深海蓝/青蓝、中文优先字体）+ 浏览器标题。
+# 宿主行本身不挂任何服务，只为了让 client.js 被 dsh-client-modules serve。
+- insert:
+    - id: seeu-theme
+      name: ../../plugins/seeu-theme/index.js
