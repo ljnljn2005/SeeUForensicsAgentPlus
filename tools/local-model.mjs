@@ -28,6 +28,9 @@ const DEFAULTS = {
   // 标题生成是每次新会话的额外一次请求：本地模型不值得给 4096 输出 tokens。
   titleMaxOutputTokens: 512,
   titleTimeoutMs: 20_000,
+  // 本地模型默认用「取证分析（本地模型精简）」预设：工具表约 10 个、系统提示紧凑，
+  // 固定开销从 ~33k 字符降到 ~11k（32k 窗口才留得下对话）。关掉则沿用完整取证预设。
+  litePreset: true,
 }
 
 export class LocalModelConfigError extends Error {
@@ -113,6 +116,7 @@ export function normalizeLocalModel(input = {}) {
     retryMaxRetries: num(input.retryMaxRetries, DEFAULTS.retryMaxRetries),
     titleMaxOutputTokens: num(input.titleMaxOutputTokens, DEFAULTS.titleMaxOutputTokens),
     titleTimeoutMs: num(input.titleTimeoutMs, DEFAULTS.titleTimeoutMs),
+    litePreset: input.litePreset !== false,
     compat: input.compat !== null && typeof input.compat === 'object' ? input.compat : {},
     models: models.map((m) => ({
       id: m.id,
@@ -196,6 +200,17 @@ export function localModelPatch(cfg) {
       '  config:',
       `    provider: ${q(c.route)}`,
       `    model: ${q(c.defaultModel)}`,
+    )
+  }
+
+  // 精简预设：工具描述是固定开销的大头（27 个工具 ≈26,687 字符），本地小窗口模型
+  // 用 seeu-lite 把工具表压到 ~10 个（≈9,900 字符）。默认建议开着，可在设置里关。
+  if (c.litePreset) {
+    lines.push(
+      '# 本地模型默认预设：取证分析（本地模型精简），由 resources/forensics/cordis.patch.yml 定义',
+      '- id: agent-preset-registry',
+      '  config:',
+      '    default: seeu-lite',
     )
   }
   return `${lines.join('\n')}\n`

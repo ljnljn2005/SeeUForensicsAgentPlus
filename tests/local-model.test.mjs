@@ -76,7 +76,7 @@ test('生成的 patch 关键行：openai-completions、保守 compat、retryPoli
   const doc = YAML.parse(yamlText)
   const rows = Array.isArray(doc) ? doc : [doc]
   const ids = rows.map((r) => r.id)
-  assert.deepEqual(ids, ['llm-pi-ai', 'session-title-llm'])
+  assert.deepEqual(ids, ['llm-pi-ai', 'session-title-llm', 'agent-preset-registry'])
   const provider = rows[0].config.providers['local-openai']
   assert.equal(provider.api, 'openai-completions')
   assert.equal(provider.baseURL, 'http://127.0.0.1:8000/v1')
@@ -89,9 +89,9 @@ test('生成的 patch 关键行：openai-completions、保守 compat、retryPoli
 test('useAsDefault 追加 agent-default-model 行', () => {
   const doc = YAML.parse(localModelPatch({ ...base, useAsDefault: true }))
   const rows = Array.isArray(doc) ? doc : [doc]
-  const last = rows.at(-1)
-  assert.equal(last.id, 'agent-default-model')
-  assert.deepEqual(last.config, { provider: 'local-openai', model: 'qwen2.5-32b-instruct' })
+  const row = rows.find((r) => r.id === 'agent-default-model')
+  assert.ok(row, 'patch 里应有 agent-default-model 行')
+  assert.deepEqual(row.config, { provider: 'local-openai', model: 'qwen2.5-32b-instruct' })
 })
 
 test('自定义值覆盖默认（超时/重试/标题/上下文/输出），compat 覆盖保留其它默认', () => {
@@ -218,4 +218,18 @@ test('normalizeGatewayModels 归一化 /v1/models 响应', () => {
     ],
   )
   assert.deepEqual(normalizeGatewayModels(undefined), [])
+})
+
+test('litePreset 默认开启：patch 里把默认预设指到 seeu-lite', () => {
+  const patch = localModelPatch({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm' }] })
+  assert.ok(patch.includes('- id: agent-preset-registry'))
+  assert.ok(patch.includes('default: seeu-lite'))
+  assert.equal(normalizeLocalModel({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm' }] }).litePreset, true)
+})
+
+test('litePreset=false 时不写 registry 行（仍保留模型与标题行）', () => {
+  const patch = localModelPatch({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm' }], litePreset: false })
+  assert.ok(!patch.includes('agent-preset-registry'))
+  assert.ok(patch.includes('- id: session-title-llm'))
+  assert.equal(normalizeLocalModel({ baseURL: 'http://127.0.0.1:8000/v1', models: [{ id: 'm' }], litePreset: false }).litePreset, false)
 })

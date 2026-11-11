@@ -184,6 +184,7 @@ try {
     set('contextWindow', '131072')
     set('maxTokens', '8192')
     document.getElementById('useAsDefault').checked = true
+    document.getElementById('litePreset').checked = true
     return true
   })()`)
   log('填表', '完成')
@@ -195,11 +196,23 @@ try {
     models: [{ id: 'qwen2.5-32b-instruct', name: 'Qwen2.5 32B（本地）' }],
     contextWindow: 131072,
     maxTokens: 8192,
-    useAsDefault: true
+    useAsDefault: true,
+    litePreset: true
   })`)
   if (preview?.ok !== true) throw new Error(`preview 失败：${JSON.stringify(preview)}`)
   report.previewHasRetryPolicy = /retryPolicy/.test(preview.patch)
   report.previewHasTitleRow = /session-title-llm/.test(preview.patch)
+  // 精简预设：默认开启时要把 agent-preset-registry.default 指到 seeu-lite
+  report.previewHasLitePreset = /agent-preset-registry/.test(preview.patch) && /seeu-lite/.test(preview.patch)
+  if (!report.previewHasLitePreset) throw new Error('preview 里没有 seeu-lite 预设切换行')
+  const fullPreview = await evaluate(client, `window.seeu.localModel.preview({
+    enabled: true,
+    baseURL: 'http://127.0.0.1:${MOCK_PORT}/v1',
+    models: [{ id: 'qwen2.5-32b-instruct' }],
+    litePreset: false
+  })`)
+  report.litePresetOptional = fullPreview?.ok === true && !/agent-preset-registry/.test(fullPreview.patch)
+  if (!report.litePresetOptional) throw new Error('关掉精简预设后仍生成了 registry 行')
   log('preview', `patch ${preview.patch.length} 字符，含 retryPolicy=${report.previewHasRetryPolicy}`)
 
 
@@ -247,12 +260,15 @@ try {
     models: [{ id: 'qwen2.5-32b-instruct', name: 'Qwen2.5 32B（本地）' }],
     contextWindow: 131072,
     maxTokens: 8192,
-    useAsDefault: true
+    useAsDefault: true,
+    litePreset: true
   })`)
   if (saved?.ok !== true) throw new Error(`保存失败：${JSON.stringify(saved)}`)
   if (!existsSync(CONFIG)) throw new Error(`保存后配置文件不存在：${CONFIG}`)
   const written = JSON.parse(readFileSync(CONFIG, 'utf8'))
   report.savedModels = written.models.map((m) => m.id)
+  report.litePresetSaved = written.litePreset === true
+  if (!report.litePresetSaved) throw new Error('保存的配置里 litePreset 不是 true')
   log('保存', `写入 ${CONFIG}，模型 ${report.savedModels.join(',')}`)
 
   const reread = await evaluate(client, 'window.seeu.localModel.get()')

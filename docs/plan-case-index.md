@@ -1322,3 +1322,35 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 回归：`npm test` 38/38；`SEEU_DEV_MULTI=1 … node scripts/e2e/m2-ui-check.mjs` → `m2ok:true / errors:[]`（KPI、检材名+备注、检索 20 命中、`复制引用清单` 按钮都在）。
 
 遗留：chip 只显示一个（最近那条）；如果要列最近 3 个需要在欢迎页加一块列表，等用户确认视觉后再做。
+
+### 20.25 第 23 轮：本地模型「精简工具集」预设（固定开销省 ~8k tokens）
+
+问题：本地模型接入只调了 provider/超时/重试/压缩阈值，**工具描述压缩**一直没动。goal 明确要求这一项；而且它可能比压缩阈值更影响小窗口模型——工具描述是每次请求的固定开销，压缩只能减少历史消息。
+
+实测（`scripts/e2e/local-tools-e2e.mjs` 的 mock 网关把请求体记进 `shapes`，新增 `toolsChars / systemChars / toolsByName / requestChars`）：
+
+| preset | 工具数 | 工具描述 | 系统提示 | 首个带工具请求 | 估算 tokens |
+| --- | --- | --- | --- | --- | --- |
+| standard | 27 | 26,687 字符 | 6,061 字符 | 45,099 字符 | ≈20.5k |
+| seeu-lite | 12 | 10,229 字符 | 4,379 字符 | 26,946 字符 | ≈12.2k |
+
+工具开销 Top：`pwsh` 3,526 / `workflow` 3,420 / `schedule_create` 2,621 / `subagent` 1,629 / `schedule_edit` 1,472 / `ask_user_question` 1,450 / `subagent_fork` 1,299 / `present` 1,037 / `update_goal` 1,015。也就是说**编排类工具（workflow/subagent/schedule/goal/present/团队通信）占了近一半固定开销**，而单机取证分析很少用它们。
+
+调研：dsh 没有工具描述覆盖/过滤配置位（`dsh-tools`、`dsh-agent` 都没有 `maxDescription` / `allowedTools` / `maxTools` 之类）；唯一可控点是 **preset 的 `plugins` 列表**——工具由 preset 挂载，`@deepseek-ai/dsh-web-app/presets/standard.patch.yml` 里每个预设就是一个 `- insert: [{name: '@deepseek-ai/dsh-agent-preset', config: {plugins: [...]}}]` 行。
+
+实现：
+
+- `resources/forensics/cordis.patch.yml` 末尾新增 `- insert:` 的 `preset-seeu-lite`（`name: '@deepseek-ai/dsh-agent-preset'`，`config.id: seeu-lite`、`order: 2`、`name: 取证分析（本地模型精简）`）：插件列表 = 精简 persona（6 条取证准则）+ `agent-instructions` + `time-context` + `tool-bash`/`tool-pwsh` + `tool-fs`（只读）+ `tool-fs-search` + `tool-jobs` + `skill-filesystem` + `tool-skill` + `tool-ask-user` + `tool-todo`（`allowParallelInProgress: false`）+ `compaction` 组（与 standard 相同的 0.8 / 8192 / 0.16）；
+- `tools/local-model.mjs`：`DEFAULTS.litePreset = true`，`normalizeLocalModel()` 返回 `litePreset: input.litePreset !== false`，`localModelPatch()` 在末尾追加 `- id: agent-preset-registry` / `config: { default: seeu-lite }`（关掉则不写这一行）；
+- `renderer/local-model.html`：新增复选框 `#litePreset`（默认勾选，文案「精简工具集（推荐，省约 2 万字符固定上下文）」），`readForm()` / `fillForm()` 同步；
+- 为什么改 registry 的 `default` 而不是覆盖 `preset-standard`：这样完整取证预设原样保留，用户在会话里可以随时切回去；覆盖 `preset-standard` 会把子代理/工作流彻底拿掉且无法按会话切回。
+
+验证：
+
+- `npm test` **40/40**（新增两条：默认开 → patch 含 `agent-preset-registry`/`seeu-lite`；关 → 无 registry 但仍有 `session-title-llm`；同时修了 2 条被新增行顺序打乱的旧断言：ids 列表加 registry、`agent-default-model` 改成按 id 查找而非 `rows.at(-1)`）；
+- `--dump-config`（取证 overlay + `.probe/local-test.yml`）：`agent-preset-registry.config.default: seeu-lite`（dump 707-710 行）、`- id: preset-seeu-lite`（1349 行）；
+- `node scripts/e2e/local-tools-e2e.mjs` → `ok:true`，`litePresetActive:true`、`litePresetTools:12`、`budget:{toolsCount:12,toolsChars:10229,systemChars:4379,requestChars:26946,approxTokens:12248}`；
+- `node scripts/e2e/settings-check.mjs` → `ok:true`，`previewHasLitePreset:true`、`litePresetOptional:true`（`litePreset:false` 时 preview 无 registry 行）、`litePresetSaved:true`，其余设置页断言（档位/健康度/诊断复制/自报窗口/缺模型/禁用兜底）不变；
+- `node scripts/e2e/m2-ui-check.mjs` → `m2ok:true / errors:[]`（面板不受预设改动影响）。
+
+遗留：精简预设只影响**新会话**（`agent-preset-registry.default` 在会话创建时读取），已有会话仍是创建时的预设；`agent-preset-registry` 目前只有 `default` 一个字段，dsh 改 registry 结构时要回看这一行。

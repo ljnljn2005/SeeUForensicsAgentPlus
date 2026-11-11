@@ -49,6 +49,14 @@ const mock = createServer((req, res) => {
         hasStreamOptions: Object.prototype.hasOwnProperty.call(body, 'stream_options'),
         hasStore: Object.prototype.hasOwnProperty.call(body, 'store'),
         hasToolResult,
+        // 上下文预算：本地模型最关心「固定开销」占多少
+        toolsChars: Array.isArray(body.tools) ? JSON.stringify(body.tools).length : 0,
+        toolsByName: Array.isArray(body.tools)
+          ? body.tools.map((t) => ({ name: t?.function?.name ?? t?.name ?? '?', chars: JSON.stringify(t).length })).sort((a, b) => b.chars - a.chars)
+          : [],
+        systemChars: messages.filter((m) => m?.role === 'system').reduce((n, m) => n + String(m?.content ?? '').length, 0),
+        toolsCount: Array.isArray(body.tools) ? body.tools.length : 0,
+        requestChars: raw.length,
         keys: Object.keys(body).join(','),
         roles: messages.map((m) => m?.role).join(','),
       })
@@ -282,8 +290,10 @@ const toolCardStyle = await ev(`(() => {
 })()`)
 const toolCardStyleOk = toolCardStyle.count === 0 ? true : (toolCardStyle.radius >= 10 && toolCardStyle.border !== 'rgba(0, 0, 0, 0)')
 
+// 默认本地模型配置会切到「取证分析（本地模型精简）」：工具表从 27 个降到约 12 个。
+const litePresetActive = (first.toolsCount ?? 99) <= 14
 const summary = {
-  ok: gotReply && sawToolResult && (first.tools ?? 0) > 0 && first.maxTokensField === 'max_tokens' && first.hasStreamOptions === false && first.hasStore === false && toolCardStyleOk,
+  ok: gotReply && sawToolResult && (first.tools ?? 0) > 0 && first.maxTokensField === 'max_tokens' && first.hasStreamOptions === false && first.hasStore === false && toolCardStyleOk && litePresetActive,
   chatCalls,
   rounds: shapes.length,
   gotReply,
@@ -292,6 +302,9 @@ const summary = {
   todoCard,
   toolCardStyle,
   toolCardStyleOk,
+  litePresetActive,
+  litePresetTools: first.toolsCount,
+
   firstRequest: {
     stream: first.stream,
     tools: first.tools,
@@ -302,6 +315,19 @@ const summary = {
     keys: first.keys,
   },
   toolRoundRoles: toolRound.roles ?? null,
+  budget: (() => {
+    const toolReq = shapes.find((x) => (x.toolsCount ?? 0) > 0) ?? first;
+    return {
+    toolsCount: toolReq.toolsCount,
+    toolsChars: toolReq.toolsChars,
+    systemChars: toolReq.systemChars,
+    requestChars: toolReq.requestChars,
+    titleRequestChars: (shapes.find((x) => (x.toolsCount ?? 0) === 0) ?? {}).requestChars ?? 0,
+    // 中文按 ~1.6 字符/token、英文 JSON 按 ~4 字符/token 粗估，取 2.2 折中
+    approxTokens: Math.round((first.requestChars ?? 0) / 2.2),
+    toolsByName: toolReq.toolsByName ?? [],
+    };
+  })(),
   snippet: gotReply ? text.slice(Math.max(0, text.indexOf('MOCK-TOOLS-OK') - 100), text.indexOf('MOCK-TOOLS-OK') + 160) : text.slice(-600),
   errors: consoleErrors.slice(0, 5),
   appLogTail: appLog.slice(-400),

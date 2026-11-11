@@ -204,6 +204,14 @@
     </label>
   </div>
 
+  <div class="check">
+    <input type="checkbox" id="litePreset" checked />
+    <label for="litePreset">
+      精简工具集（推荐，省约 2 万字符固定上下文）
+      <div class="hint">本地模型默认用「取证分析（本地模型精简）」预设：工具表从 27 个减到约 10 个、系统提示换成紧凑版；需要子代理/工作流时在会话里切回「取证分析（Forensics）」。</div>
+    </label>
+  </div>
+
   <div class="actions">
     <button class="primary" id="btn-save">保存</button>
     <button id="btn-models">从网关拉取模型列表</button>
@@ -286,6 +294,7 @@
       contextWindow: Number.isFinite(contextWindow) && contextWindow > 0 ? contextWindow : undefined,
       maxTokens: Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : undefined,
       useAsDefault: $('useAsDefault').checked,
+      litePreset: $('litePreset').checked,
       timeoutMs: secToMs($('timeoutSec').value),
       streamIdleTimeoutMs: secToMs($('streamIdleSec').value),
       retryMaxRetries: numOrUndef($('retryMaxRetries').value),
@@ -318,6 +327,7 @@
     $('contextWindow').value = c.contextWindow || 131072
     $('maxTokens').value = c.maxTokens || 8192
     $('useAsDefault').checked = c.useAsDefault === true || c.defaultModel !== undefined
+    $('litePreset').checked = c.litePreset !== false
     $('timeoutSec').value = c.timeoutMs ? Math.round(c.timeoutMs / 1000) : 600
     $('streamIdleSec').value = c.streamIdleTimeoutMs ? Math.round(c.streamIdleTimeoutMs / 1000) : 600
     $('retryMaxRetries').value = Number.isFinite(c.retryMaxRetries) ? c.retryMaxRetries : 3

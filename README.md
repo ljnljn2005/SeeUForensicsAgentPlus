@@ -408,6 +408,7 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 | `model` / `models[]` | 必填 | `models` 可写 `{id,name,contextWindow,maxTokens}`；`contextWindow` 个人赛常用 131072（128k），团体赛 262144（256k） |
 | `contextWindow` / `maxTokens` | `131072` / `8192` | 生成 patch 时的默认上下文与单次输出上限 |
 | `useAsDefault` | `false` | 为 `true` 时覆盖 `agent-default-model`，新会话直接用它 |
+| `litePreset` | `true` | 新会话默认用「取证分析（本地模型精简）」预设（工具表约 12 个，省约 8k tokens 固定开销）；`false` 时回到完整取证预设 |
 | `timeoutMs` / `streamIdleTimeoutMs` | `600000` | 本地模型首 token 可能很慢，默认给 10 分钟 |
 | `retryMaxRetries` | `3` | 低并发网关的失败重试次数（dsh 默认 5 次，排队时会放大成 5 次长超时） |
 | `titleMaxOutputTokens` / `titleTimeoutMs` | `512` / `20000` | 会话标题生成的输出上限与超时（本地模型不值得给 4096 tokens） |
@@ -420,7 +421,8 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 - `compat: { supportsUsageInStreaming: false, maxTokensField: max_tokens, supportsStore: false, supportsDeveloperRole: false }`——不带 `stream_options.include_usage`（部分本地网关会 400），用 `max_tokens` 而不是 `max_completion_tokens`，不发 `store` 字段，系统提示走 `system` 角色而不是 OpenAI 新的 `developer` 角色（vLLM/Ollama/LM Studio 一类网关对这几个字段很敏感，最保守的请求体实测只有 `model,messages,stream,max_tokens,tools`）；需要时可在 `local-model.json` 的 `compat` 里逐项覆盖；
 - 每个模型 `input: [text]`、`reasoningEfforts: false`（本地模型一般不支持思考档位）；
 - `retryPolicy: { mode: normal, maxRetries: 3 }`（覆盖 dsh 默认的 5 次）；
-- 顶层 `session-title-llm` 覆盖：`maxOutputTokens: 512, timeoutMs: 20000`（每次新会话多一次标题请求，本地模型要省）。
+- 顶层 `session-title-llm` 覆盖：`maxOutputTokens: 512, timeoutMs: 20000`（每次新会话多一次标题请求，本地模型要省）；
+- `litePreset: true`（默认）时追加 `agent-preset-registry` 行，把默认预设指到 `seeu-lite`（见 §9.2）。
 
 **设置页的「高级：超时与重试」**（折叠区）可调四个数：请求超时 `timeoutMs`（默认 600 秒）、流式空闲超时 `streamIdleTimeoutMs`（默认 600 秒）、失败重试次数 `retryMaxRetries`（默认 3）、标题生成上限 `titleMaxOutputTokens`（默认 512）。留空即用默认值，改完保存并重启。
 
@@ -434,12 +436,25 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 - 这一行嵌在 preset 内部，**不能用 local-model patch 覆盖**（overlay 只能改顶层行）——所以它是随包固定值，换模型时不需要重打包。
 - `tool-result-pruner` 保持官方 8192/4096/1024：本地模型同样吃 token，工具输出超长时截断比留全量更划算。
 
+**精简工具集（`litePreset`，默认开启）**：工具描述是每次请求的固定开销大头。实测（`npm run test:e2e:tools`，mock 网关记录请求体）：
+
+| 预设 | 工具数 | 工具描述 | 系统提示 | 首个带工具请求 | 估算 tokens |
+| --- | --- | --- | --- | --- | --- |
+| 取证分析（Forensics） | 27 | 26,687 字符 | 6,061 字符 | 45,099 字符 | ≈ 20.5k |
+| 取证分析（本地模型精简） | 12 | 10,229 字符 | 4,379 字符 | 26,946 字符 | ≈ 12.2k |
+
+精简预设（`resources/forensics/cordis.patch.yml` 的 `preset-seeu-lite`）保留取证必需的工具：pwsh、read / read_image、glob / grep、job_output / job_kill / job_list、skill、ask_user_question、todo_write，以及同样的压缩策略；去掉的是编排类工具（workflow / subagent / schedule / goal / present / 团队通信），固定开销省下约 8k tokens，**32k 窗口的本地模型因此还剩一半上下文给对话**。
+
+- 开关在「本地模型设置」页（勾选「精简工具集（推荐…）」），对应 `local-model.json` 的 `litePreset`；
+- 勾选时新会话默认就是精简预设；某个会话需要子代理/工作流时，在该会话的预设选择里切回「取证分析（Forensics）」即可（不会改配置）；
+- `litePreset: false` 时完全回到完整取证预设，行为与旧版本一致。
+
 ### 9.3 验证
 
 纯函数（配置归一化 / patch 生成 / 路径分类 / CSV 与 chat 解析 / typed 表头投影）用 `node --test` 覆盖，不需要 Electron：
 
 ```bash
-npm test                                  # 38 个单元测试（本地模型配置、解析层、typed 投影）
+npm test                                  # 40 个单元测试（本地模型配置、解析层、typed 投影）
 ```
 
 端到端脚本各自起 mock OpenAI 网关 + 真 Electron，用 CDP 操作界面，不需要真实网关：
@@ -452,7 +467,7 @@ node scripts/e2e/local-diagnose-check.mjs # 能力自检：支持工具的模型
 ```
 
 - 基础连通：`REPORT {"ok":true,"chatCalls":2,"gotReply":true,...,"errors":[]}`
-- 工具调用：`REPORT {"ok":true,"chatCalls":3,"gotReply":true,"toolResultSeen":true,"todoCard":true,"firstRequest":{"stream":true,"tools":27,"maxTokensField":"max_tokens","hasStreamOptions":false,"hasStore":false,"keys":"model,messages,stream,max_tokens,tools"},"errors":[]}` —— 27 个工具随请求下发，mock 用 OpenAI 流式规范分片返回 `todo_write` 调用，dsh 执行后把 `role:"tool"` 结果回传（第二轮请求 roles 末尾出现 `tool`），页面出现「任务 1 进行中」与最终答复。
+- 工具调用：`REPORT {"ok":true,"chatCalls":3,"gotReply":true,"toolResultSeen":true,"toolCardStyleOk":true,"litePresetActive":true,"litePresetTools":12,"firstRequest":{"stream":true,"tools":12,"maxTokensField":"max_tokens",…},"budget":{"toolsCount":12,"toolsChars":10229,"systemChars":4379,"requestChars":26946,"approxTokens":12248},"errors":[]}` —— 默认精简预设下 12 个工具随请求下发，mock 用 OpenAI 流式规范分片返回 `todo_write` 调用，dsh 执行后把 `role:"tool"` 结果回传（第二轮请求 roles 末尾出现 `tool`），页面出现「任务 1 进行中」与最终答复；脚本同时断言 `litePresetActive` 与工具卡片圆角/边框（theme.css 的 `[data-tool]` 规则）。
 - 低并发重试：`REPORT {"ok":true,"chatCalls":3,"failTimes":2,"retried":true,"gotReply":true,"errors":[]}` —— 429 由 `retryPolicy.maxRetries: 3` 吸收，用户只看到一次正常回复。
 - 能力自检：`REPORT {"ok":true,"checks":{"firstOk":true,"toolsRowBad":true,"summaryMentionsChatOnly":true}...}` —— 支持工具的模型三项全绿（模型列表 / 基础对话 / 工具调用），`no-tool-model` 的工具项标红并提示「只能聊天，不能查案件库」。
 
