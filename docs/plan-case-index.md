@@ -1530,3 +1530,15 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 `node scripts/e2e/search-filter-check.mjs` → `"ok": true`、`"eidFilled": true`、`"filterApplied": true`、`"filteredRows": 12`、`"filteredAllMatch": true`、`"copyNote":"已复制 12 条引用清单"`、`"pageTotal": 41`、`"exportAllCount": 41`、`"errors": []`；`npm test` 43/43；`m2-ui-check`（`SEEU_DEV_MULTI=1`）→ `"errors": []`。
 
 遗留：检材下拉的数据来自 `/evidences`，索引库 schema < 4 时 `name/platform` 为空，下拉只剩「检材 N」（建议按旧库提示重建）；下拉只在检索视图，记录/表视图的筛选仍是手输。
+
+### 20.36 第 34 轮：检索结果行显示检材名
+
+**问题**：检索结果行标签是「3·WhatsApp」（eid·应用），研判时要回头翻检材清单才知道 3 是哪个手机；检材下拉已经有名称数据，结果行却没用上。
+
+**实现**（只改 plugins/seeu-case-index/client.js）：新增 evLabel(eid)（在 evList 里按 eid 找 name，找不到退回「检材 N」），结果行标签改成「检材名 · 应用」并给标签加 title=「检材 N」保留检材号。
+
+**e2e**：scripts/e2e/search-filter-check.mjs 的 readSearchRows() 原本从标签文本里正则抓 eid，改标签后抠不到 → 改为读标签的 title 属性（匹配「检材 数字」）拿 eid、取「 · 」后半段当 app；scripts/e2e/m2-ui-check.mjs 新增 searchEvNames 断言（检索结果文本里应出现案件检材文件名）。
+
+**验证**：search-filter-check → ok:true、baseRows:20、filteredRows:12、pageTotal:41、errors:[]；m2-ui-check（SEEU_DEV_MULTI=1）→ searchOk:true、searchEvNames:true、errors:[]；npm test 43/43。
+
+遗留：结果行标签只用于检索视图，记录/表/时间线视图仍按各自表格结构显示检材号或名称；检材名过长时靠标签的省略号截断，完整名要开引用详情。
