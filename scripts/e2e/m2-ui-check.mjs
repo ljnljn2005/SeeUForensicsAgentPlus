@@ -1,0 +1,177 @@
+// 真实 Electron 外壳里的「案件索引」插件端到端检查：
+// 启动 → 等侧栏出现「取证索引」→ 点开 → 自动扫描索引 → 打开案件 → 树导航 → 关键词检索。
+import { spawn, execFileSync } from 'node:child_process'
+import { request } from 'node:http'
+import { join } from 'node:path'
+
+const root = process.cwd()
+const port = 9345
+// 打包态验证：SEEU_UI_EXE 指向 release/win-unpacked 下的 exe
+const exeOverride = process.env.SEEU_UI_EXE
+const electron = exeOverride || join(root, 'node_modules', 'electron', 'dist', 'electron.exe')
+const CASE_DIR = 'E:\\forensics\\W盘_2919d298-f083-4a81-9c12-bd4ca393bcc5'
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+function get(url, timeout = 3000) {
+  return new Promise((resolve) => {
+    const req = request(url, { method: 'GET', timeout }, (res) => {
+      let body = ''
+      res.setEncoding('utf8')
+      res.on('data', (c) => (body += c))
+      res.on('end', () => resolve({ status: res.statusCode, body }))
+    })
+    req.on('error', (e) => resolve({ status: 0, error: String(e.message) }))
+    req.on('timeout', () => { req.destroy(); resolve({ status: 0, error: 'timeout' }) })
+    req.end()
+  })
+}
+
+const env = { ...process.env }
+delete env.ELECTRON_RUN_AS_NODE
+if (process.env.SEEU_NO_KILL !== '1') {
+  try {
+    execFileSync('taskkill', ['/F', '/IM', exeOverride ? 'SeeUForensicsAgentPlus.exe' : 'electron.exe', '/T'], { stdio: 'ignore' })
+  } catch { /* 无残留 */ }
+}
+
+const args = exeOverride ? [`--remote-debugging-port=${port}`] : ['.', `--remote-debugging-port=${port}`]
+const child = spawn(electron, args, { cwd: exeOverride ? join(electron, '..') : root, env, stdio: ['ignore', 'pipe', 'pipe'] })
+let appLog = ''
+child.stdout.setEncoding('utf8')
+child.stderr.setEncoding('utf8')
+child.stdout.on('data', (c) => (appLog += c))
+child.stderr.on('data', (c) => (appLog += c))
+
+const deadline = Date.now() + 120000
+let target = null
+while (Date.now() < deadline && child.exitCode === null) {
+  const r = await get(`http://127.0.0.1:${port}/json/list`)
+  if (r.status === 200) {
+    try {
+      target = JSON.parse(r.body).find((p) => p.type === 'page' && /^http:\/\/127\.0\.0\.1:\d+/.test(p.url))
+      if (target) break
+    } catch { /* 未就绪 */ }
+  }
+  await sleep(500)
+}
+if (!target) {
+  console.log('FAIL: 没有拿到 Web UI 页面', JSON.stringify(appLog.slice(-1200)))
+  child.kill('SIGKILL')
+  process.exit(1)
+}
+console.log('page:', target.url)
+
+const ws = new WebSocket(target.webSocketDebuggerUrl)
+await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej })
+let seq = 0
+const pending = new Map()
+const errors = []
+ws.onmessage = (ev) => {
+  const msg = JSON.parse(ev.data)
+  if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); return }
+  if (msg.method === 'Runtime.consoleAPICalled' && ['error', 'warning'].includes(msg.params.type)) {
+    const text = (msg.params.args ?? []).map((a) => a.value ?? a.description ?? '').join(' ')
+    if (/seeu|case-index|取证索引/i.test(text)) errors.push(`${msg.params.type}: ${text}`.slice(0, 300))
+  }
+  if (msg.method === 'Runtime.exceptionThrown') {
+    const d = msg.params.exceptionDetails
+    errors.push(`exception: ${d.text} ${d.exception?.description ?? ''}`.slice(0, 300))
+  }
+}
+const send = (method, params = {}) => new Promise((resolve) => {
+  const id = ++seq
+  pending.set(id, resolve)
+  ws.send(JSON.stringify({ id, method, params }))
+})
+await send('Runtime.enable')
+const ev = async (expression) => {
+  const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+  if (r.result?.exceptionDetails) return `ERR: ${r.result.exceptionDetails.text}`
+  return r.result?.result?.value
+}
+const bodyText = () => ev('document.body.innerText')
+const clickText = (text, tagFilter = 'button,div,a,li') => ev(`(() => {
+  const nodes = [...document.querySelectorAll(${JSON.stringify(tagFilter)})]
+  const hit = nodes.filter((n) => (n.innerText || '').trim() === ${JSON.stringify(text)} || (n.innerText || '').includes(${JSON.stringify(text)}))
+    .sort((a, b) => (a.innerText || '').length - (b.innerText || '').length)[0]
+  if (!hit) return 'not-found'
+  hit.click()
+  return 'clicked:' + hit.tagName + '|' + (hit.className||'') + '|' + (hit.outerHTML||'').slice(0,180)
+})()`)
+const typeInto = (selector, value) => ev(`(() => {
+  const list = [...document.querySelectorAll(${JSON.stringify(selector)})]
+  const input = list[list.length - 1]
+  if (!input) return 'no-input'
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+  setter.call(input, ${JSON.stringify(value)})
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  return 'typed'
+})()`)
+const pressEnter = () => ev(`(() => {
+  const list = [...document.querySelectorAll('input')]
+  const input = list[list.length - 1]
+  if (!input) return 'no-input'
+  for (const type of ['keydown', 'keypress', 'keyup']) input.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }))
+  return 'enter'
+})()`)
+
+await sleep(8000)
+const report = {}
+report.sidebar = (await bodyText()).includes('取证索引')
+// 1) 把上次使用的案件目录写进 localStorage，然后刷新，让面板初始状态就用它（等价于用户上次输入过）
+report.seed = await ev('(() => { localStorage.setItem("seeu.indexDir", ' + JSON.stringify(CASE_DIR) + '); return "seeded" })()')
+await ev('location.reload()')
+await sleep(9000)
+report.openPanel = await clickText('取证索引', 'button')
+await sleep(9000)
+let text = await bodyText()
+report.scanFoundCase = text.includes('W盘')
+report.treeRoot = /检材 5/.test(text) && /文件 370/.test(text)
+// v0.1.8：树根每个检材要显示火眼里的名称与备注
+report.evNames = /CHAN_MH_mobile\.zip/.test(text) && /LEUNG_YL_mobile\.zip/.test(text)
+report.evRemark = text.includes('伤人案')
+report.rootText = text.slice(text.indexOf('取证案件索引'), text.indexOf('取证案件索引') + 900)
+report.drill3 = await clickText('检材 3', 'div')
+await sleep(6000)
+text = await bodyText()
+report.drilledApps = text.includes('WhatsApp') || text.includes('Safari')
+report.drilledText = text.slice(text.indexOf('检材 3') >= 0 ? text.indexOf('检材 3') : 0, text.indexOf('检材 3') + 900)
+// 先切到「检索」标签，否则 last input 是顶部的案件目录输入框
+await clickText('检索', 'button')
+await sleep(1500)
+report.searchTyped = await typeInto('input', '加密')
+await sleep(400)
+report.searchEnter = await pressEnter()
+await sleep(7000)
+text = await bodyText()
+report.searchOk = /引擎 (trigram|like) · \d+ 命中/.test(text)
+const idx = text.indexOf('引擎')
+report.searchText = idx >= 0 ? text.slice(idx, idx + 800) : text.slice(0, 600)
+
+// ---------- M2：四个新视图（记录 / 实体 / 时间线 / 表） ----------
+report.tabNames = await ev('[...document.querySelectorAll("button")].map((b) => (b.innerText || "").trim()).filter(Boolean).slice(0, 24)')
+const openTab = async (label) => {
+  const r = await clickText(label, 'button')
+  await sleep(4500)
+  return r
+}
+report.tabRecordsClick = await openTab('记录')
+text = await bodyText()
+report.recordsText = text.slice(text.indexOf('记录'), text.indexOf('记录') + 700)
+report.tabEntityClick = await openTab('实体')
+text = await bodyText()
+report.entityText = text.slice(text.indexOf('实体'), text.indexOf('实体') + 700)
+report.tabTimelineClick = await openTab('时间线')
+text = await bodyText()
+report.timelineText = text.slice(text.indexOf('时间线'), text.indexOf('时间线') + 700)
+report.tabTablesClick = await openTab('表')
+text = await bodyText()
+report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
+report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10
+
+report.errors = errors.slice(0, 6)
+console.log('REPORT', JSON.stringify(report, null, 2))
+
+try { execFileSync('taskkill', ['/F', '/PID', String(child.pid), '/T'], { stdio: 'ignore' }) } catch { /* ignore */ }
+child.kill('SIGKILL')
+process.exit(0)

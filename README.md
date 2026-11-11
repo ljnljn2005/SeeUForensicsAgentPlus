@@ -379,7 +379,7 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 生成的行固定：
 
 - `api: openai-completions`（OpenAI 兼容协议）；
-- `compat: { supportsUsageInStreaming: false, maxTokensField: max_tokens }`——不带 `stream_options.include_usage`（部分本地网关会 400），用 `max_tokens` 而不是 `max_completion_tokens`；
+- `compat: { supportsUsageInStreaming: false, maxTokensField: max_tokens, supportsStore: false, supportsDeveloperRole: false }`——不带 `stream_options.include_usage`（部分本地网关会 400），用 `max_tokens` 而不是 `max_completion_tokens`，不发 `store` 字段，系统提示走 `system` 角色而不是 OpenAI 新的 `developer` 角色（vLLM/Ollama/LM Studio 一类网关对这几个字段很敏感，最保守的请求体实测只有 `model,messages,stream,max_tokens,tools`）；需要时可在 `local-model.json` 的 `compat` 里逐项覆盖；
 - 每个模型 `input: [text]`、`reasoningEfforts: false`（本地模型一般不支持思考档位）；
 - `retryPolicy: { mode: normal, maxRetries: 3 }`（覆盖 dsh 默认的 5 次）；
 - 顶层 `session-title-llm` 覆盖：`maxOutputTokens: 512, timeoutMs: 20000`（每次新会话多一次标题请求，本地模型要省）。
@@ -395,15 +395,19 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 
 ### 9.3 验证
 
+三个端到端脚本各自起 mock OpenAI 网关 + 真 Electron，用 CDP 操作界面，不需要真实网关：
+
 ```bash
-node .probe/local-model-e2e.mjs
+node scripts/e2e/local-model-e2e.mjs     # 基础连通：SSE 文本回复
+node scripts/e2e/local-tools-e2e.mjs     # 工具调用：SSE 分片 tool_calls → 工具执行 → 回传 → 最终答复
+node scripts/e2e/local-retry-e2e.mjs     # 低并发重试：前 2 次 429 → 重试后成功
 ```
 
-该脚本会：起一个 mock OpenAI 网关（`:18080`，SSE 分片回 `MOCK-OK…`）→ 用 `SEEU_LOCAL_MODEL_JSON` 拉起真 Electron → 用 CDP 点掉预览提示、在 composer 里输入并回车 → 断言 mock 收到请求且页面出现回复。通过时输出：
+- 基础连通：`REPORT {"ok":true,"chatCalls":2,"gotReply":true,...,"errors":[]}`
+- 工具调用：`REPORT {"ok":true,"chatCalls":3,"gotReply":true,"toolResultSeen":true,"todoCard":true,"firstRequest":{"stream":true,"tools":27,"maxTokensField":"max_tokens","hasStreamOptions":false,"hasStore":false,"keys":"model,messages,stream,max_tokens,tools"},"errors":[]}` —— 27 个工具随请求下发，mock 用 OpenAI 流式规范分片返回 `todo_write` 调用，dsh 执行后把 `role:"tool"` 结果回传（第二轮请求 roles 末尾出现 `tool`），页面出现「任务 1 进行中」与最终答复。
+- 低并发重试：`REPORT {"ok":true,"chatCalls":3,"failTimes":2,"retried":true,"gotReply":true,"errors":[]}` —— 429 由 `retryPolicy.maxRetries: 3` 吸收，用户只看到一次正常回复。
 
-```
-REPORT {"ok":true,"chatCalls":2,"gotReply":true,...,"errors":[]}
-```
+脚本都会用 `taskkill` 清理 Electron，结束后不留进程。
 
 ### 9.4 注意
 

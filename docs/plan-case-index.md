@@ -894,3 +894,30 @@ typed 表行数（实测）：`health_metric` 6,200、`exif` 4,518、`msg_csv` 4
 回归：`.probe/local-model-e2e.mjs` → `{"ok":true,"chatCalls":2,"gotReply":true,"errors":[]}`；`.probe/settings-check.mjs` → `{"ok":true,...,"badGatewayRejected":true}`；`.probe/m2-ui-check.mjs`（面板）→ `errors: []`。
 
 **遗留**：欢迎页三步提示是静态文本，没有和实际索引状态联动（例如「还没建库」时无法高亮第一步）；模型状态只有 tooltip/对话框/设置页，主界面会话区内仍看不到当前模型（dsh 自带模型 chip 已显示，未重复造）。
+
+### 20.5 第 6 轮：本地模型工具调用与重试的端到端验证（2026-11-11）
+
+**背景**：前几轮只验证了「本地网关能回一句话」。取证场景真正依赖的是**工具调用**（`todo_write` / `ges-index` 技能里的 `curl` 查库 / `present` 等），以及低并发网关下的 429 重试——这两条不通过就不能算「本地模型可用」。
+
+**新增脚本（均只依赖 Node 内置模块 + 已安装 Electron）**
+
+| 脚本 | mock 行为 | 断言 |
+| --- | --- | --- |
+| `scripts/e2e/local-tools-e2e.mjs` | 首轮按 OpenAI 流式规范分片返回 `tool_calls`（`todo_write`，arguments 分 4 段）；请求里出现 `role:"tool"` 后改回最终文本 | 请求带 `tools`（27 个）、`stream:true`、`max_tokens` 字段、**无** `stream_options`/`store`、工具执行成功（页面出现「任务 1 进行中」）、最终答复可见、无 JS 异常 |
+| `scripts/e2e/local-retry-e2e.mjs` | 前 2 次 `POST /v1/chat/completions` 返回 429（`Retry-After: 0`），第 3 次正常 SSE | `chatCalls === 3`（2 次失败被吸收）、页面只出现一次正常回复 |
+
+**实测 JSON**
+
+```
+tools: {"ok":true,"chatCalls":3,"rounds":3,"gotReply":true,"toolResultSeen":true,"todoCard":true,
+        "firstRequest":{"stream":true,"tools":27,"toolChoice":null,"maxTokensField":"max_tokens",
+        "hasStreamOptions":false,"hasStore":false,
+        "keys":"model,messages,stream,max_tokens,tools"},"errors":[]}
+retry: {"ok":true,"chatCalls":3,"failTimes":2,"retried":true,"gotReply":true,"errors":[]}
+```
+
+**compat 加固**：`tools/local-model.mjs` 的 `localModelPatch()` 现在默认写 `supportsStore: false` 与 `supportsDeveloperRole: false`（原来只有 `supportsUsageInStreaming: false` + `maxTokensField: max_tokens`），用户的 `compat` 仍可逐项覆盖。实测请求体精简到 `model,messages,stream,max_tokens,tools`——vLLM/Ollama/LM Studio 一类网关对多余字段（`store`、`stream_options`、`temperature`）经常直接 400，减到最保守形态最稳。
+
+**踩坑**：dsh 的 composer 是 Lexical `contenteditable`，`Input.insertText` 后必须读 `document.activeElement.innerText` 才能确认输入真的进了编辑器；首屏「预览版说明」卡会挡住 composer，需先点文本为「继续」的按钮（同一 profile 第二次启动不再出现，脚本要容忍 `dismiss: null`）。
+
+**遗留**：手工声明的 pi-ai 路由拿不到原生「系统/工具增量更新」（`dsh-llm-pi-ai/README.zh.md:268`），每轮会以 user 角色重申系统提示并重发完整工具列表——token 消耗比官方模型高，属于协议限制，暂不处理；真实网关（用户提供地址后）仍需一次人工联调。

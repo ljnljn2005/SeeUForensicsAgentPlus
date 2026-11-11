@@ -146,11 +146,17 @@ export function localModelPatch(cfg) {
     lines.push('        headers:')
     for (const [k, v] of Object.entries(c.headers)) lines.push(`          ${q(k)}: ${q(v)}`)
   }
+  // 本地/自建网关的保守兼容档：不发 store、不用 developer 角色、不回传 usage 流事件，
+  // 输出上限字段用 max_tokens。用户的 compat 覆盖这几个默认值。
+  const compat = {
+    supportsUsageInStreaming: false,
+    maxTokensField: 'max_tokens',
+    supportsStore: false,
+    supportsDeveloperRole: false,
+    ...c.compat,
+  }
   lines.push('        compat:')
-  lines.push('          supportsUsageInStreaming: false')
-  lines.push('          maxTokensField: max_tokens')
-  for (const [k, v] of Object.entries(c.compat)) {
-    if (k === 'supportsUsageInStreaming' || k === 'maxTokensField') continue
+  for (const [k, v] of Object.entries(compat)) {
     lines.push(`          ${k}: ${typeof v === 'boolean' || typeof v === 'number' ? String(v) : q(v)}`)
   }
   lines.push('        models:')

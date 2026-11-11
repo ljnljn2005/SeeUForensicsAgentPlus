@@ -1,0 +1,247 @@
+/**
+ * 本地模型设置窗口的 CDP 验收脚本。
+ *
+ * 做四件事：
+ *   1. 起一个 mock OpenAI 网关（仅 /v1/models），验证设置页的「测试连接」；
+ *   2. 用独立 userData / DSH_HOME 启动 Electron（SEEU_DEV_MULTI=1，避免和用户实例抢单实例锁；
+ *      SEEU_OPEN_SETTINGS=1 让启动即打开设置窗口）；
+ *   3. 通过 CDP 在设置页里执行 get → 填表 → preview → save → test；
+ *   4. 截图 + 输出一行 JSON 报告。
+ *
+ * 用法：node scripts/e2e/settings-check.mjs [--out scripts/e2e/shots/local-model.png]
+ */
+import { spawn } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
+import { join, resolve } from 'node:path'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { fileURLToPath } from 'node:url'
+
+const REPO = resolve(fileURLToPath(new URL('..', import.meta.url)))
+const argOut = process.argv.indexOf('--out')
+const OUT = argOut > -1 ? process.argv[argOut + 1] : join(REPO, '.probe', 'shots', 'local-model-settings.png')
+const CDP_PORT = 9351
+const MOCK_PORT = 18081
+const argExe = process.argv.indexOf('--exe')
+const EXE = argExe > -1 ? resolve(process.argv[argExe + 1]) : join(REPO, 'node_modules', 'electron', 'dist', 'electron.exe')
+const EXE_ARGS = argExe > -1 ? [] : [REPO]
+const ELECTRON = join(REPO, 'node_modules', 'electron', 'dist', 'electron.exe')
+const UD = join(REPO, '.dev', 'settings-ud')
+const HOME = join(REPO, '.dev', 'settings-home')
+const CONFIG = join(UD, 'local-model.json')
+
+const report = { ok: false, steps: [], errors: [] }
+
+function log(step, detail) {
+  report.steps.push(detail === undefined ? step : `${step}: ${detail}`)
+}
+
+async function startMockGateway() {
+  const server = createServer((req, res) => {
+    if (req.url === '/v1/models') {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ object: 'list', data: [{ id: 'qwen2.5-32b-instruct' }, { id: 'mock-14b' }] }))
+      return
+    }
+    res.writeHead(404)
+    res.end('nope')
+  })
+  await new Promise((done) => server.listen(MOCK_PORT, '127.0.0.1', done))
+  return server
+}
+
+async function cdpTargets() {
+  const text = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).text()
+  return JSON.parse(text)
+}
+
+async function waitForSettingsPage(timeoutMs = 120000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const targets = await cdpTargets()
+      const page = targets.find((t) => t.type === 'page' && String(t.url).includes('local-model.html'))
+      if (page !== undefined) return page
+    } catch {
+      // devtools endpoint 还没起来
+    }
+    await sleep(500)
+  }
+  return undefined
+}
+
+function cdp(wsUrl) {
+  const socket = new WebSocket(wsUrl)
+  let nextId = 1
+  const pending = new Map()
+  socket.addEventListener('message', (event) => {
+    const msg = JSON.parse(event.data)
+    if (msg.id !== undefined && pending.has(msg.id)) {
+      const { done, fail } = pending.get(msg.id)
+      pending.delete(msg.id)
+      if (msg.error) fail(new Error(msg.error.message))
+      else done(msg.result)
+    }
+  })
+  const ready = new Promise((done, fail) => {
+    socket.addEventListener('open', () => done())
+    socket.addEventListener('error', () => fail(new Error('CDP websocket 连接失败')))
+  })
+  return {
+    ready,
+    send(method, params = {}) {
+      const id = nextId++
+      return new Promise((done, fail) => {
+        pending.set(id, { done, fail })
+        socket.send(JSON.stringify({ id, method, params }))
+      })
+    },
+    close() {
+      try { socket.close() } catch { /* ignore */ }
+    },
+  }
+}
+
+async function evaluate(client, expression) {
+  const result = await client.send('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+  })
+  if (result.exceptionDetails !== undefined) {
+    throw new Error(result.exceptionDetails.exception?.description ?? 'evaluate 抛异常')
+  }
+  return result.result?.value
+}
+
+let child
+let mock
+try {
+  mock = await startMockGateway()
+  log('mock 网关', `http://127.0.0.1:${MOCK_PORT}/v1`)
+
+  // 干净的用户数据目录，避免污染真实 %APPDATA%
+  rmSync(UD, { recursive: true, force: true })
+  mkdirSync(UD, { recursive: true })
+  rmSync(HOME, { recursive: true, force: true })
+  mkdirSync(HOME, { recursive: true })
+
+  const env = { ...process.env }
+  delete env.ELECTRON_RUN_AS_NODE
+  env.SEEU_DEV_MULTI = '1'
+  env.SEEU_OPEN_SETTINGS = '1'
+  env.SEEU_DSH_HOME = HOME
+  env.SEEU_USER_DATA = UD
+  delete env.SEEU_LOCAL_MODEL_JSON
+
+  child = spawn(EXE, [...EXE_ARGS, `--remote-debugging-port=${CDP_PORT}`, `--user-data-dir=${UD}`], {
+    cwd: REPO,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  child.stdout.on('data', () => {})
+  child.stderr.on('data', () => {})
+
+  const page = await waitForSettingsPage()
+  if (page === undefined) throw new Error('设置页没出现（CDP page 超时）')
+  log('设置页已加载', page.url.replace(/^file:\/\/\//, ''))
+
+  const client = cdp(page.webSocketDebuggerUrl)
+  await client.ready
+  await client.send('Runtime.enable')
+  await client.send('Page.enable')
+
+  const bridge = await evaluate(client, 'Boolean(window.seeu && window.seeu.localModel)')
+  if (bridge !== true) throw new Error('preload 桥未暴露 window.seeu.localModel')
+  log('preload 桥', 'OK')
+
+  const view = await evaluate(client, 'window.seeu.localModel.get()')
+  log('get', JSON.stringify(view))
+  const expected = CONFIG.toLowerCase().replaceAll('\\', '/')
+  const actual = String(view?.path ?? '').toLowerCase().replaceAll('\\', '/')
+  if (actual !== expected) throw new Error(`配置路径不是独立 userData：${actual} != ${expected}`)
+
+  // 填表（走真实 DOM，输入事件会触发即时预览）
+  await evaluate(client, `(() => {
+    const set = (id, value) => {
+      const el = document.getElementById(id)
+      el.value = value
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    document.getElementById('enabled').checked = true
+    set('baseURL', 'http://127.0.0.1:${MOCK_PORT}/v1')
+    set('apiKey', 'local')
+    set('models', 'qwen2.5-32b-instruct | Qwen2.5 32B（本地）')
+    set('contextWindow', '131072')
+    set('maxTokens', '8192')
+    document.getElementById('useAsDefault').checked = true
+    return true
+  })()`)
+  log('填表', '完成')
+
+  const preview = await evaluate(client, `window.seeu.localModel.preview({
+    enabled: true,
+    baseURL: 'http://127.0.0.1:${MOCK_PORT}/v1',
+    apiKey: 'local',
+    models: [{ id: 'qwen2.5-32b-instruct', name: 'Qwen2.5 32B（本地）' }],
+    contextWindow: 131072,
+    maxTokens: 8192,
+    useAsDefault: true
+  })`)
+  if (preview?.ok !== true) throw new Error(`preview 失败：${JSON.stringify(preview)}`)
+  report.previewHasRetryPolicy = /retryPolicy/.test(preview.patch)
+  report.previewHasTitleRow = /session-title-llm/.test(preview.patch)
+  log('preview', `patch ${preview.patch.length} 字符，含 retryPolicy=${report.previewHasRetryPolicy}`)
+
+  const probe = await evaluate(client, `window.seeu.localModel.test({ baseURL: 'http://127.0.0.1:${MOCK_PORT}/v1', apiKey: 'local' })`)
+  if (probe?.ok !== true) throw new Error(`测试连接失败：${JSON.stringify(probe)}`)
+  report.gatewayModels = (probe.models ?? []).map((m) => m.id)
+  log('测试连接', `HTTP ${probe.status}，模型 ${report.gatewayModels.join(',')}`)
+
+  const saved = await evaluate(client, `window.seeu.localModel.save({
+    enabled: true,
+    baseURL: 'http://127.0.0.1:${MOCK_PORT}/v1',
+    apiKey: 'local',
+    models: [{ id: 'qwen2.5-32b-instruct', name: 'Qwen2.5 32B（本地）' }],
+    contextWindow: 131072,
+    maxTokens: 8192,
+    useAsDefault: true
+  })`)
+  if (saved?.ok !== true) throw new Error(`保存失败：${JSON.stringify(saved)}`)
+  if (!existsSync(CONFIG)) throw new Error(`保存后配置文件不存在：${CONFIG}`)
+  const written = JSON.parse(readFileSync(CONFIG, 'utf8'))
+  report.savedModels = written.models.map((m) => m.id)
+  log('保存', `写入 ${CONFIG}，模型 ${report.savedModels.join(',')}`)
+
+  const reread = await evaluate(client, 'window.seeu.localModel.get()')
+  if (reread?.config?.baseURL !== `http://127.0.0.1:${MOCK_PORT}/v1`) throw new Error('重新读取的 baseURL 不一致')
+  log('重新读取', '一致')
+
+  const bad = await evaluate(client, `window.seeu.localModel.test({ baseURL: 'http://127.0.0.1:1/v1' })`)
+  report.badGatewayRejected = bad?.ok === false
+  log('错误网关', report.badGatewayRejected ? '按预期失败' : '意外成功')
+
+  const shot = await client.send('Page.captureScreenshot', { format: 'png' })
+  mkdirSync(join(REPO, '.probe', 'shots'), { recursive: true })
+  writeFileSync(OUT, Buffer.from(shot.data, 'base64'))
+  log('截图', OUT)
+
+  client.close()
+  report.ok = true
+} catch (error) {
+  report.errors.push(String(error?.message ?? error))
+} finally {
+  if (mock !== undefined) mock.close()
+  if (child !== undefined && child.pid !== undefined) {
+    const { execFileSync } = await import('node:child_process')
+    try {
+      execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
+    } catch { /* 已退出 */ }
+    await sleep(500)
+  }
+  // 清理测试写入的配置，避免影响下次开发启动
+  try { rmSync(CONFIG, { force: true }) } catch { /* ignore */ }
+}
+
+console.log(`REPORT ${JSON.stringify(report)}`)
+process.exit(report.ok ? 0 : 1)

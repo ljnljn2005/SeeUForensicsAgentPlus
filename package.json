@@ -39,7 +39,14 @@
     "index:xcase:top": "node tools/ges-index/cli.mjs xcase top --min-cases 2",
     "index:xcase:stats": "node tools/ges-index/cli.mjs xcase stats",
     "index:ev": "node tools/ges-index/cli.mjs ev",
-    "dev:web": "node scripts/dev-web.mjs"
+    "dev:web": "node scripts/dev-web.mjs",
+    "test:e2e:local": "node scripts/e2e/local-model-e2e.mjs",
+    "test:e2e:local-tools": "node scripts/e2e/local-tools-e2e.mjs",
+    "test:e2e:local-retry": "node scripts/e2e/local-retry-e2e.mjs",
+    "test:e2e:settings": "node scripts/e2e/settings-check.mjs",
+    "test:e2e:welcome": "node scripts/e2e/welcome-check.mjs",
+    "test:e2e:ui": "node scripts/e2e/m2-ui-check.mjs",
+    "shot": "node scripts/e2e/shot.mjs"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.1.0",
