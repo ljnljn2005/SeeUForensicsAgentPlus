@@ -1426,3 +1426,21 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `node scripts/e2e/settings-check.mjs`（mock 网关两个模型都自报 `max_model_len: 32768`，随后写一份 `contextWindow: 131072` + 含 `ghost-7b` 的配置并调 `probe()`）→ `{"ok":true,"probeMismatch":{"configured":131072,"gateway":32768},"probeText":"启动探测：可用 · qwen2.5-32b-instruct, mock-14b · http://127.0.0.1:18081/v1 · …｜配置的模型 ghost-7b 不在网关列表；配置窗口 131.1k 超过网关自报的 32.8k，超出部分请求会被拒","errors":[]}`。
 
 遗留：只在启动探测/手动探测时检查，不拦截保存（用户可能故意配大窗口配代理层）；网关完全不报窗口时无法判断。
+
+### 20.30 第 28 轮：检索结果分页
+
+问题：`search()` 最多 `limit` 100，面板只请求 20 条且没有翻页，命中几十上百条时后面大部分看不到。
+
+实现：
+
+- `tools/ges-index/query.mjs` 的 `search()`：新增 `offset`（`Math.max(0, Number(opts.offset) || 0)`），两条 SQL 都加 `limit ? offset ?`；新增 `total`（同 where 条件的 `count(*)`，FTS 与 LIKE 各一份）与 `next`（`offset + rows.length < total ? offset + rows.length : null`），返回体多 `total/offset/limit/next`；
+- 插件 `plugins/seeu-case-index/index.js` 的 `/search` 路由透传 `offset`；
+- 面板 `plugins/seeu-case-index/client.js`：`doSearch(nextOffset)`（点击事件对象经 `Number.isFinite(Number(x))` 过滤后按第 0 页处理），结果头部在「引擎 … · N 命中」后加「共 N 条 · 第 a–b 条」与【上一页】【下一页】（`result.next == null` 不显示下一页）。
+
+验证：
+
+- API 直测（dev 预览，关键词「加密」走 LIKE）：`total=41`，第 1 页 20 条 `first=2415`、`next=20`，第 2 页 `offset=20` `first=21916`、`next=40`，两页 id 无重叠；
+- `npm run test:e2e:search` 新增分页断言 → `{"ok":true,"pageTotal":41,"page2Rows":20,"page2Different":true,"pagePrevShown":true,"pageBackSame":true,"baseRows":20,"filteredRows":12,"errors":[]}`；
+- 回归 `m2-ui-check` → `{"m2ok":true,"searchOk":true,"evNames":true,"errors":[]}`、`npm test` 43/43。
+
+遗留：每页固定 20 条（未做成可调）；「复制引用清单」仍只导出当前页；`total` 用 `count(*)` 全量统计，超大库（百万行）会慢，必要时可加「估算」模式。
