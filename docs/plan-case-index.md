@@ -1667,3 +1667,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 实现：`EntityView` 内加 `evList` 状态 + `useEffect`（依赖 `db`，`api('/evidences', { db })`，失败置空），`narrowInput` 换成 `<select>`（「全部检材」+「检材 N · 名称」）；选项变化时同时重置 `offset` 并立即 `setApplied`，不用再点【查询】。
 - e2e：`m2-ui-check` 在实体页采样含检材名选项的 select → `"entityEvOptions":6`、`"entityEvSelectOk":true`，并入 `m2ok`；完整结果 `{"entityEvOptions":6,"entityEvSelectOk":true,"entityPagingOk":true,"m2ok":true,"errors":[]}`。
 - 回归：`npm test` 50/50、`check:overlay` OK、`node scripts/build.mjs` 通过。
+
+## 20.50 跨案视图双案件端到端（v0.2.6 起）
+
+- 遗留问题：§20.23 起就写着「跨案导出未在双案夹具下跑 e2e」，而外壳 / 跨案中央库、`/cross/sync`、重合实体导出这几块一直是手工点过、没有回归保护。
+- 夹具做法：把真实案件库（`E:\forensics\W盘_2919d298-…\.seeu-index\case-index.db`）复制到 `.dev/cross/案件甲_2919` 与 `.dev/cross/案件乙_77aa`，用 `node:sqlite` 改 `meta`/`case_info` 的 `case_number`（`cross-fixture-a` / `cross-fixture-b`）与 `case_name`（跨案夹具A/B）——`syncCase()` 以 `case_number` 为幂等键，同案号会被覆盖，必须改成两个案号才会出现「2 案」。
+- 目录注入：`src/host.ts:204-208` 会用 `<DSH_HOME>/index-state.json` 的 `dirs` 拼 `SEEU_INDEX_SEARCH_DIRS`，所以 e2e 把两个夹具目录写进隔离 home 的 `index-state.json`，不依赖面板手工输入；跨案库路径由 `SEEU_WORKSPACE` 决定（`<workspace>/indexes/crosscase.db`），夹具根目录同时作为 workspace。
+- 新脚本 `scripts/e2e/cross-case-check.mjs`（`npm run test:e2e:cross`，端口 `SEEU_CROSS_E2E_PORT` 默认 9384）：扫描 → 切「跨案」→【同步全部案件】→ 等「同步完成：…」→ 断言两案在案件清单里、Top 有 30 条 →【复制重合实体清单】→ `powershell Get-Clipboard -Raw` 读回校验抬头/`2 案`/两个案号/实体类型。实测 `{"ok":true,"syncNote":"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。","copyNote":"已复制 30 条重合实体清单（2675 字符）","clipboard":{"len":2677,"hasHeader":true,"hasTwoCases":true,"hasCaseNumbers":true,"hasKinds":true},"errors":[]}`。
+- 顺带修两个真问题：① `doSync()` 成功后只 `list.reload()`，重合实体 Top 不重拉，用户同步完看到的还是同步前的空列表（e2e 第一次就是 `copyClicked:false` 暴露的）；现在同步后一并 `top.reload()`，已查过的实体也重拉。② `topShared()` 的行里没有案件号，导出清单的「案件：」行永远不出现；SQL 加 `group_concat(distinct case_number) caseNumbers`，导出时按 `r.cases`（旧结构）或 `r.caseNumbers`（新结构）回退。
+- 回归：`npm test` 50/50、`m2-ui-check` `m2ok:true / errors:[]`、`check:overlay` OK、`node scripts/build.mjs` 通过。

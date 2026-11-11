@@ -958,10 +958,13 @@ window.__ModuleLoader__.load({
             : `同步完成：扫描索引 ${res.indexes ?? 0} 个，没有可同步的案件索引（先建库）。`);
         } catch (e) {
           setSyncError(String(e.message ?? e));
+          // 同步会改跨案库内容：Top 与已查实体一起重拉，避免界面上还是同步前的空列表
+          if (typeof top?.reload === 'function') await top.reload();
+          if (hit.value && typeof found?.reload === 'function') await found.reload();
         } finally {
           setSyncing(false);
         }
-      }, [syncing, stats, list]);
+      }, [syncing, stats, list, top, found, hit]);
 
       const query = () => {
         const v = valueInput.trim();
@@ -995,7 +998,10 @@ window.__ModuleLoader__.load({
           ];
           topRows.forEach((r, i) => {
             lines.push(`${i + 1}. [${r.kind}] ${r.value} — ${r.caseCount ?? '?'} 案 · ${r.evidenceCount ?? '-'} 检材 · 提及 ${r.hits ?? 0} 次`);
-            if (Array.isArray(r.cases) && r.cases.length) lines.push(`   案件：${r.cases.map((c) => c.caseNumber ?? '').filter(Boolean).join(', ')}`);
+            const caseNumbers = Array.isArray(r.cases) && r.cases.length
+              ? r.cases.map((c) => c.caseNumber ?? '').filter(Boolean)
+              : String(r.caseNumbers ?? '').split(',').filter(Boolean);
+            if (caseNumbers.length) lines.push(`   案件：${caseNumbers.join(', ')}`);
           });
           const chars = await clipboardWrite(lines.join('\n'));
           setNote(`已复制 ${topRows.length} 条重合实体清单（${chars} 字符）`);
