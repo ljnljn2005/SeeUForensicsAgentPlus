@@ -15,7 +15,7 @@ import { EventEmitter } from 'node:events'
 import { createServer } from 'node:net'
 import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { dshCliEntry, dshHome, forensicsPatchPath, hostLogFile, workspaceDir } from './paths.js'
+import { dshCliEntry, dshHome, forensicsPatchPath, hostLogFile, lovelyCliEntry, workspaceDir } from './paths.js'
 import { DESKTOP_MARKER_ENV, PRODUCT_NAME } from './brand.js'
 import { prepareLocalModel } from './local-model.js'
 
@@ -215,6 +215,11 @@ export class DshHost extends EventEmitter {
       SEEU_CROSS_DB: join(this.workspace, 'indexes', 'crosscase.db'),
       // dsh 用户级技能根（外壳启动前把随包技能复制到这里）。
       SEEU_SKILLS_DIR: join(this.homeDir, 'skills'),
+      // 复用 shell + 按需技能调用本机 CLI，不常驻服务、不增加模型工具 schema。
+      SEEU_LOVELY_CLI: lovelyCliEntry(),
+      SEEU_CLI_NODE: nodeBinary,
+      // dsh 的 shell 子进程会清除 DSH_*，显式传入配置位置以保持桌面数据隔离。
+      SEEU_LOVELY_CONFIG: this.extraEnv.SEEU_LOVELY_CONFIG ?? process.env.SEEU_LOVELY_CONFIG ?? join(this.homeDir, 'lovely-cli.json'),
       // 桌面版不接收远端访问；CLI 已绑定 loopback，这里再收敛一次。
       NO_COLOR: '1',
     }

@@ -31,6 +31,9 @@
 
 ## 2. 快速开始
 
+本机 **LovelyMem V3 / LovelySpark CLI** 已接入：会话按需加载对应技能，通过现有 shell 调用，
+完整输出落盘、模型只接收限长预览，无新增运行依赖或 MCP 服务。路径设置与命令见 [CLI 接入说明](docs/lovely-cli.md)。
+
 ```bash
 npm install        # 已配 .npmrc（npmmirror + electron 镜像），D 盘约需 1.1G
 npm start          # 构建 dist/ 并启动桌面版

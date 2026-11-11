@@ -26,6 +26,12 @@ export function dshCliEntry(): string {
   return join(dshRuntimeDir(), 'lib', 'bin.js')
 }
 
+/** shell 调用的纯 Node 薄层；真实路径兼容 Electron 与系统 Node。 */
+export function lovelyCliEntry(): string {
+  const root = appRoot()
+  return join(root.endsWith('.asar') ? `${root}.unpacked` : root, 'tools', 'lovely-cli', 'cli.mjs')
+}
+
 /** 本次桌面版专用的 DSH_HOME：与用户 `~/.dsh` 完全隔离，避免污染/被污染。 */
 export function dshHome(): string {
   return process.env.SEEU_DSH_HOME ?? join(app.getPath('userData'), 'dsh-home')
