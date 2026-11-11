@@ -1652,3 +1652,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 实现：`TimelineView` 自己拉 `/evidences` 与 `/facets`（`useEffect` 依赖 `db`，卸载标记 alive），两个 `narrowInput` 换成 `<select>`：检材选项「检材 N · 名称」、应用选项「应用（记录数）」，保留 Enter 触发、`disabled: !db`。**坑**：`TimelineView` 是独立组件（不在 `Panel` 作用域里），直接引用 `Panel` 的 `evList` / `facets` 会抛 `ReferenceError: evList is not defined`，运行时表现为「slot entry crashed in main」，必须组件内自取。
 - e2e：`m2-ui-check` 在切到时间线后采样 `timelineFilterOptions`（找含检材名选项的 select 与含「（数字）」选项的 select）→ 实测 `{"ev":6,"app":9}`、`timelineFiltersOk:true`，并纳入 `m2ok`。
 - 验证：`m2ok:true`、`errors:[]`；`npm test` 48/48；`check:overlay` OK；`node scripts/build.mjs` 通过。
+
+## 20.48 实体视图分页（v0.2.6 起）
+
+- 问题：实体视图只显示聚合 top 30（本案 3999 条聚合、8191 个实体），后面的实体在界面上完全看不到，`复制实体清单` 也只能复制前 30 条。
+- 后端：`tools/ges-index/query.mjs` 的 `entity()` 在无关键词的聚合分支加 `offset`（`limit ? offset ?`）、`total`（`select count(*) c from (select 1 from entity${where} group by kind, value_norm)`）与 `next`；带 `q` 的下钻/唯一命中分支不变。
+- 前端：`EntityView` 加 `offset` 状态（`apply`/`clear`/`drill`/`pickKind` 都重置为 0），`useLoad` 依赖 `[db, applied, offset]`；聚合行下方显示「共 N 条聚合 · 当前 a-b」+【上一页】【下一页】+「第 K 页 · 点类别可下钻」。
+- e2e：`m2-ui-check` 在实体标签页读「共 N 条聚合 · 当前 a-b」，点【下一页】后比较正文变化 → 实测 `{"entityPager":["共 3999 条聚合 · 当前 1-30","3999","1","30"],"entityTotal":3999,"entityNextClick":true,"entityPagingOk":true,"m2ok":true,"errors":[]}`，`entityPagingOk` 纳入 `m2ok`。
+- 单测：新增 `tests/entity-paging.test.mjs` 2 例（12 个值按 limit 5 翻三页，`total/offset/next` 正确且页间不重叠；`kind` 过滤后 `total` 只算该类别）→ `npm test` 50/50。

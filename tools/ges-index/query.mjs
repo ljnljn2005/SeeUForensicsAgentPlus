@@ -404,11 +404,17 @@ export function entity(db, opts = {}) {
     return { query: q, matched: 'aggregate', returned: top.length, rows: top.map((r) => ({ kind: r.kind, value: r.value_norm, count: r.n, evidences: r.eids, eids: r.eid_list.split(',').map(Number) })) };
   }
 
+  const offset = Math.max(0, Number(opts.offset) || 0);
   const rows = db.prepare(`select kind, value_norm, count(*) n, count(distinct eid) eids, group_concat(distinct eid) eid_list
-    from entity${where} group by kind, value_norm order by n desc, eids desc limit ?`).all(...params, limit);
+    from entity${where} group by kind, value_norm order by n desc, eids desc limit ? offset ?`).all(...params, limit, offset);
+  const total = db.prepare(`select count(*) c from (select 1 from entity${where} group by kind, value_norm)`).get(...params).c;
   const kinds = db.prepare('select kind, count(*) n from entity group by kind order by n desc').all();
   return {
     returned: rows.length,
+    total,
+    offset,
+    limit,
+    next: offset + rows.length < total ? offset + rows.length : null,
     kinds,
     crossEvidence: rows.filter((r) => r.eids > 1).length,
     rows: rows.map((r) => ({ kind: r.kind, value: r.value_norm, count: r.n, evidences: r.eids, eids: r.eid_list.split(',').map(Number) })),

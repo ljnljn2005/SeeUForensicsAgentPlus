@@ -518,22 +518,26 @@ window.__ModuleLoader__.load({
     function EntityView({ db, onCite }) {
       const [draft, setDraft] = useState({ kind: '', q: '', eid: '' });
       const [applied, setApplied] = useState(draft);
+      const [offset, setOffset] = useState(0);
       const [copying, setCopying] = useState(false);
       const [note, setNote] = useState('');
-      const { data, error, loading } = useLoad(() => api('/entity', { db, ...applied, limit: PAGE }), [db, applied]);
-      const apply = () => setApplied({ ...draft });
+      const { data, error, loading } = useLoad(() => api('/entity', { db, ...applied, limit: PAGE, offset }), [db, applied, offset]);
+      const apply = () => { setOffset(0); setApplied({ ...draft }); };
       const clear = () => {
         const next = { kind: '', q: '', eid: '' };
+        setOffset(0);
         setDraft(next);
         setApplied(next);
       };
       const drill = (row) => {
         const next = { kind: row.kind, q: row.value, eid: applied.eid };
+        setOffset(0);
         setDraft(next);
         setApplied(next);
       };
       const pickKind = (kind) => {
         const next = { ...draft, kind: draft.kind === kind ? '' : kind };
+        setOffset(0);
         setDraft(next);
         setApplied(next);
       };
@@ -577,6 +581,13 @@ window.__ModuleLoader__.load({
           h('span', { style: { marginLeft: 'auto' } },
             actionButton(copying ? '复制中…' : '复制实体清单', copyEntities, { disabled: copying || !rows.length }))),
         note ? h('div', { style: S.noticeInfo }, note) : null,
+        data && data.total != null
+          ? h('div', { style: { ...S.row, gap: 6 } },
+            h('span', { style: S.muted }, `共 ${data.total} 条聚合 · 当前 ${data.offset + 1}-${data.offset + data.returned}`),
+            data.offset > 0 ? actionButton('上一页', () => setOffset(Math.max(0, data.offset - PAGE))) : null,
+            data.next != null ? actionButton('下一页', () => setOffset(data.next)) : null,
+            h('span', { style: S.muted }, `第 ${Math.floor(data.offset / PAGE) + 1} 页 · 点类别可下钻`))
+          : null,
         kinds.length ? h('div', { style: { ...S.row, gap: 5 } },
           h('span', { style: S.muted }, '实体类别'),
           kinds.slice(0, 14).map((k) => {

@@ -244,6 +244,17 @@ await sleep(2500)
 report.tabEntityClick = await openTab('实体')
 text = await bodyText()
 report.entityText = text.slice(text.indexOf('实体'), text.indexOf('实体') + 700)
+// 实体视图：共 N 条聚合 + 下一页（第一版只显示前 30 条，8191 个实体看不到后面的）
+report.entityPager = text.match(/共 (\d+) 条聚合 · 当前 (\d+)-(\d+)/)
+report.entityTotal = report.entityPager ? Number(report.entityPager[1]) : 0
+report.entityFirstPageText = await bodyText()
+report.entityNextClick = await clickText('下一页', 'button')
+if (report.entityNextClick) {
+  await sleep(1800)
+  text = await bodyText()
+  report.entitySecondPageText = text.slice(text.indexOf('实体'), text.indexOf('实体') + 700)
+  report.entityPagingOk = report.entityTotal > 30 && report.entityFirstPageText !== report.entitySecondPageText
+}
 report.tabTimelineClick = await openTab('时间线')
 text = await bodyText()
 report.timelineText = text.slice(text.indexOf('时间线'), text.indexOf('时间线') + 700)
@@ -258,7 +269,7 @@ report.timelineFiltersOk = report.timelineFilterOptions.ev > 1 && report.timelin
 report.tabTablesClick = await openTab('表')
 text = await bodyText()
 report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
-report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true && report.timelineFiltersOk === true
+report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true && report.timelineFiltersOk === true && report.entityPagingOk === true
 
 // ---------- 浅色主题回归（SEEU_E2E_THEME=light；暗色为默认） ----------
 if (process.env.SEEU_E2E_THEME === 'light') {
