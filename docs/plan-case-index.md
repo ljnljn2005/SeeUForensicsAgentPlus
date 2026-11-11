@@ -302,7 +302,8 @@ ges-index build --case <case_number|--case-dir <dir>> [--scope all|parsed|relate
 
 | 命令 | 作用 | 典型用途 |
 |---|---|---|
-| `query overview` | 案件/检材/应用/类别/计数 | 开场先看有什么数据 |
+| `query tree <node>` | **树状导航（渐进式披露，主入口）**：一次只展开一层 | 从案件概览逐层钻到某条消息 |
+| `query overview` | 案件/检材/应用/类别/计数（= `tree root`） | 开场先看有什么数据 |
 | `query search -q <kw> [--eid] [--app] [--category] [--from] [--to] [--limit 20]` | 关键词检索（FTS + LIKE 回退） | "谁提到 转账"、"8525* 出现在哪" |
 | `query records --artifact <id> [--offset 0] [--limit 20]` | 看某叶子原始行 | 定位后看上下文 |
 | `query get <record_id>` | 单条记录全字段 | 精读 |
@@ -325,16 +326,43 @@ ges-index build --case <case_number|--case-dir <dir>> [--scope all|parsed|relate
 - **边界**：DB 是火眼解析结果的快照，不含 AI 结论、不含原始文件字节；需要原始文件或深度分析时明确告诉用户"需要回火眼操作"。`query marks` / `query notes` 返回的是导航数据（`citable=0`），只能用于引导用户回火眼核对，**不得当作可引用原文**。
 - **禁止**：不执行 `ges`、不改 DB、不联网。
 
-### 7.3 token 账
+### 7.5 树状渐进式披露（`query tree <node>`，M0 已验证原型）
+
+树（**每层一次调用、只回下一层**，默认 ≤ 1.5 KB）：
+
+```text
+root                         案件概览 + 检材列表
+ └─ ev:<eid>                 检材下的应用/类别计数
+     └─ app:<eid>/<app>      该应用下的分类（WhatsApp/微信 下先分账号）
+         └─ cat:<eid>/<app>/<账号>/<类别>   该类别下的会话/群组/文件夹（= 文件列表）
+             └─ art:<id>[:page]            文件元信息 + 每页 10 条记录
+                 └─ cite:<recordId>        单条记录 + 可校验的引用链接
+```
+
+M0 实测每层输出（紧凑 JSON）：`root` 309 B / `ev:3` 767 B / `app:3/WhatsApp` 581 B / `cat:…/群聊消息` 979 B / `art:45`（10 条记录）2,088 B / `cite:1` 364 B。
+一次"根 → 某群聊 → 某条消息 → 引用"合计约 **5 KB ≈ 1.4k token**，且完全按需展开（不看的应用/会话永不进入上下文）。
+
+原则：
+
+1. **默认只展开一层**；`--depth 2` 才多回一层；叶子强分页（`PAGE=10`，超预算降到 8 / 每行 120 字符）。
+2. **节点 id 短且可复用**（`ev:` / `app:` / `cat:` / `art:` / `cite:`），模型直接把返回值当下一步参数，不需要重新拼路径。
+3. 每个节点返回 `totals`（文件数/行数/`citable` 比例）+ `children`，让模型自己判断"够不够、要不要继续钻"。
+4. **搜索不是唯一入口**：先 `tree root` 看规模 → 按应用/账号/类别钻 → `art:` 翻页 → `cite:` 取引用；`search` 只用于跨树的关键词跳转（命中后同样给 `id`，再用 `cite`）。
+5. **桌面 UI 复用同一棵树**（左侧懒加载目录树），CLI 与 UI 共享同一份 JSON schema——树上点选和模型调用看到的是同一套节点。
+
+> M2 需要在 `artifact` 里补 `account` 列，让 WhatsApp/微信 的"账号目录"成为独立一层（M0 里它暂时被归到 `category`）。
+
+### 7.6 token 账
 
 | 场景 | 上下文成本 |
 |---|---|
 | 旧方式：会话里去读 4 个官方 skill + 现场 `ges read` 几十个 CSV | 约 20k token（4 个 skill 全量 72 KB）+ 每次读文件 1–5k |
 | 新方式：`ges-case-index` skill 常驻 | 约 800 token |
 | 每次查询 | 约 300–600 token（≤2 KB JSON） |
+| 树状导航单层（M0 实测） | 约 90–300 token/层；一条完整钻取链 ≈ 1.4k token |
 | 标记/笔记/OCR 额外能力 | 仍走同一 skill，命令数 6→9，常驻约 +150 token |
 
-### 7.4 OCR 开关（默认关闭）
+### 7.7 OCR 开关（默认关闭）
 
 - **开关位置**：桌面版设置页「索引 → 图片文字识别（OCR）」；CLI `--ocr off|auto|force`，默认 `off`。
 - **`off`**：只入图片/视频元数据（`file_meta`），0 耗时。
@@ -487,7 +515,9 @@ create table cross_file(id integer primary key, sha256 text, case_number text, e
 
 - **M1**：加并发抓取 2–4（单线程 1.7 s/叶）；断点续跑按"叶"粒度；若 `ges` 有常驻/批处理接口（`daemon`/`job`）再压一次进程启动成本。
 - **M2**：`实体分类/*/data.csv`、`检材信息/data.csv` 自动判"无基址行" → 强制 `citable=0`，不进引用面。
-- **M3**：`search` 自适应引擎；输出改为 `id + snippet`；新增 `cite <id>` 命令产出验证命令与 `[[n]](…)` 链接。
+- **M3**：`search` 自适应引擎；输出改为 `id + snippet`；新增 `cite <id>` 命令产出验证命令与 `[[n]](…)` 链接；按 §7.5 实现 `tree <node>` 并作为技能里的**主入口**（先树后搜）。
+- **M2 追加**：`artifact.account` 列 + 树里增加"账号"层（WhatsApp/微信 多账号场景必须）。
+- **M0 已额外验证**：`.probe/m0/tree.mjs` 实现了 §7.5 的 6 级树（root/ev/app/cat/art/cite），实测每层 309–2,088 B、单层 P50 < 1 ms（仅 SQLite + 进程启动）。
 - **M6 OCR**：继续延后，不影响 M1–M3。
 
 ---
