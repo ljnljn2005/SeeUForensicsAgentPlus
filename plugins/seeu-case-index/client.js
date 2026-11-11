@@ -796,6 +796,9 @@ window.__ModuleLoader__.load({
       const [tab, setTab] = useState('tree');
       const [recordSeed, setRecordSeed] = useState(null);
       const [query, setQuery] = useState('');
+      // 检索筛选：检材 / 应用 / 起止日期（后端 search() 原生支持，空值不传）
+      const [filters, setFilters] = useState({ eid: '', app: '', from: '', to: '' });
+      const [copyNote, setCopyNote] = useState('');
       const [result, setResult] = useState(null);
       const [detail, setDetail] = useState(null);
       const [busy, setBusy] = useState('');
@@ -892,10 +895,82 @@ window.__ModuleLoader__.load({
         setBusy('search');
         setError('');
         setDetail(null);
-        try { setResult(await api('/search', { db, q: query.trim(), limit: 20 })); }
+        setCopyNote('');
+        const extra = {};
+        const eid = String(filters.eid ?? '').trim();
+        if (eid) extra.eid = Number(eid);
+        if (String(filters.app ?? '').trim()) extra.app = String(filters.app).trim();
+        if (String(filters.from ?? '').trim()) extra.from = String(filters.from).trim();
+        if (String(filters.to ?? '').trim()) extra.to = String(filters.to).trim();
+        try { setResult(await api('/search', { db, q: query.trim(), limit: 20, ...extra })); }
         catch (e) { setError(String(e.message ?? e)); }
         finally { setBusy(''); }
-      }, [db, query]);
+      }, [db, query, filters]);
+
+      const resetFilters = useCallback(() => {
+        setFilters({ eid: '', app: '', from: '', to: '' });
+      }, []);
+
+      /** 统一的复制出口：Electron 走 preload 桥，纯 web 预览退回 navigator.clipboard。 */
+      const copyText = useCallback(async (text) => {
+        const value = String(text ?? '');
+        if (!value) throw new Error('没有可复制的内容');
+        if (window.seeu?.writeClipboard) {
+          await window.seeu.writeClipboard(value);
+        } else if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(value);
+        } else {
+          throw new Error('当前环境不支持剪贴板');
+        }
+        return value.length;
+      }, []);
+
+      /** 把当前检索结果导出成可粘贴进报告的引用清单（逐条回查句柄）。 */
+      const exportCitations = useCallback(async () => {
+        const rows = result?.rows ?? [];
+        if (!rows.length) return;
+        setBusy('copy');
+        setError('');
+        try {
+          const parts = [];
+          parts.push('# SeeU 取证索引 · 检索引用清单');
+          parts.push(`关键词：${result.query ?? query}`);
+          parts.push(`引擎：${result.engine ?? 'like'} · ${result.returned ?? rows.length} 条（导出 ${rows.length} 条）`);
+          const fl = [];
+          if (filters.eid) fl.push(`检材 ${filters.eid}`);
+          if (filters.app) fl.push(`应用 ${filters.app}`);
+          if (filters.from) fl.push(`起始 ${filters.from}`);
+          if (filters.to) fl.push(`结束 ${filters.to}`);
+          if (fl.length) parts.push(`筛选：${fl.join(' · ')}`);
+          parts.push(`索引库：${db}`);
+          parts.push(`导出时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`);
+          parts.push('');
+          let idx = 0;
+          let missing = 0;
+          for (const r of rows) {
+            idx += 1;
+            let c = null;
+            try { c = await api('/cite', { db, id: r.id }); } catch { c = null; }
+            const head = [c?.ev ?? `检材 ${r.eid}`, c?.app ?? r.app, c?.ts ?? r.ts, c?.line != null ? `第 ${c.line} 行` : ''].filter(Boolean).join(' · ');
+            parts.push(`${idx}. ${head}`);
+            if (c?.citation) {
+              const recheck = c.citation.match(/\(([^)]+)\)/);
+              parts.push(`   引用：${recheck ? recheck[1] : c.citation}`);
+            } else {
+              missing += 1;
+              parts.push('   引用：（该行无溯源句柄，只能作为导航线索）');
+            }
+            if (c?.verifyCmd) parts.push(`   回查：${c.verifyCmd}`);
+            parts.push(`   摘要：${String(c?.text ?? r.snip ?? '').replace(/\s+/g, ' ').trim()}`);
+            parts.push('');
+          }
+          if (missing) parts.push(`（其中 ${missing} 条无溯源句柄，已在清单里标注。）`);
+          const n = await copyText(parts.join('\n'));
+          setCopyNote(`已复制 ${rows.length} 条引用清单（${n} 字符）${missing ? `，其中 ${missing} 条无句柄` : ''}`);
+        } catch (e) {
+          setError(`复制引用清单失败：${String(e.message ?? e)}`);
+        } finally { setBusy(''); }
+      }, [db, result, query, filters, copyText]);
 
       const drill = useCallback((nextNode, label) => {
         setCrumbs((c) => [...c, { node, label: label ?? nodeLabel(view, node) }]);
@@ -962,7 +1037,17 @@ window.__ModuleLoader__.load({
         h('div', { style: S.row },
           h('span', { style: S.title }, '引用详情'),
           busy === 'cite' ? h(LoadingLine, { text: '回查中…' }) : null,
-          h('span', { style: { marginLeft: 'auto' } }, actionButton('关闭', () => setDetail(null)))),
+          h('span', { style: { marginLeft: 'auto', display: 'flex', gap: 6 } },
+            detail.citation
+              ? actionButton('复制引用', async () => {
+                  try {
+                    const n = await copyText(`${detail.citation}\n回查：${detail.verifyCmd ?? ''}`);
+                    setCopyNote(`已复制该引用（${n} 字符）`);
+                  } catch (e) { setError(`复制失败：${String(e.message ?? e)}`); }
+                })
+              : null,
+            actionButton('关闭', () => setDetail(null)))),
+        copyNote ? h('div', { style: S.noticeInfo }, copyNote) : null,
         h(CiteDetail, { detail })) : null;
 
       return h('div', { style: S.wrap },
@@ -1084,11 +1169,22 @@ window.__ModuleLoader__.load({
               }),
               actionButton('检索', doSearch, { primary: true, disabled: !db || busy === 'search' }),
               busy === 'search' ? h(LoadingLine, { text: '检索中…' }) : null),
+            h('div', { style: { ...S.row, gap: 6, marginTop: 6 } },
+              narrowInput(filters.eid, (v) => setFilters((f) => ({ ...f, eid: v })), '检材号 eid', { width: 84, disabled: !db, onEnter: doSearch }),
+              narrowInput(filters.app, (v) => setFilters((f) => ({ ...f, app: v })), '应用 app（精确）', { width: 116, disabled: !db, onEnter: doSearch }),
+              narrowInput(filters.from, (v) => setFilters((f) => ({ ...f, from: v })), '起始 2025-04-01', { width: 112, disabled: !db, onEnter: doSearch }),
+              narrowInput(filters.to, (v) => setFilters((f) => ({ ...f, to: v })), '结束 2025-04-30', { width: 112, disabled: !db, onEnter: doSearch }),
+              actionButton('按筛选检索', doSearch, { disabled: !db || !query.trim() || busy === 'search' }),
+              (filters.eid || filters.app || filters.from || filters.to) ? actionButton('清空筛选', resetFilters) : null),
             !db ? noDbHint : null,
             result ? h('div', { style: S.card },
               h('div', { style: S.row },
                 h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `引擎 ${result.engine} · ${result.returned} 命中`),
+                (result.rows ?? []).length
+                  ? actionButton(busy === 'copy' ? '复制中…' : '复制引用清单', exportCitations, { disabled: busy === 'copy' })
+                  : null,
                 h('span', { style: { ...S.muted, marginLeft: 'auto' } }, '点一条看引用句柄。')),
+              copyNote ? h('div', { style: S.noticeInfo }, copyNote) : null,
               (result.rows ?? []).length
                 ? h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 460, overflow: 'auto' } },
                   (result.rows ?? []).map((r) => h('div', {

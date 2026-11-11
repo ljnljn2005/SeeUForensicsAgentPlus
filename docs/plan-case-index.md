@@ -1155,3 +1155,42 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 ```
 
 遗留：hero 只在新会话（无消息）出现；「帮助」入口未做，产品说明仍以 README 为准。
+
+## 20.18 第 18 轮：检索筛选 + 引用清单导出
+
+动机：关键词检索此前只有「关键词」一个条件，真实案件里最常问的是「这个关键词在这一起检材里出现了几次」「某段时间有没有相关记录」；另外写报告时要把命中逐条抄成 `Goldeneyes://` 句柄，手工复制十几条容易漏行、漏行号。
+
+实现（只改 `plugins/seeu-case-index/client.js`，后端 `tools/ges-index/query.mjs:244 search()` 原本就支持 `eid/app/account/category/from/to`，不需要改索引或重建）：
+- 检索视图加第二行筛选：`检材号 eid` / `应用 app（精确）` / `起始 2025-04-01` / `结束 2025-04-30`，回车与【按筛选检索】等价；有任一条件时出现【清空筛选】。筛选值在 `doSearch()` 里拼进 `/search` 请求（空值不传），与关键词同时生效（AND）。
+- 结果区【复制引用清单】：按当前结果逐条 `GET /seeu-index/cite?id=` 回查真实句柄，导出 Markdown：
+
+  ```markdown
+  # SeeU 取证索引 · 检索引用清单
+  关键词：加密
+  引擎：like · 12 条（导出 12 条）
+  筛选：检材 3
+  索引库：E:\forensics\<案件>\.seeu-index\case-index.db
+  导出时间：2026/11/12 01:34:52
+
+  1. CHAN_MH_mobile.zip · WhatsApp · 2025-04-02 10:11:12 · 第 120 行
+     引用：Goldeneyes://2919d298-…/229000000016#120
+     回查：ges read "…" --offset 119 --limit 1
+     摘要：…
+  ```
+
+  无句柄的行写「（该行无溯源句柄，只能作为导航线索）」并在文末统计条数，避免报告里混入不可回查的引用。
+- 复制走 `window.seeu.writeClipboard`（Electron preload 桥）；纯浏览器 dev 预览自动退回 `navigator.clipboard.writeText`。
+- 引用详情面板也加了【复制引用】（单条：句柄 + 回查命令），复制结果在面板里回显「已复制 N 字符」。
+- `resetFilters()` 与「清空筛选」按钮让筛选条件可一键复位；`copyNote` 在重新检索时清空，避免旧提示误导。
+
+验证（新增 `npm run test:e2e:search`，真 Electron + CDP + 真实案件库）：
+
+```json
+{"ok":true,"keyword":"加密","errors":[],"panelOpened":true,"dirFilled":true,"scanned":true,"tabOpened":true,"queryFilled":true,"searched":true,"baseRows":20,"filterEid":3,"eidFilled":true,"filterApplied":true,"filteredRows":12,"filteredAllMatch":true,"filterNarrowed":true,"copyClicked":true,"copyNote":"已复制 12 条引用清单","clipboard":{"len":4596,"hasHeader":true,"hasCite":true,"hasRecheck":true,"head":"# SeeU 取证索引 · 检索引用清单 | 关键词：加密 | 引擎：like · 12 条（导出 12 条）"},"cleared":true,"afterClear":""}
+```
+
+要点：先不带筛选检索 20 条，取首行的 `检材号` 作为筛选值再检索 → 12 条且**全部**落在该检材；复制后从系统剪贴板（`powershell Get-Clipboard -Raw`）读回 4596 字符，含清单头、`引用：Goldeneyes://` 与 `回查：`；清空筛选后输入框为空。渲染进程 `navigator.clipboard.readText()` 会被 Chromium 拒绝（Read permission denied），所以剪贴板断言必须从系统剪贴板侧读。
+
+回归：`npm run test:e2e:ui`（面板主流程 `m2ok:true`、`errors:[]`）、`npm test` 38/38、`npm run check:overlay` OK。
+
+遗留：应用筛选是**精确匹配**（与后端一致），不支持下拉补全与模糊匹配；日期只按 `record.ts` 字符串比较（格式 `YYYY-MM-DD HH:MM:SS`，跨时区仍以检材原始时间串为准）；一次最多导出当前页 20 条，分页导出待做。

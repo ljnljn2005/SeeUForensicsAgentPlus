@@ -51,7 +51,8 @@
     "test:e2e:loading": "node scripts/e2e/loading-check.mjs",
     "test:e2e:panel-empty": "node scripts/e2e/panel-empty-check.mjs",
     "test": "node --test",
-    "test:e2e:hero": "node scripts/e2e/hero-check.mjs"
+    "test:e2e:hero": "node scripts/e2e/hero-check.mjs",
+    "test:e2e:search": "node scripts/e2e/search-filter-check.mjs"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.1.0",
