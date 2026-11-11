@@ -254,6 +254,13 @@ if (report.entityNextClick) {
   text = await bodyText()
   report.entitySecondPageText = text.slice(text.indexOf('实体'), text.indexOf('实体') + 700)
   report.entityPagingOk = report.entityTotal > 30 && report.entityFirstPageText !== report.entitySecondPageText
+// 实体视图的检材筛选也应是下拉
+report.entityEvOptions = await ev(`(() => {
+  const sels = [...document.querySelectorAll('select')]
+  const evSel = sels.find(s => [...s.options].some(o => /LEUNG_YL_mobile\\.zip/.test(o.textContent)))
+  return evSel ? evSel.options.length : 0
+})()`)
+report.entityEvSelectOk = report.entityEvOptions > 1
 }
 report.tabTimelineClick = await openTab('时间线')
 text = await bodyText()
@@ -269,7 +276,7 @@ report.timelineFiltersOk = report.timelineFilterOptions.ev > 1 && report.timelin
 report.tabTablesClick = await openTab('表')
 text = await bodyText()
 report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
-report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true && report.timelineFiltersOk === true && report.entityPagingOk === true
+report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true && report.timelineFiltersOk === true && report.entityPagingOk === true && report.entityEvSelectOk === true
 
 // ---------- 浅色主题回归（SEEU_E2E_THEME=light；暗色为默认） ----------
 if (process.env.SEEU_E2E_THEME === 'light') {

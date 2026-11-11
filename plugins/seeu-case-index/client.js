@@ -521,6 +521,15 @@ window.__ModuleLoader__.load({
       const [offset, setOffset] = useState(0);
       const [copying, setCopying] = useState(false);
       const [note, setNote] = useState('');
+      const [evList, setEvList] = useState([]);
+      useEffect(() => {
+        let alive = true;
+        if (!db) { setEvList([]); return undefined; }
+        api('/evidences', { db })
+          .then((body) => { if (alive) setEvList(body?.evidences ?? []); })
+          .catch(() => { if (alive) setEvList([]); });
+        return () => { alive = false; };
+      }, [db]);
       const { data, error, loading } = useLoad(() => api('/entity', { db, ...applied, limit: PAGE, offset }), [db, applied, offset]);
       const apply = () => { setOffset(0); setApplied({ ...draft }); };
       const clear = () => {
@@ -575,7 +584,16 @@ window.__ModuleLoader__.load({
         h('div', { style: { ...S.row, gap: 6 } },
           narrowInput(draft.kind, (v) => setDraft((d) => ({ ...d, kind: v })), '实体类型 kind', { width: 110, onEnter: apply }),
           narrowInput(draft.q, (v) => setDraft((d) => ({ ...d, q: v })), '值 / 关键词 q', { width: 150, onEnter: apply }),
-          narrowInput(draft.eid, (v) => setDraft((d) => ({ ...d, eid: v })), '检材号 eid', { width: 84, onEnter: apply }),
+          h('select', {
+            style: { ...S.input, flex: 'none', width: 190 },
+            value: draft.eid ?? '',
+            disabled: !db,
+            title: '按检材筛选：下拉里就是火眼的检材名称',
+            onChange: (e) => { setDraft((d) => ({ ...d, eid: e.target.value })); setOffset(0); setApplied((a) => ({ ...a, eid: e.target.value })); },
+            onKeyDown: (e) => { if (e.key === 'Enter') apply(); },
+          },
+            h('option', { value: '' }, '全部检材'),
+            ...evList.map((ev) => h('option', { key: ev.eid, value: String(ev.eid) }, '检材 ' + ev.eid + (ev.name ? ' · ' + ev.name : '')))),
           actionButton('查询', apply, { primary: true }),
           hasFilter ? actionButton('清空', clear) : null,
           h('span', { style: { marginLeft: 'auto' } },

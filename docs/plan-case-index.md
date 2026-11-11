@@ -1660,3 +1660,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 前端：`EntityView` 加 `offset` 状态（`apply`/`clear`/`drill`/`pickKind` 都重置为 0），`useLoad` 依赖 `[db, applied, offset]`；聚合行下方显示「共 N 条聚合 · 当前 a-b」+【上一页】【下一页】+「第 K 页 · 点类别可下钻」。
 - e2e：`m2-ui-check` 在实体标签页读「共 N 条聚合 · 当前 a-b」，点【下一页】后比较正文变化 → 实测 `{"entityPager":["共 3999 条聚合 · 当前 1-30","3999","1","30"],"entityTotal":3999,"entityNextClick":true,"entityPagingOk":true,"m2ok":true,"errors":[]}`，`entityPagingOk` 纳入 `m2ok`。
 - 单测：新增 `tests/entity-paging.test.mjs` 2 例（12 个值按 limit 5 翻三页，`total/offset/next` 正确且页间不重叠；`kind` 过滤后 `total` 只算该类别）→ `npm test` 50/50。
+
+## 20.49 实体视图检材筛选改下拉（v0.2.6 起）
+
+- 实体视图的「检材号 eid」原本还是手输框（kind 有类别 chip、关键词可搜），补成下拉后面板里四个视图（检索/记录/时间线/实体）的检材筛选全部是「选名称」而不是「记 eid」。
+- 实现：`EntityView` 内加 `evList` 状态 + `useEffect`（依赖 `db`，`api('/evidences', { db })`，失败置空），`narrowInput` 换成 `<select>`（「全部检材」+「检材 N · 名称」）；选项变化时同时重置 `offset` 并立即 `setApplied`，不用再点【查询】。
+- e2e：`m2-ui-check` 在实体页采样含检材名选项的 select → `"entityEvOptions":6`、`"entityEvSelectOk":true`，并入 `m2ok`；完整结果 `{"entityEvOptions":6,"entityEvSelectOk":true,"entityPagingOk":true,"m2ok":true,"errors":[]}`。
+- 回归：`npm test` 50/50、`check:overlay` OK、`node scripts/build.mjs` 通过。
