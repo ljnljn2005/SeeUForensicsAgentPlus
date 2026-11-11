@@ -28,7 +28,7 @@ export LOVELYCARVE_SESSION_DIR='E:\SeeU\runtime\sessions'   # 可选：把常驻
 "$LC" -q system get | head -c 400                     # 自检：commands/exitCodes/agentMode/ocr/qrcode
 ```
 
-**找不到可执行文件时按序判定，别猜**：① 环境变量 `LOVELYCARVE_CLI`；② `E:\LovelyCarve\cli\lovelycarve-cli.exe`（本机 CLI 独立部署）；③ `app\LovelyCarve.exe` 同目录的 `lovelycarve-cli.exe`（GUI 安装目录）；④ `where lovelycarve-cli`；⑤ 都没有 → 明确告知"未安装/路径未知"并停下，**不要伪造命令输出**。
+**找不到可执行文件时按序判定，别猜**：① 调用方已给的路径（`$LC`、或某技能自带 `bin/lovelycarve-cli.exe`）；② `E:\LovelyCarve\cli\lovelycarve-cli.exe`（本机 CLI 独立部署）；③ `app\LovelyCarve.exe` 同目录的 `lovelycarve-cli.exe`（GUI 安装目录）；④ `where lovelycarve-cli`；⑤ 都没有 → 明确告知"未安装/路径未知"并停下，**不要伪造命令输出**。
 
 - 必须与 `lovelycarve-cli.exe` 同目录保留 `lc-plugin-host.exe`、`plugins\`、运行库 DLL；**不要** `cd` 进该目录执行。
 - 启动即退（`0xC0000135`）＝缺 `libcrypto-3-x64.dll`；本机部署已把官方 `libcrypto-4-x64.dll` 原样复制为 `libcrypto-3-x64.dll`，见 `E:\LovelyCarve\DEPLOYMENT.md`。
