@@ -268,14 +268,30 @@ const todoCard = /任务/.test(text) && /进行中|已完成/.test(text)
 const first = shapes[0] ?? {}
 const toolRound = shapes.find((s) => s.hasToolResult) ?? {}
 
+// 工具卡片样式：验证 theme.css 的 [data-tool] 规则（圆角 ≥10、边框不是 transparent）
+const toolCardStyle = await ev(`(() => {
+  const el = document.querySelector('[data-tool]')
+  if (el === null) return { count: 0 }
+  const cs = getComputedStyle(el)
+  return {
+    count: document.querySelectorAll('[data-tool]').length,
+    radius: parseFloat(cs.borderTopLeftRadius) || 0,
+    border: cs.borderTopColor,
+    bg: cs.backgroundColor,
+  }
+})()`)
+const toolCardStyleOk = toolCardStyle.count === 0 ? true : (toolCardStyle.radius >= 10 && toolCardStyle.border !== 'rgba(0, 0, 0, 0)')
+
 const summary = {
-  ok: gotReply && sawToolResult && (first.tools ?? 0) > 0 && first.maxTokensField === 'max_tokens' && first.hasStreamOptions === false && first.hasStore === false,
+  ok: gotReply && sawToolResult && (first.tools ?? 0) > 0 && first.maxTokensField === 'max_tokens' && first.hasStreamOptions === false && first.hasStore === false && toolCardStyleOk,
   chatCalls,
   rounds: shapes.length,
   gotReply,
   toolResultSeen: sawToolResult,
   todoVisible,
   todoCard,
+  toolCardStyle,
+  toolCardStyleOk,
   firstRequest: {
     stream: first.stream,
     tools: first.tools,

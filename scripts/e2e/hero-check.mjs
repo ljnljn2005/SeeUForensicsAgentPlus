@@ -10,7 +10,7 @@
  * 用法：node scripts/e2e/hero-check.mjs [--exe <打包后的 exe>]
  */
 import { spawn, execFileSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
@@ -23,6 +23,9 @@ const CDP_PORT = 9353
 const UD = join(REPO, '.dev', 'hero-ud')
 const HOME = join(REPO, '.dev', 'hero-home')
 const OUT = join(REPO, '.probe', 'shots', 'hero-actions.png')
+// 真实案件目录：只有在它有 .seeu-index/case-index.db 时才断言「最近案件」chip
+const CASE_DIR = process.env.SEEU_HERO_CASE_DIR ?? 'E:\\forensics\\W盘_2919d298-f083-4a81-9c12-bd4ca393bcc5'
+const CASE_DB = join(CASE_DIR, '.seeu-index', 'case-index.db')
 
 const report = { ok: false, steps: [], errors: [] }
 const log = (step, detail) => report.steps.push(detail === undefined ? step : `${step}: ${detail}`)
@@ -98,6 +101,11 @@ try {
   env.SEEU_DSH_HOME = HOME
   env.SEEU_USER_DATA = UD
   env.SEEU_INDEX_SEARCH_DIRS = join(REPO, '.dev', 'empty-indexes')
+  if (existsSync(CASE_DB)) {
+    // 外壳启动时用 <DSH_HOME>/index-state.json 的 dirs 覆盖 SEEU_INDEX_SEARCH_DIRS，
+    // 直接传 env 不生效；写状态文件才是"面板选过的上次案件目录"的真实路径。
+    writeFileSync(join(HOME, 'index-state.json'), JSON.stringify({ dirs: [CASE_DIR] }))
+  }
 
   child = spawn(EXE, [...EXE_ARGS, `--remote-debugging-port=${CDP_PORT}`, `--user-data-dir=${UD}`], {
     cwd: REPO,
@@ -130,6 +138,27 @@ try {
   log('快捷入口', JSON.stringify(actions))
   for (const key of ['index', 'model', 'workspace']) {
     if (!actions.includes(key)) throw new Error(`缺少快捷入口 ${key}`)
+  }
+
+  // 欢迎页「最近案件」chip：需要真实案件库在场
+  if (existsSync(CASE_DB)) {
+    const recentText = await evaluate(client, `(async () => {
+      const t0 = Date.now()
+      while (Date.now() - t0 < 15000) {
+        const el = document.querySelector('[data-seeu-recent]')
+        if (el !== null) return { text: el.innerText, db: el.getAttribute('data-seeu-recent') }
+        await new Promise((r) => setTimeout(r, 300))
+      }
+      return null
+    })()`)
+    report.recentText = recentText ? recentText.text : ''
+    report.recentDb = recentText ? recentText.db : ''
+    report.recentOk = recentText !== null && /最近案件/.test(report.recentText)
+    log('最近案件 chip', report.recentOk ? report.recentText : '没出现')
+    if (!report.recentOk) throw new Error('欢迎页没有显示最近案件 chip')
+  } else {
+    report.recentOk = null
+    log('最近案件 chip', `跳过（没有案件库：${CASE_DB}）`)
   }
 
   // 点「本地模型设置」→ 新开设置窗口

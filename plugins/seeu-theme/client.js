@@ -169,21 +169,40 @@ window.__ModuleLoader__.load({
     // 注意 conversation.hero.options 是 list 槽（scope: session），只在有会话时渲染。
     function HeroActions() {
       const shell = typeof window !== 'undefined' ? window.seeu : undefined
+      // 最近案件：向本地索引 API 要一次列表，挑 builtAt 最新的一条显示在按钮下方
+      const [recent, setRecent] = React.useState(null)
+      React.useEffect(() => {
+        let alive = true
+        const load = async () => {
+          try {
+            const res = await fetch('/seeu-index/list')
+            if (!res.ok) return
+            const body = await res.json()
+            const list = Array.isArray(body?.indexes) ? body.indexes : []
+            if (!alive || !list.length) return
+            const sorted = list.slice().sort((a, b) => String(b.builtAt ?? '').localeCompare(String(a.builtAt ?? '')))
+            setRecent(sorted[0])
+          } catch {
+            // 索引 API 不可用（例如纯 web 预览没起插件）时静默隐藏
+          }
+        }
+        void load()
+        return () => { alive = false }
+      }, [])
+      const openIndex = () => {
+        try {
+          const layout = ctxRef.current && ctxRef.current.layout
+          if (layout && typeof layout.selectPanel === 'function') layout.selectPanel('seeu-case-index')
+        } catch (error) {
+          console.warn('[seeu-theme] 打开取证索引失败', error)
+        }
+      }
       const actions = [
         {
           key: 'index',
           label: '打开取证索引',
           title: '在侧栏打开「取证索引」面板：选案件目录、建库、检索',
-          run: () => {
-            try {
-              const layout = ctxRef.current && ctxRef.current.layout
-              if (layout && typeof layout.selectPanel === 'function') {
-                layout.selectPanel('seeu-case-index')
-              }
-            } catch (error) {
-              console.warn('[seeu-theme] 打开取证索引失败', error)
-            }
-          },
+          run: openIndex,
         },
       ]
       if (shell && typeof shell.openLocalModelSettings === 'function') {
@@ -206,7 +225,45 @@ window.__ModuleLoader__.load({
           },
         })
       }
+      const fmtBytes = (n) => (n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MiB' : n >= 1024 ? Math.round(n / 1024) + ' KiB' : String(n ?? 0) + ' B')
+      const fmtTime = (value) => {
+        const ts = Date.parse(String(value ?? ''))
+        return Number.isNaN(ts) ? '' : new Date(ts).toLocaleString('zh-CN', { hour12: false })
+      }
+      const caseLabel = recent ? (recent.caseName || String(recent.caseDir ?? '').split(/[\\/]/).filter(Boolean).pop() || '未命名案件') : ''
+      const recentChip = recent
+        ? h(
+            'div',
+            {
+              key: 'recent',
+              'data-seeu-recent': recent.dbPath,
+              title: recent.dbPath,
+              onClick: openIndex,
+              style: {
+                display: 'inline-flex',
+                alignItems: 'baseline',
+                gap: '6px',
+                marginTop: '2px',
+                padding: '3px 12px',
+                borderRadius: '999px',
+                fontSize: '11.5px',
+                lineHeight: 1.7,
+                cursor: 'pointer',
+                background: 'color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE) 10%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE) 32%, transparent)',
+              },
+            },
+            h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #8397B0)' } }, '最近案件：'),
+            h('span', { style: { color: 'var(--dsw-alias-label-primary, #E6EDF7)', fontWeight: 600 } }, caseLabel),
+            h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #8397B0)' } },
+              [recent.sizeBytes ? fmtBytes(recent.sizeBytes) : '', fmtTime(recent.builtAt)].filter(Boolean).join(' · ')),
+            h('span', { style: { color: 'var(--dsw-alias-brand-primary-new-colorprimary-new-color, #22D3EE)' } }, '打开 ›'),
+          )
+        : null
       return h(
+        'div',
+        { className: 'seeu-hero-wrap', style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' } },
+        h(
         'div',
         {
           className: 'seeu-hero-actions',
@@ -241,6 +298,8 @@ window.__ModuleLoader__.load({
             action.label,
           ),
         ),
+        ),
+        recentChip,
       )
     }
 

@@ -1302,3 +1302,23 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `node scripts/e2e/m2-ui-check.mjs` → `m2ok:true / errors:[]`（独立 `SEEU_DSH_HOME` / `SEEU_USER_DATA`，避免位置记忆被旧本地存储干扰）；`npm test` 38/38；`check:overlay` OK。
 
 遗留：跨案【复制重合实体清单】尚未在双案夹具下跑 e2e（单案时 minCases=2 无行、按钮不显示；代码与实体清单共用 `clipboardWrite` 路径），下次做双案联调时补一条断言。
+
+### 20.24 第 22 轮：欢迎页「最近案件」chip + 工具卡片样式入 e2e
+
+问题：欢迎页只有三枚入口按钮，研判者每次都要先进面板才知道上次建过库的案件；另外 §20.19 遗留的 `[data-tool]` 卡片样式一直没被任何 e2e 覆盖（会话区只验了气泡/正文/输入框）。
+
+实现（`plugins/seeu-theme/client.js` 的 `HeroActions`）：
+
+- 新增 `recent` 状态：`fetch('/seeu-index/list')` → `body.indexes` 按 `builtAt` 字符串倒序取第一条；`alive` 标记防止卸载后 setState；接口不可用（纯 web 预览没起插件）时静默隐藏；
+- 抽出 `openIndex()`（`ctx.layout.selectPanel('seeu-case-index')`），原「打开取证索引」按钮复用同一个函数；
+- 外层改成列布局 `seeu-hero-wrap`，按钮行下方渲染 chip：`data-seeu-recent={dbPath}`、`title={dbPath}`、点击 = `openIndex`，文案「最近案件：<案件名> · <MiB> · <生成时间> ›」，样式用强调色 10% 底 / 32% 边 / 圆角 999px（跟随主题 token）；
+- 案件名取 `caseName`，缺失时用 `caseDir` 末段；时间用 `toLocaleString('zh-CN',{hour12:false})`。
+
+验证：
+
+- `node scripts/e2e/hero-check.mjs` → `ok:true`、`recentOk:true`，`recentText:"最近案件：\nW盘\n63.0 MiB · 2026/11/11 21:13:00\n打开 ›"`，`recentDb:"E:\\forensics\\W盘_2919d298-…\\.seeu-index\\case-index.db"`，三枚按钮与设置窗口/面板断言不变；
+- **踩到的坑**：外壳启动时会用 `readIndexStateDirs(<DSH_HOME>/index-state.json)` 覆盖 `SEEU_INDEX_SEARCH_DIRS`（`src/host.ts:204-208`），所以 e2e 里给 electron 传 `SEEU_INDEX_SEARCH_DIRS` 不生效（`/seeu-index/list` 一直回 `{"indexes":[]}`）；正确做法是往隔离 `DSH_HOME` 写 `index-state.json`：`{"dirs":[<真实案件目录>]}`，这也正是面板「记住上次案件目录」的生产路径。探测脚本里用 `fetch('/seeu-index/list')`（页面同源、无鉴权）确认状态。
+- `node scripts/e2e/local-tools-e2e.mjs` 末尾新增工具卡片采样：`document.querySelector('[data-tool]')` 的 `borderTopLeftRadius` / `borderTopColor`；结果 `toolCardStyle:{"count":1,"radius":12,"border":"rgba(148,163,184,0.18)"}`、`toolCardStyleOk:true`，同时保持原有断言（`chatCalls:3`、`tools:27`、`maxTokensField:"max_tokens"`、`hasStreamOptions:false`、`hasStore:false`）。
+- 回归：`npm test` 38/38；`SEEU_DEV_MULTI=1 … node scripts/e2e/m2-ui-check.mjs` → `m2ok:true / errors:[]`（KPI、检材名+备注、检索 20 命中、`复制引用清单` 按钮都在）。
+
+遗留：chip 只显示一个（最近那条）；如果要列最近 3 个需要在欢迎页加一块列表，等用户确认视觉后再做。
