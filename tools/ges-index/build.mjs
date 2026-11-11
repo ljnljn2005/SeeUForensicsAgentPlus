@@ -8,7 +8,7 @@ import {
   classifyPath, parseChat, parseCsvLine, parseCsvRow, extractEntities, ENTITY_TYPES,
   DDL, SCHEMA_VERSION, CASE_DATA_ROOT,
 } from './parse.mjs';
-import { listCases, status as gesStatus, openCase, globAll, readLeaf } from './ges.mjs';
+import { listCases, status as gesStatus, openCase, globAll, readLeaf, readCaseConfig } from './ges.mjs';
 import { TYPED_TABLES, TYPED_DDL, projectCsvRow } from './typed.mjs';
 
 export const TOOL = 'ges-index';
@@ -175,8 +175,8 @@ export async function buildIndex(opts = {}) {
   const insCitation = db.prepare(`insert or replace into citation(record_id,artifact_id,eid,base_handle,node_id,line_no,citable,status,method,verified_at)
     values(?,?,?,?,?,?,?,?,?,?)`);
   const insColumnMap = db.prepare('insert or replace into column_map(app,category,kind,column,target_table,target_field,seen) values(?,?,?,?,?,?,?)');
-  const insEv = db.prepare(`insert or replace into evidence(eid,name,holder,platform,type,timezone,md5,sha1,sha256,size_bytes,source_path,storage_path,created,updated,raw_json)
-    values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const insEv = db.prepare(`insert or replace into evidence(eid,name,holder,platform,type,timezone,md5,sha1,sha256,size_bytes,source_path,storage_path,created,updated,raw_json,person_name,remark,evidence_number,record_count)
+    values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
 
   const done = new Set();
   if (resuming) {
@@ -322,9 +322,27 @@ export async function buildIndex(opts = {}) {
   await Promise.all(Array.from({ length: Math.max(1, Math.min(8, concurrency)) }, () => worker()));
   log(`[build] 抓取完成，用时 ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
+  // 检材名称/持有人/备注/编号以火眼案件配置（<案件目录>/<案件名>.gec）为准；
+  // 「检材信息」CSV 里的「检材名称」常常是存储名（.tar），.gec 才是界面上显示的名字。
+  const caseConfig = readCaseConfig(String(target.location ?? caseDir ?? ''));
+  if (caseConfig.error) log(`[build] 读取案件配置失败（忽略）：${caseConfig.error}`);
+  for (const [eid, cfg] of caseConfig.evidences) {
+    if (!evidenceSeen.has(eid)) {
+      evidenceSeen.set(eid, {
+        eid, name: '', holder: '', platform: cfg.platform ?? '', type: cfg.type ?? '', timezone: '',
+        md5: '', sha1: '', sha256: '', size: null, source_path: '', storage_path: '',
+        created: '', updated: '', raw_json: JSON.stringify(cfg),
+      });
+    }
+  }
   for (const [eid, ev] of evidenceSeen) {
-    insEv.run(eid, ev.name, ev.holder, ev.platform, ev.type, ev.timezone, ev.md5, ev.sha1, ev.sha256,
-      ev.size, ev.source_path, ev.storage_path, ev.created, ev.updated, ev.raw_json);
+    const cfg = caseConfig.evidences.get(eid) ?? {};
+    insEv.run(
+      eid,
+      cfg.name || ev.name, ev.holder, cfg.platform || ev.platform, cfg.type || ev.type, ev.timezone,
+      ev.md5, ev.sha1, ev.sha256, ev.size, ev.source_path, ev.storage_path, ev.created, ev.updated, ev.raw_json,
+      cfg.person_name || '', cfg.remark || '', cfg.evidence_number || '', Number(cfg.record_count) || null,
+    );
   }
 
   progress({ phase: 'finalize', message: '校验与原子替换', elapsedMs: Date.now() - t0 });

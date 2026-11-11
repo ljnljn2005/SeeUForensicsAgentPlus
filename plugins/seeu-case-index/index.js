@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { basename, dirname, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
-import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records } from '../../tools/ges-index/query.mjs';
+import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records, evidences } from '../../tools/ges-index/query.mjs';
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
 
 const ROUTE = '/seeu-index';
@@ -173,6 +173,7 @@ async function handle(req, res) {
       }
       if (path === '/cite') return send(res, 200, cite(db, url.searchParams.get('id')));
       if (path === '/stats') return send(res, 200, statsOf(db));
+      if (path === '/evidences') return send(res, 200, { evidences: evidences(db) });
       if (path === '/tables') return send(res, 200, { tables: typedTables(db) });
       if (path === '/table') {
         const name = url.searchParams.get('name') ?? '';

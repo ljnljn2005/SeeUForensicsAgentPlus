@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { buildIndex, IndexBuildError, TOOL, TOOL_VERSION } from './build.mjs';
-import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records } from './query.mjs';
+import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records, evidences } from './query.mjs';
 import { SCHEMA_VERSION } from './parse.mjs';
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, topShared } from './cross.mjs';
 
@@ -48,6 +48,7 @@ const HELP = `ges-index ${TOOL_VERSION}
   ges-index search -q <kw> [--eid 3] [--app WhatsApp] [--from 2025-04-01] [--to ...] [--limit 10]
   ges-index cite <recordId>
   ges-index stats
+  ges-index ev|evidences                     检材清单（名称/持有人/平台/备注/记录数）——判断分析哪个检材先看这个
   ges-index tables                              列出 typed 投影表与行数
   ges-index table <name> [--eid 3] [--q kw] [--from ...] [--limit 20] [--offset 0]
   ges-index entity [--kind phone] [--q 8525] [--eid 3] [--limit 20]   跨检材实体聚合/下钻
@@ -131,6 +132,7 @@ async function main() {
     else if (cmd === 'search') result = search(db, { ...opts });
     else if (cmd === 'cite') result = cite(db, opts._[1]);
     else if (cmd === 'stats') result = statsOf(db);
+    else if (cmd === 'ev' || cmd === 'evidences') result = { evidences: evidences(db) };
     else if (cmd === 'tables') result = { tables: typedTables(db) };
     else if (cmd === 'table') {
       if (!opts._[1]) { console.error('用法：ges-index table <name>'); process.exit(2); }

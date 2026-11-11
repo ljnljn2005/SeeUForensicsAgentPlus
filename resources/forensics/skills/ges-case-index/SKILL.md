@@ -1,6 +1,6 @@
 ---
 name: ges-case-index
-description: 查询火眼（GoldenEyes/GES）案件全解析结果的本地索引库（案件树、关键词检索、结构化表、实体跨检材聚合、时间线、引用回查），不调用 ges.exe。用于摸清案件有哪些检材/应用/账号、查某个关键词或实体出现在哪里、按时间线看行为节奏、以及生成可核验的 Goldeneyes 句柄引用。
+description: 查询火眼（GoldenEyes/GES）案件全解析结果的本地索引库（检材清单与名称、案件树、关键词检索、结构化表、实体跨检材聚合、时间线、引用回查），不调用 ges.exe。用于摸清案件有哪些检材/应用/账号、查某个关键词或实体出现在哪里、按时间线看行为节奏、以及生成可核验的 Goldeneyes 句柄引用。
 ---
 
 # 火眼案件索引查询
@@ -28,13 +28,29 @@ curl -s "$SEEU_INDEX_API/list" | head -c 500
 `/list` 返回 `indexes[]`，每项含 `caseDir`、`dbPath`、`caseNumber`、`caseName`、`builtAt`、`sizeBytes`。
 **后续所有查询都带上 `db=<dbPath>`**（URL 编码交给 `--data-urlencode`/`-G` 即可）。
 
+## 先认检材（用户说检材名时必查）
+
+`eid` 只是序号，用户/题目说的是**检材名称**。开工前先拿检材清单，把名称和 `eid` 对上：
+
+```bash
+curl -s -G "$API/evidences" --data-urlencode "db=$DB"
+# → evidences[]: {eid, name, holder, platform, type, remark, evidenceNumber, recordCount, sizeBytes, label}
+#   例：{eid:3, name:"LEUNG_YL_mobile.zip", platform:"ios", label:"LEUNG_YL_mobile.zip · ios"}
+```
+
+`/tree root` 的 `children[]` 里也直接带 `eid/name/holder/platform/remark`，与 `/evidences` 等价。
+**判断分析哪个检材时：用 name/holder/platform/备注 做子串匹配（不区分大小写），不要猜 eid。** 匹配不到时把 `evidences[]` 列给用户确认。
+
 ## 查询命令（全部 GET，返回紧凑 JSON）
 
 ```bash
 DB="<dbPath>"
 API="$SEEU_INDEX_API"
 
-# 1) 概览：检材数、文件数、记录数、时间范围、每个检材的应用分布
+# 0) 检材清单（名称 → eid 映射；用户提检材名时先跑这个）
+curl -s -G "$API/evidences" --data-urlencode "db=$DB"
+
+# 1) 概览：检材数、文件数、记录数、时间范围；children[] 每个检材带 name/person/platform/remark
 curl -s -G "$API/tree" --data-urlencode "db=$DB" --data-urlencode "node=root"
 
 # 2) 逐层钻取：ev:<eid> → app:<eid>|<应用> → acc:<eid>|<应用>|<账号> → cat:<eid>|<应用>|<账号>|<类别> → art:<id>[:page]
@@ -87,7 +103,7 @@ curl -s -G "$SEEU_INDEX_API/cross/files" --data-urlencode "sha256=<64位十六�
 
 ## 工作方式建议
 
-1. 先用 `/tree root` 看清案件全貌（几个检材、各有哪些应用、多少记录），再决定钻哪一枝；
+1. 先跑 `/evidences`（或 `/tree root`）把**检材名称 ↔ eid** 对上；用户问"某检材"时按名称子串定位，再展开 `ev:<eid>` 看应用与记录。回答里提到检材时写名称（可附 eid），不要只写"检材 3"；
 2. 找线索用 `/search` 或 `/records`，找到候选后再 `/cite` 拿句柄，最后用 `ges read`（火眼 `/case/` 路径）核对原文；
 3. 跨检材关联（同一手机号/邮箱/网址出现在多个检材）优先用 `/entity`：`crossEvidence>1` 说明跨检材命中；
 4. 行为节奏/时间集中性用 `/timeline`，再用 `/records` 带 `from`/`to` 看具体内容；

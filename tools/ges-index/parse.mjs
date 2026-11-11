@@ -149,7 +149,7 @@ export function extractEntities(text) {
 
 export const ENTITY_TYPES = new Set(['IP地址', '快递单号', '手机号', '网址', '虚拟钱包', '身份证', '车牌号', '邮箱', '银行卡']);
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const DDL = `
 create table if not exists meta(k text primary key, v text);
@@ -157,7 +157,8 @@ create table if not exists case_info(k text primary key, v text);
 create table if not exists evidence(
   eid integer primary key, name text, holder text, platform text, type text, timezone text,
   md5 text, sha1 text, sha256 text, size_bytes integer, source_path text, storage_path text,
-  created text, updated text, raw_json text);
+  created text, updated text, raw_json text,
+  person_name text, remark text, evidence_number text, record_count integer);
 create table if not exists artifact(
   id integer primary key, eid integer, app text, account text, category text, subcat text,
   virtual_path text unique, kind text, base_handle text, node_id text,

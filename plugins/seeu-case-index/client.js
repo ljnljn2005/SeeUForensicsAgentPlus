@@ -757,7 +757,8 @@ window.__ModuleLoader__.load({
             children
               ? h('div', { style: S.list },
                 children.map((c) => h('div', { key: c.id, style: S.item, onClick: () => drill(c.id, labelOf(c)) },
-                  h('span', { style: { flex: 1 } }, labelOf(c)),
+                  h('span', { style: { flex: 1 } }, labelOf(c),
+                    c.remark ? h('span', { style: { ...S.muted, marginLeft: 8 } }, `备注：${String(c.remark).slice(0, 40)}`) : null),
                   c.artifacts !== undefined ? h('span', { style: S.muted }, `${c.artifacts} 文件`) : null,
                   c.records !== undefined ? h('span', { style: S.muted }, `${c.records} 记录`) : null,
                   c.accounts ? h('span', { style: S.muted }, `${c.accounts} 账号`) : null,
@@ -808,14 +809,15 @@ window.__ModuleLoader__.load({
     function basename(p) { return String(p ?? '').split(/[\\/]/).filter(Boolean).pop() ?? ''; }
     function labelOf(c) {
       const id = String(c.id ?? '');
-      if (id.startsWith('ev:')) return `检材 ${id.slice(3)}`;
+      // 检材节点带火眼里的真实名称（eid 只是序号，模型/用户判断「分析哪个检材」靠 name）
+      if (id.startsWith('ev:')) return [`检材 ${id.slice(3)}`, c.name, c.person, c.platform].filter(Boolean).join(' · ');
       if (id.startsWith('app:') && c.app) return c.app;
       if (id.startsWith('acc:')) return c.account || c.name || id;
       return c.name ?? c.app ?? c.cat ?? c.account ?? id;
     }
     function nodeLabel(view, node) {
       if (!view) return node;
-      if (node.startsWith('ev:')) return `检材 ${node.slice(3)}`;
+      if (node.startsWith('ev:')) return [`检材 ${node.slice(3)}`, view.evidence?.name, view.evidence?.platform].filter(Boolean).join(' · ');
       if (view.artifact) return `${view.artifact.cat}`;
       return node;
     }

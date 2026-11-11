@@ -791,3 +791,28 @@ typed 表行数（实测）：`health_metric` 6,200、`exif` 4,518、`msg_csv` 4
 - 跨案只做"实体 + 镜像哈希"，没有跨案时间线、没有语义相似度（按用户此前决策先做关键词/实体）。
 - `cross_image` 目前按 `(case_number, eid)` 去重，同一镜像在一案里多次出现只记一行（符合"同一镜像在哪几案出现"的用法）。
 - 案件删除不自动同步清理（见 18.2/18.4）。
+
+## 19. 检材元数据（v0.1.8，M2.5）
+
+**问题**：`/tree root` 的 `children[]` 只有 `{id:'ev:3', artifacts, lines}`，面板显示「检材 N」，会话里的模型完全不知道哪个 eid 对应哪个检材 —— 用户发题目时它无法判断「分析哪个检材」（用户 2026-11-11 反馈）。`evidence.name` 在库里其实有值（`CHAN_MH_mobile.zip` 等），只是从来没暴露到树/检索/引用里。
+
+**检材名称的真实来源**：火眼案件配置文件 `<案件目录>/<案件名>.gec` 是 SQLite，`evidence` 表列含 `id,name,person_name,remark,platform,type,record_count,evidence_number`。
+- 「检材信息」CSV 里的「检材名称」常常是存储名（`CHAN_MH_mobile.tar`/zip 内部名），火眼界面上显示的名字应以 `.gec` 为准；
+- `remark` 只有个别检材有（本案 eid1：「伤人案(冯子康头部受伤)手机检材:iPhone D331pAP/iOS17.1.1 全量提取」），对判断检材用途很有价值；
+- `person_name` 本案全空，`platform` 为 `ios`/空。
+
+**实现**：
+- `tools/ges-index/ges.mjs` 新增 `readCaseConfig(caseDir)`：只读打开 `*.gec`，读 `evidence` 表，失败返回空表（老版本/无 `.gec` 不影响建库）。
+- `tools/ges-index/build.mjs`：`evidence` 表新增 `person_name/remark/evidence_number/record_count` 四列（`SCHEMA_VERSION` 3 → **4**）；建库末尾用 `.gec` 覆盖 `name/platform/type`，补齐「检材信息」CSV 失败时缺失的检材行。
+- `tools/ges-index/query.mjs`：新增 `evidences(db)`（eid/name/holder/platform/type/remark/evidenceNumber/recordCount/label）；`tree('root')` 的 children 带 `name/person/platform/remark`；`tree('ev:<eid>')` 的 evidence 带全字段；`cite()` 与 `records()` 行带检材名；`statsOf()` 带 `evidences[]`。
+- 插件路由 `/seeu-index/evidences`；CLI `ev`/`evidences` 子命令 + `npm run index:ev`。
+- 面板树：`检材 3 · LEUNG_YL_mobile.zip · ios`，有备注的检材在名称后跟「备注：…」。
+- 技能 `ges-case-index` SKILL.md：新增「先认检材」段 —— 先 `/evidences` 拿 `name ↔ eid`，用户说检材名时按名称子串匹配，不要猜 eid；回答里写检材名称。
+
+**验证**（2026-11-11，真实案件 W盘）：
+- 重建：370 叶 / 22,777 记录 / 63.04 MiB / 224 s，schemaVersion 4；`ev` 输出 5 个检材，含名称、`recordCount`（3065/3/13718/68/25669）、`evidenceNumber`、eid1 的 remark。
+- `tree root`：`children[]` 每个检材带 `name/person/platform/remark`。
+- Electron 端到端（`.probe/m2-ui-check.mjs`）：`evNames: true`、`evRemark: true`、树根文本「检材 1 · CHAN_MH_mobile.zip 备注：伤人案(…)」…「检材 5 · FUNG_CC_mobile.zip · ios」，检索 `加密` 20 命中，七标签全绿，`errors: []`。
+- 开发态预览：`npm run dev:web -- --workspace <案件目录>` 直接起 dsh web（技能复制到 `.dev/dsh-home/skills`、固定端口注入 `SEEU_INDEX_API`），`/seeu-index/evidences` 与 `/tree` 均返回带名称的结果。
+
+**遗留**：`size_bytes`/`sha256` 仍为空（取自「检材信息」CSV，需按实际表头再核对）；`.gec` 结构若随火眼版本变化，`readCaseConfig` 会静默降级为空表（建库不受影响，但名称退回 CSV 值）。

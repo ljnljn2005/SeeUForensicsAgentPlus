@@ -228,7 +228,8 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
    校验（`integrity_check` + 覆盖率 + 基址率）通过后才原子替换，并写 `manifest.json`（指纹/统计/耗时/失败清单）。
 2. **扫描已有索引**：面板打开时自动扫描上次用的案件目录（`localStorage.seeu.indexDir`）以及 dsh 工作目录下的 `indexes/`；
    也可手填目录再点【扫描已有索引】。
-3. **树状导航**：案件 → 检材 N → 应用 → 账号 → 类别 → 文件 → 记录 → 引用，每层只显示摘要与计数，逐层点开。
+3. **树状导航**：案件 → 检材 N（**带火眼里的检材名称 / 平台 / 备注**）→ 应用 → 账号 → 类别 → 文件 → 记录 → 引用，每层只显示摘要与计数，逐层点开。
+   检材名称来自火眼案件配置 `<案件目录>\<案件名>.gec`（SQLite）的 `evidence` 表，因此界面上叫什么、面板和会话里就叫什么；
 4. **关键词检索**：输入后回车（≥3 字符走 FTS5 trigram，1–2 字中文自动退回 `LIKE`），命中行显示 `检材·应用 / 时间 / 片段`；
    点结果可看引用详情（`Goldeneyes://…` 句柄 + 可复制的 `ges read` 核验命令）。
 5. **记录 / 实体 / 时间线 / 表**（M2，v0.1.6 起）：
@@ -266,6 +267,8 @@ npm run index:search -- --db "…\\case-index.db" -q 加密
 npm run index:verify -- --db "…\\case-index.db" --sample 20          # 随机回火眼核对正文与基址
 ```
 
+- 检材清单：`node tools/ges-index/cli.mjs ev --db "…\case-index.db"` → `{evidences:[{eid,name,holder,platform,remark,...}]}`；
+  同 `npm run index:ev -- --db "…"`（会话里对应 `GET $SEEU_INDEX_API/evidences`）。
 - 只读火眼：仅调用 `case ls / case open / status / glob / read`；唯一写入是 `<案件目录>\.seeu-index\`。
 - 本案实测：370/370 叶、22,777 条记录、1,594 条消息、8,185 个实体、0 失败、建库 242–329 s、引用回查 20/20 一致。
 - 设计、schema、里程碑与实测明细见 `docs/plan-case-index.md`；工具用法见 `tools/ges-index/README.md`。

@@ -87,6 +87,36 @@ function helpers(db) {
   };
 }
 
+// ---------- 检材（evidence）----------
+
+/** 检材清单：eid → 名称/持有人/平台/备注/记录数（模型和面板判断「分析哪个检材」的依据）。 */
+export function evidences(db) {
+  let rows = [];
+  try {
+    rows = db.prepare(`select eid,name,holder,person_name,platform,type,timezone,remark,
+        evidence_number,record_count,size_bytes,sha256 from evidence order by eid`).all();
+  } catch {
+    rows = db.prepare('select eid,name,holder,platform,type,timezone from evidence order by eid').all();
+  }
+  return rows.map((r) => ({
+    eid: r.eid, name: r.name ?? '', holder: r.person_name || r.holder || '',
+    platform: r.platform ?? '', type: r.type ?? '', timezone: r.timezone ?? '',
+    remark: r.remark ?? '', evidenceNumber: r.evidence_number ?? '',
+    recordCount: r.record_count ?? null, sizeBytes: r.size_bytes ?? null,
+    sha256: r.sha256 ?? null,
+    label: [r.name, r.person_name || r.holder, r.platform].filter(Boolean).join(' · '),
+  }));
+}
+
+function evidenceName(db, eid) {
+  try {
+    const r = db.prepare('select name,person_name from evidence where eid=?').get(Number(eid));
+    return r ? [r.name, r.person_name].filter(Boolean).join(' · ') || null : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------- 树 ----------
 export function tree(db, node = 'root') {
   const { one, all } = helpers(db);
@@ -104,9 +134,18 @@ export function tree(db, node = 'root') {
         entities: one('select count(*) n from entity').n,
       },
       timeRange: one("select min(ts) f, max(ts) t from record where ts is not null and ts <> ''"),
-      children: all('select eid, count(*) artifacts, sum(line_count) lines from artifact group by eid order by eid')
-        .map((r) => ({ id: `ev:${r.eid}`, artifacts: r.artifacts, lines: r.lines })),
-      next: '展开检材：node "ev:<eid>"',
+      children: all(`select a.eid, count(*) artifacts, sum(a.line_count) lines,
+          (select name from evidence e where e.eid=a.eid) name,
+          (select person_name from evidence e where e.eid=a.eid) person,
+          (select platform from evidence e where e.eid=a.eid) platform,
+          (select remark from evidence e where e.eid=a.eid) remark
+        from artifact a group by a.eid order by a.eid`)
+        .map((r) => ({
+          id: `ev:${r.eid}`, eid: r.eid, name: r.name ?? null, person: r.person || null,
+          platform: r.platform || null, remark: r.remark || null,
+          artifacts: r.artifacts, lines: r.lines,
+        })),
+      next: '展开检材：node "ev:<eid>"（children 里的 name 就是火眼里的检材名称）',
     };
   }
   if (node.startsWith('ev:')) {
@@ -115,7 +154,8 @@ export function tree(db, node = 'root') {
       from artifact where eid=? group by app order by artifacts desc`, eid);
     return {
       node: `ev:${eid}`,
-      evidence: one('select eid,name,holder,platform,type,timezone,md5,sha256 from evidence where eid=?', eid) ?? null,
+      evidence: one(`select eid,name,holder,platform,type,timezone,md5,sha256,
+        person_name,remark,evidence_number,record_count from evidence where eid=?`, eid) ?? null,
       totals: one('select count(*) artifacts, sum(line_count) lines from artifact where eid=?', eid),
       children: rows.map((r) => ({ id: `app:${eid}|${enc(r.app)}`, app: r.app, accounts: r.accounts, artifacts: r.artifacts, lines: r.lines })),
     };
@@ -251,7 +291,7 @@ export function cite(db, id) {
   const r = db.prepare(`select r.*, a.virtual_path path from record r join artifact a on a.id=r.artifact_id where r.id=?`).get(Number(id));
   if (!r) { const e = new Error(`记录 ${id} 不存在`); e.code = 'E_NOT_FOUND'; throw e; }
   return {
-    id: r.id, eid: r.eid, app: r.app, account: r.account ?? '', cat: r.category,
+    id: r.id, eid: r.eid, ev: evidenceName(db, r.eid), app: r.app, account: r.account ?? '', cat: r.category,
     sub: r.subcat, ts: r.ts, line: r.line_no, path: shortPath(r.path),
     citable: !!r.base_handle,
     citation: r.base_handle ? `[[1]](${r.base_handle}#${r.line_no})` : null,
@@ -406,10 +446,11 @@ export function records(db, opts = {}) {
         const total = db.prepare('select count(*) n from record r' + ftsWhere).get(...params, kw).n;
         rows = db.prepare(select + ftsWhere + ' order by r.ts desc, r.id desc limit ? offset ?').all(...params, kw, limit, offset);
         engine = 'fts5-trigram';
+        const evMap = new Map(db.prepare('select eid,name from evidence').all().map((r2) => [r2.eid, r2.name]));
         return {
           query: kw, engine, returned: rows.length, total, offset,
           next: offset + rows.length < total ? offset + rows.length : null,
-          rows: rows.map((r) => ({ id: r.id, eid: r.eid, app: r.app, account: r.account ?? '', cat: r.category, sub: r.subcat, line: r.line_no, ts: r.ts, actor: r.actor, text: clip(r.text, 180) })),
+          rows: rows.map((r2) => ({ id: r2.id, eid: r2.eid, ev: evMap.get(r2.eid) ?? null, app: r2.app, account: r2.account ?? '', cat: r2.category, sub: r2.subcat, line: r2.line_no, ts: r2.ts, actor: r2.actor, text: clip(r2.text, 180) })),
         };
       } catch {
         rows = null;
@@ -422,10 +463,11 @@ export function records(db, opts = {}) {
   }
   const total = db.prepare('select count(*) n from record r' + where2).get(...params2).n;
   rows = db.prepare(select + where2 + ' order by r.ts desc, r.id desc limit ? offset ?').all(...params2, limit, offset);
+  const evMap = new Map(db.prepare('select eid,name from evidence').all().map((r) => [r.eid, r.name]));
   return {
     query: kw || null, engine, returned: rows.length, total, offset,
     next: offset + rows.length < total ? offset + rows.length : null,
-    rows: rows.map((r) => ({ id: r.id, eid: r.eid, app: r.app, account: r.account ?? '', cat: r.category, sub: r.subcat, line: r.line_no, ts: r.ts, actor: r.actor, text: clip(r.text, 180) })),
+    rows: rows.map((r) => ({ id: r.id, eid: r.eid, ev: evMap.get(r.eid) ?? null, app: r.app, account: r.account ?? '', cat: r.category, sub: r.subcat, line: r.line_no, ts: r.ts, actor: r.actor, text: clip(r.text, 180) })),
   };
 }
 
@@ -448,6 +490,7 @@ export function statsOf(db) {
     typed: typedTables(db),
     entityKinds: db.prepare('select kind, count(*) n, count(distinct eid) eids from entity group by kind order by n desc').all(),
     citations: one('select count(*) n from citation').n,
+    evidences: evidences(db),
   };
 }
 

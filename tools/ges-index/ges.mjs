@@ -2,7 +2,9 @@
 // 只读：本模块只调用 ls/status/case/glob/read/help，不写案件数据。
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 const execFileAsync = promisify(execFile);
 
@@ -109,4 +111,36 @@ export async function readLeaf(path, { pageSize = 200 } = {}) {
     offset += got;
   }
   return { baseHandle, total, lines };
+}
+
+/**
+ * 读火眼案件配置文件 `<caseDir>/<案件名>.gec`（SQLite）里的检材元数据。
+ * 这是火眼界面上「检材名称 / 持有人 / 备注」的真实来源；CLI `ges evidence ls` 只能给文件名。
+ * 只读打开，失败时返回空表（老版本/.gec 缺失都不影响建库）。
+ */
+export function readCaseConfig(caseDir) {
+  const evidences = new Map();
+  let file = null;
+  try {
+    if (!caseDir || !existsSync(caseDir)) return { file, evidences };
+    file = readdirSync(caseDir)
+      .filter((n) => n.toLowerCase().endsWith('.gec'))
+      .map((n) => join(caseDir, n))
+      .find((p) => {
+        try { return statSync(p).isFile(); } catch { return false; }
+      }) ?? null;
+    if (!file) return { file, evidences };
+    const db = new DatabaseSync(file, { readOnly: true });
+    try {
+      const rows = db.prepare(
+        `select id, name, person_name, remark, platform, type, record_count, evidence_number from evidence`,
+      ).all();
+      for (const r of rows) evidences.set(Number(r.id), r);
+    } finally {
+      db.close();
+    }
+    return { file, evidences };
+  } catch (e) {
+    return { file, evidences, error: String(e?.message ?? e) };
+  }
 }

@@ -1,7 +1,7 @@
 {
   "name": "seeu-forensics-agent-plus",
   "productName": "SeeUForensicsAgentPlus",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "type": "module",
   "description": "SeeUForensicsAgentPlus — 取证专用 DeepSeek Harness 桌面版",
@@ -37,7 +37,9 @@
     "index:xcase:sync": "node tools/ges-index/cli.mjs xcase sync",
     "index:xcase:list": "node tools/ges-index/cli.mjs xcase list",
     "index:xcase:top": "node tools/ges-index/cli.mjs xcase top --min-cases 2",
-    "index:xcase:stats": "node tools/ges-index/cli.mjs xcase stats"
+    "index:xcase:stats": "node tools/ges-index/cli.mjs xcase stats",
+    "index:ev": "node tools/ges-index/cli.mjs ev",
+    "dev:web": "node scripts/dev-web.mjs"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.1.0",
