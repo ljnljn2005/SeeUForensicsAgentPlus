@@ -71,6 +71,14 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
 
+### v0.2.7 待发布（未打包）
+
+> v0.2.6（`44808cb`）之后的改动，尚未打包；等验收后统一进 0.2.7。
+
+- **记录视图【导出 CSV】**：把当前筛选（检材/应用/类别/关键词/起止日期）命中的记录整批导出成 CSV 文件，Excel 双击打开不乱码（UTF-8 BOM + CRLF，逗号/引号/换行按 RFC 4180 转义）；默认导出前 20000 行（共 22,777 条时提示截断），文件落盘到 `<下载>/seeu-exports`（`SEEU_EXPORT_DIR` 可覆盖，e2e 用它读回断言）；web 预览（无 Electron 桥）自动回退为浏览器下载；
+- **CSV 后端**：新增 `tools/ges-index/csv.mjs`（纯函数，4 个单测）与插件接口 `GET /seeu-index/export/records.csv`（参数同 `/records`，响应头带 `x-seeu-rows/x-seeu-total/x-seeu-truncated`）；
+- **测试**：`npm test` 现 **54/54**（新增 CSV 4 例）；`export-check` 增加落盘文件校验（BOM、表头、20000 行、时间列）。
+
 ### v0.2.6 改了什么
 
 > 以下改动已进入 v0.2.6 安装包（累计 v0.2.5 之后的 8 个提交），打包态回归见 `docs/packaging.md`。
@@ -337,6 +345,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
    - **导出**：KPI 条下方有【复制案件概览】（Markdown 抬头：案件名/编号/目录/索引库/生成时间/规模 + 检材表：编号·名称·持有人·平台·记录数·备注，适合研判报告与交接）；
      记录视图与表视图都有【复制本页引用清单】（逐条回查 `Goldeneyes://` 句柄 + `ges read` 回查命令，Markdown 可直接粘进报告）；
      实体视图有【复制实体清单】（`[kind] 值 — 次数 · 检材`，跨检材行高亮）。`npm run test:e2e:export` 用系统剪贴板读回校验（含案件概览）。
+    记录视图另有【导出 CSV】（v0.2.7）：把当前筛选的整批记录写成 CSV 落盘（默认前 20000 行，Excel 直接开；`SEEU_EXPORT_DIR` 可改目录），e2e 会读回文件校验 BOM/表头/行数。
    引用一律回 `record.id` → `Goldeneyes://` 句柄，typed 表只是派生视图。
 
 > **M2 typed 层（v0.1.6）**：把火眼全解析结果按**真实表头签名**投影成 24 张结构化表（不按 app/category 硬编码），
@@ -370,6 +379,7 @@ npm run index:verify -- --db "…\\case-index.db" --sample 20          # 随机�
 - 检材清单：`node tools/ges-index/cli.mjs ev --db "…\case-index.db"` → `{evidences:[{eid,name,holder,platform,remark,...}]}`；
   同 `npm run index:ev -- --db "…"`（会话里对应 `GET $SEEU_INDEX_API/evidences`）。
 - 应用/类别选项：`GET $SEEU_INDEX_API/facets?db=…` → `{apps:[{app,n}],categories:[{category,n}],accounts:[{account,n}]}`（面板「应用」「类别」下拉与检索筛选就用它）。
+- 记录 CSV：`GET $SEEU_INDEX_API/export/records.csv?db=…&eid=&app=&category=&from=&to=&q=&max=20000` → `text/csv`（UTF-8 BOM + CRLF；响应头 `x-seeu-rows/x-seeu-total/x-seeu-truncated`）。
 - 只读火眼：仅调用 `case ls / case open / status / glob / read`；唯一写入是 `<案件目录>\.seeu-index\`。
 - 本案实测：370/370 叶、22,777 条记录、1,594 条消息、8,185 个实体、0 失败、建库 242–329 s、引用回查 20/20 一致。
 - 设计、schema、里程碑与实测明细见 `docs/plan-case-index.md`；工具用法见 `tools/ges-index/README.md`。

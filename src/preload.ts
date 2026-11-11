@@ -108,6 +108,8 @@ const api = {
   openLocalModelSettings: (): void => { ipcRenderer.send('seeu:open-settings') },
   quit: (): void => { ipcRenderer.send('seeu:quit') },
   writeClipboard: (text: string): Promise<boolean> => ipcRenderer.invoke('seeu:clipboard:write', text) as Promise<boolean>,
+  saveExport: (name: string, text: string): Promise<{ ok: boolean; path?: string; bytes?: number; error?: string }> =>
+    ipcRenderer.invoke('seeu:file:save-export', { name, text }) as Promise<{ ok: boolean; path?: string; bytes?: number; error?: string }>,
   localModel: {
     get: (): Promise<LocalModelView> => ipcRenderer.invoke('seeu:local-model:get') as Promise<LocalModelView>,
     save: (config: unknown): Promise<LocalModelSaveResult> =>

@@ -5,6 +5,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
 import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records, evidences, facets } from '../../tools/ges-index/query.mjs';
+import { recordsCsv } from '../../tools/ges-index/csv.mjs';
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
 
 const ROUTE = '/seeu-index';
@@ -54,6 +55,16 @@ function send(res, status, body) {
     'cache-control': 'no-store',
     // 同源调用；显式允许本机其它端口的调试读取（不涉及凭据）
     'access-control-allow-origin': '*',
+  });
+  res.end(text);
+}
+
+function sendText(res, status, text, headers = {}) {
+  res.writeHead(status, {
+    'content-type': 'text/plain; charset=utf-8',
+    'cache-control': 'no-store',
+    'access-control-allow-origin': '*',
+    ...headers,
   });
   res.end(text);
 }
@@ -221,6 +232,30 @@ async function handle(req, res) {
         const opts = { limit: url.searchParams.get('limit') ?? 20, offset: url.searchParams.get('offset') ?? 0 };
         for (const k of ['eid', 'app', 'account', 'category', 'artifact', 'from', 'to']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
         return send(res, 200, records(db, opts));
+      }
+      if (path === '/export/records.csv') {
+        const opts = {};
+        for (const k of ['eid', 'app', 'account', 'category', 'artifact', 'from', 'to', 'q']) {
+          if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
+        }
+        const max = Math.min(20000, Math.max(1, Number(url.searchParams.get('max')) || 20000));
+        const pageSize = 100;
+        const rows = [];
+        let total = 0;
+        for (let off = 0; off < max; off += pageSize) {
+          const page = records(db, { ...opts, limit: pageSize, offset: off });
+          total = page.total;
+          rows.push(...page.rows);
+          if (page.next == null || rows.length >= max) break;
+        }
+        const csv = recordsCsv(rows.slice(0, max));
+        return sendText(res, 200, csv, {
+          'content-type': 'text/csv; charset=utf-8',
+          'content-disposition': `attachment; filename="seeu-records-${Date.now()}.csv"`,
+          'x-seeu-rows': String(rows.length),
+          'x-seeu-total': String(total),
+          'x-seeu-truncated': String(total > rows.length),
+        });
       }
       if (path === '/verify') return send(res, 200, await verify(db, { sample: url.searchParams.get('sample') ?? 20 }));
     } finally {

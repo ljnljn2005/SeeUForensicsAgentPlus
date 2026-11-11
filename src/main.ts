@@ -10,7 +10,7 @@
  */
 
 import { app, BrowserWindow, Menu, Tray, clipboard, dialog, ipcMain, nativeImage, session, shell, type MenuItemConstructorOptions } from 'electron'
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   APP_ID,
@@ -544,6 +544,23 @@ function registerIpc(): void {
   ipcMain.handle('seeu:clipboard:write', (_event, text: unknown) => {
     clipboard.writeText(String(text ?? ''))
     return true
+  })
+  // 面板导出的落盘（CSV 等）：默认存到 <下载>/seeu-exports，SEEU_EXPORT_DIR 可覆盖（e2e 用）。
+  ipcMain.handle('seeu:file:save-export', (_event, input: unknown) => {
+    const payload = input as { name?: unknown; text?: unknown } | null
+    const text = typeof payload?.text === 'string' ? payload.text : ''
+    if (!text) return { ok: false, error: '导出内容为空' }
+    const dir = process.env.SEEU_EXPORT_DIR || join(app.getPath('downloads'), 'seeu-exports')
+    const rawName = typeof payload?.name === 'string' && payload.name.trim() ? payload.name.trim() : 'seeu-export.csv'
+    const safeName = rawName.replace(/[\\/:*?"<>|\r\n]+/g, '_').slice(0, 120) || 'seeu-export.csv'
+    try {
+      mkdirSync(dir, { recursive: true })
+      const target = join(dir, safeName)
+      writeFileSync(target, text, 'utf8')
+      return { ok: true, path: target, bytes: Buffer.byteLength(text, 'utf8') }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
   })
   ipcMain.handle('seeu:info', () => ({
     productName: PRODUCT_NAME,

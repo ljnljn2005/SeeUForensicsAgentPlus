@@ -10,6 +10,7 @@
  * 产出：一行 REPORT JSON。
  */
 import { spawn, execFileSync } from 'node:child_process'
+import { readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { request } from 'node:http'
 import { join } from 'node:path'
 
@@ -19,6 +20,7 @@ const exeOverride = process.env.SEEU_UI_EXE
 const electron = exeOverride || join(root, 'node_modules', 'electron', 'dist', 'electron.exe')
 const CASE_DIR = process.env.SEEU_CASE_DIR || 'E:\\forensics\\W盘_2919d298-f083-4a81-9c12-bd4ca393bcc5'
 const KEYWORD = process.env.SEEU_SEARCH_KEYWORD || '加密'
+const EXPORT_DIR = process.env.SEEU_EXPORT_DIR || join(root, '.dev', 'exports')
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 function get(url, timeout = 3000) {
@@ -38,6 +40,8 @@ function get(url, timeout = 3000) {
 const env = { ...process.env }
 delete env.ELECTRON_RUN_AS_NODE
 env.SEEU_DEV_MULTI = '1'
+env.SEEU_EXPORT_DIR = EXPORT_DIR
+rmSync(EXPORT_DIR, { recursive: true, force: true })
 if (process.env.SEEU_NO_KILL !== '1') {
   try {
     execFileSync('taskkill', ['/F', '/IM', exeOverride ? 'SeeUForensicsAgentPlus.exe' : 'electron.exe', '/T'], { stdio: 'ignore' })
@@ -154,6 +158,26 @@ const readClipboard = () => {
   } catch { return '' }
 }
 
+// 读回【导出 CSV】落盘的文件（取目录里最新的「记录导出-*.csv」）
+const readLatestCsv = () => {
+  try {
+    const files = readdirSync(EXPORT_DIR).filter((f) => /^记录导出-.*[.]csv$/.test(f))
+    if (!files.length) return null
+    const latest = files
+      .map((f) => ({ f, t: statSync(join(EXPORT_DIR, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t)[0]
+    const buf = readFileSync(join(EXPORT_DIR, latest.f))
+    return {
+      name: latest.f,
+      bytes: buf.length,
+      bom: buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf,
+      text: buf.toString('utf8'),
+    }
+  } catch {
+    return null
+  }
+}
+
 const noteText = async (regex) => {
   const body = String((await evaluate('document.body.innerText')) ?? '')
   const m = body.match(regex)
@@ -200,6 +224,22 @@ try {
     hasRecheck: /回查：/.test(clipRecords),
   }
 
+  // ---- 1b) 记录视图：导出 CSV 落到本地文件 ----
+  report.csvClicked = await clickText('导出 CSV')
+  await sleep(3500)
+  report.csvNote = await noteText(/已导出\s*\d+\s*行[^\n]*/)
+  const csv = readLatestCsv()
+  report.csvFile = csv
+    ? {
+        name: csv.name,
+        bytes: csv.bytes,
+        bom: csv.bom,
+        hasHeader: csv.text.includes('检材号,检材名称,应用,账号,类别,子类,时间,行号,记录ID,摘要'),
+        dataLines: csv.text.replace(/^\uFEFF/, '').split('\r\n').filter(Boolean).length - 1,
+        hasTs: /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(csv.text),
+      }
+    : null
+
   // ---- 2) 实体视图：复制实体清单 ----
   report.tabEntity = await clickTab('实体')
   await sleep(2200)
@@ -245,6 +285,7 @@ try {
   report.ok = report.panelOpened && report.scanned &&
     report.overviewCopied && report.overviewClipboard.hasHeader && report.overviewClipboard.hasTable && report.overviewClipboard.hasScale && report.overviewClipboard.hasRange && report.overviewClipboard.len > 0 &&
     report.tabRecords && report.recordsCopied && report.recordsClipboard.hasHeader && report.recordsClipboard.hasCite && report.recordsClipboard.len > 0 &&
+    report.csvClicked && !!report.csvFile && report.csvFile.bom && report.csvFile.hasHeader && report.csvFile.dataLines > 0 && report.csvFile.hasTs &&
     report.tabEntity && report.entityCopied && report.entityClipboard.hasHeader && report.entityClipboard.len > 0 &&
     report.tabTables && !!report.tablePicked && report.tableCopied && report.tableClipboard.hasHeader && report.tableClipboard.hasCite &&
     report.tabTimeline && report.timelineCopied && report.timelineClipboard.hasHeader && report.timelineClipboard.hasBucket &&

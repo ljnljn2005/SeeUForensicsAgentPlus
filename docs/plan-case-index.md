@@ -1687,3 +1687,16 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 打包态 e2e 全绿：面板 `m2-ui-check`（`recordsFilterOk`/`recordsAppFilterOk`/`entityPagingOk`/`entityEvSelectOk`/`timelineFiltersOk`/`briefVisible`/`treeFilterOk`/`kpiRange`，`m2ok:true`）；设置页 `settings-check`（`titleGen*`、`usage*`、`warmupOk`、`pulledContextWindow:32768`、`probeMismatch`、`lightShell`）；导出 `export-check`（概览 718 且 `hasRange`、记录 14,996/实体 1,888/表 7,025/时间线 3,235 字符）；跨案 `cross-case-check`（2 案、30 条重合实体、清单 2,675 字符含两案号）。
 - 坑：`SEEU_UI_EXE` 必须传 Windows 路径（`D:/...`），MSYS 的 `$PWD`（`/d/...`）会让 `spawn` 报 ENOENT；打包日志里 `duplicate dependency references` 巨量列表是 electron-builder 正常输出。
 - 文档：README §2 产物表换 0.2.6 + 「### v0.2.6 改了什么」收尾（50 单测 / 16 个 e2e）；`docs/packaging.md` 追加「### v0.2.6 回归验证」；本节即打包记录。预览仍在线，等用户视觉验收 + 真实网关联调。
+
+## 20.52 记录视图导出 CSV（v0.2.7 起，未打包）
+
+- 动机：面板里「复制引用清单」给的是 Markdown（适合粘报告），但研判时经常要在 Excel 里排序、透视、按检材分表；此前只能整库拿去 SQLite 里查。
+- 后端：
+  - 新文件 `tools/ges-index/csv.mjs`：`RECORD_CSV_HEADER`（检材号/检材名称/应用/账号/类别/子类/时间/行号/记录ID/摘要）、`csvCell()`（逗号/引号/换行按 RFC 4180 加引号并双写引号，null → 空）、`csvLine()`、`recordsCsv(rows,{bom,header})`（默认 UTF-8 BOM + CRLF，Excel 双击打开不乱码）；
+  - `tests/csv.test.mjs` 4 例（转义规则、行映射、BOM 开关、空表只有表头）；
+  - 插件新增 `GET /seeu-index/export/records.csv`：参数与 `/records` 一致（`eid/app/account/category/artifact/from/to/q`，另加 `max`），内部按 100 行/页循环取满（默认与上限 20000），响应 `text/csv; charset=utf-8` + `content-disposition` + `x-seeu-rows`/`x-seeu-total`/`x-seeu-truncated`。
+- 外壳：`src/main.ts` 新增 IPC `seeu:file:save-export`（`{name,text}` → 落盘到 `SEEU_EXPORT_DIR` 或 `<下载>/seeu-exports`，文件名去掉 `\/:*?"<>|` 并截 120 字符，返回 `{ok,path,bytes}`）；`src/preload.ts` 暴露 `window.seeu.saveExport(name,text)`。
+- 面板：`RecordsView` 头部多【导出 CSV】：按当前 `applied` 筛选拼 query → `fetch` 取 CSV → 有 Electron 桥就落盘并在下方显示「已导出 N 行（共 M 条，单次最多 20000 行）到 <路径>」，web 预览（无桥）回退成 `Blob` + `<a download>`。
+- 坑：**`fetch` 的 `Response.text()` 会吃掉 BOM**（`TextDecoder` 默认忽略 BOM），第一版实测 `csvFile.bom:false`、Excel 打开中文可能乱码；在客户端保存前补回 `'\uFEFF'` 前缀即修复（实测 4,608,566 B、`bom:true`、20,000 行）。
+- 验证：`npm test` **54/54**；`export-check`（`.dev/exports` 隔离目录，`SEEU_EXPORT_E2E_PORT=9412`）`{"ok":true,"csvClicked":true,"csvNote":"已导出 20000 行（共 22777 条，单次最多 20000 行）…","csvFile":{"bytes":4608566,"bom":true,"hasHeader":true,"dataLines":20000,"hasTs":true},"errors":[]}`，其余导出步骤（概览 718 / 记录 14,996 / 实体 1,888 / 表 7,025 / 时间线 3,235 字符）不变；`m2-ui-check` `m2ok:true / errors:[]`。
+- 遗留：CSV 只覆盖记录视图（表/时间线仍是 Markdown 清单）；20000 行是硬上限（22,777 条会被截断并提示，需要全量可调 `max` 或改 SQLite 直查）；时间列按索引里的字符串原样输出，不换算时区。

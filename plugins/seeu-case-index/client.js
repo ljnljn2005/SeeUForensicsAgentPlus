@@ -378,6 +378,8 @@ window.__ModuleLoader__.load({
       const [offset, setOffset] = useState(0);
       const [copying, setCopying] = useState(false);
       const [note, setNote] = useState('');
+      const [exporting, setExporting] = useState(false);
+      const [exportNote, setExportNote] = useState('');
       // 检材下拉（名称来自 /evidences），用户不用记 eid
       const [evList, setEvList] = useState([]);
       // 应用/类别下拉：来自 /facets（按当前库的 record 统计）
@@ -443,6 +445,48 @@ window.__ModuleLoader__.load({
           setCopying(false);
         }
       };
+      // 把当前筛选的整批记录导出成 CSV 文件（Excel 可直接打开；web 预览回退为浏览器下载）
+      const exportCsv = async () => {
+        if (exporting || !db) return;
+        setExporting(true);
+        setExportNote('');
+        try {
+          const qs = new URLSearchParams({ db });
+          for (const [k, v] of Object.entries(applied)) if (v !== '' && v != null) qs.set(k, String(v));
+          qs.set('max', '20000');
+          const res = await fetch('/seeu-index/export/records.csv?' + qs.toString());
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const raw = await res.text();
+          // 注意：fetch 的 Response.text() 会吃掉 BOM，而 Excel 需要 BOM 才不乱码，所以这里补回去
+          const text = raw.startsWith('\uFEFF') ? raw : '\uFEFF' + raw;
+          const rowsOut = Number(res.headers.get('x-seeu-rows') ?? 0);
+          const totalOut = Number(res.headers.get('x-seeu-total') ?? rowsOut);
+          const now = new Date();
+          const pad = (n) => String(n).padStart(2, '0');
+          const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+          const name = '记录导出-' + stamp + '.csv';
+          const saved = window.seeu && typeof window.seeu.saveExport === 'function'
+            ? await window.seeu.saveExport(name, text)
+            : null;
+          if (saved && saved.ok) {
+            setExportNote('已导出 ' + rowsOut + ' 行' + (totalOut > rowsOut ? '（共 ' + totalOut + ' 条，单次最多 20000 行）' : '') + '到 ' + saved.path);
+          } else if (saved && !saved.ok) {
+            setExportNote('导出失败：' + (saved.error ?? '未知错误'));
+          } else {
+            const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = name;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            setExportNote('已下载 ' + rowsOut + ' 行' + (totalOut > rowsOut ? '（共 ' + totalOut + ' 条）' : '') + '：' + name);
+          }
+        } catch (e) {
+          setExportNote('导出失败：' + String(e.message ?? e));
+        } finally {
+          setExporting(false);
+        }
+      };
       return h('div', { style: S.card },
         h('div', { style: { ...S.row, gap: 6 } },
           h('select', {
@@ -492,8 +536,10 @@ window.__ModuleLoader__.load({
             h('span', { style: S.muted }, `当前 ${data.offset + 1}-${data.offset + data.returned}`),
             loading ? h('span', { style: S.muted }, '更新中…') : null,
             h('span', { style: { marginLeft: 'auto' } },
-              actionButton(copying ? '复制中…' : '复制本页引用清单', copyPage, { disabled: copying }))),
+              actionButton(copying ? '复制中…' : '复制本页引用清单', copyPage, { disabled: copying }),
+              actionButton(exporting ? '导出中…' : '导出 CSV', exportCsv, { disabled: exporting }))),
           note ? h('div', { style: S.noticeInfo }, note) : null,
+          exportNote ? h('div', { style: S.noticeInfo }, exportNote) : null,
           h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 420, overflow: 'auto' } },
             rows.map((r) => h('div', {
               key: r.id,
