@@ -1638,3 +1638,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 案件概览导出加 `- 数据时间范围：…` 一行（`export-check` 新增 `hasRange` 断言并纳入 `ok`）。
 - 验证：`m2-ui-check` 新增 `kpiRange`（KPI 文本含「时间范围」+ `\d{4}-\d{2}-\d{2} ~ …`）、`treeFilterVisible`/`treeFilterEmpty`/`treeFilterOk`（检材 3 下 8 个应用节点，输入 `zzzz-no-match` 出现空匹配文案，清空后行数恢复 8）→ 实测 `kpiRange:true, treeFilterVisible:true, treeFilterOk:true, treeRowsBefore/After:8/8, m2ok:true, errors:[]`；`export-check` 覆盖 `hasRange`；`npm test` 45/45。
 - 遗留：树过滤只作用于已加载的当前层，跨层搜索仍用「检索」标签；过滤不做拼音/模糊匹配。
+
+## 20.46 应用/类别下拉（/facets）——检索与记录视图不再手输应用名（v0.2.6 起）
+
+- 问题：检索与记录视图的「应用」「类别」是手输框，用户得记住索引里的应用拼写（WhatsApp / 微信 / 苹果健康…），本地小模型也常拼错；而索引里 `record.app/category` 是现成的枚举。
+- 实现：`tools/ges-index/query.mjs` 新增 `facets(db, opts)` → `{eid, apps:[{app,n}], categories:[{category,n}], accounts:[{account,n}]}`（`group by` + 记录数倒序，各取 60/60/40 条，空值过滤；`eid` 可选缩小到单个检材）；插件新增 `GET /facets?db=&eid=`；面板 `Panel` 与 `RecordsView` 各自 `useEffect` 取 facets，检索「应用」、记录「应用」「类别」改成 `<select>`（选项文案 `应用（记录数）`，首个选项「全部应用/全部类别」）。
+- 验证：`m2-ui-check` 新增 `searchAppOptions`（检索视图应用下拉选项数，实测 **9**）、`searchAppSelect`、`recordsAppPick`/`recordsAppCount`/`recordsAppFilterOk`（记录视图选「苹果健康」→ 记录从 22,777 → **3,028**，仍 >0）→ `{"searchAppOptions":9,"searchAppSelect":true,"recordsAppPick":"苹果健康","recordsAppCount":3028,"recordsAppFilterOk":true,"m2ok":true,"errors":[]}`；`npm test` 48/48（新增 `tests/facets.test.mjs` 3 例：分组计数/首项最大/eid 过滤/空库）；`check:overlay` OK。
+- 遗留：facets 只列 top N（60/60/40），极少数低频应用不在下拉里；需要时仍可用 CLI/API 传精确值；时间线视图的应用筛选仍是手输。

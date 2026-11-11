@@ -432,6 +432,17 @@ export function timeline(db, opts = {}) {
 }
 
 /** 记录分页（给面板「记录」视图与深链）。 */
+export function facets(db, opts = {}) {
+  const conds = [];
+  const params = [];
+  if (opts.eid) { conds.push('eid=?'); params.push(Number(opts.eid)); }
+  const extra = conds.length ? ' and ' + conds.join(' and ') : '';
+  const apps = db.prepare(`select app, count(*) n from record where ifnull(app,'')<>''${extra} group by app order by n desc limit 60`).all(...params);
+  const categories = db.prepare(`select category, count(*) n from record where ifnull(category,'')<>''${extra} group by category order by n desc limit 60`).all(...params);
+  const accounts = db.prepare(`select account, count(*) n from record where ifnull(account,'')<>''${extra} group by account order by n desc limit 40`).all(...params);
+  return { eid: opts.eid ? Number(opts.eid) : null, apps, categories, accounts };
+}
+
 export function records(db, opts = {}) {
   const limit = Math.min(200, Number(opts.limit) || 20);
   const offset = Math.max(0, Number(opts.offset) || 0);

@@ -105,7 +105,8 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 ### v0.2.2 改了什么
 
 - **欢迎页快捷入口**：品牌块下方三枚按钮——打开「取证索引」面板 / 本地模型设置 / 打开取证工作区（纯 web 预览无 preload 桥时只显示第一个）；
-- **检索筛选**：检材（下拉直接选火眼里的检材名称，不用记 eid）、应用（精确）、起止日期四个条件与关键词 AND 组合，条件存在时出现【清空筛选】，筛选会带到检索结果与导出清单的抬头里；
+- **检索筛选**：检材（下拉直接选火眼里的检材名称，不用记 eid）、应用（下拉选索引里出现过的应用，带记录数）、起止日期四个条件与关键词 AND 组合，条件存在时出现【清空筛选】，筛选会带到检索结果与导出清单的抬头里；
+- **应用/类别下拉**：检索与记录视图的「应用」「类别」不再是手输框，选项来自新接口 `GET /facets`（对当前库的 `record` 做 `group by app/category`，带记录数，各取前 60 项），省得记应用名拼写；`/facets` 也支持 `?eid=` 只看某个检材（新增 3 个 facets 单测，`npm test` 现 **48/48**）；
 - **命中高亮**：检索结果与记录视图里查询词用强调色底高亮（`<mark class="seeu-hl">`，跟随主题 token），一眼能看出为什么命中；
 - **外壳窗口跟随系统浅色**：加载页 / 启动失败页 / 本地模型设置窗口原先只有深色盘，现在加了 `@media (prefers-color-scheme: light)` 覆盖（浅色下强调色换成 `#0E7490`，按钮文字随之改白），白天或投屏时不刺眼；dsh 主界面的深浅色仍由 `ui-theme` 控制；
 - **引用清单导出**：检索结果【复制引用清单】、记录视图【复制本页引用清单】、表视图【复制本页引用清单】、实体视图【复制实体清单】，每条都回查 Goldeneyes 句柄，输出 Markdown（抬头含关键词/筛选/索引库/时间，正文带 `引用：` 与可直接执行的 `回查：ges read …`，无句柄行标注并在文末统计）；
@@ -351,6 +352,7 @@ npm run index:verify -- --db "…\\case-index.db" --sample 20          # 随机�
 
 - 检材清单：`node tools/ges-index/cli.mjs ev --db "…\case-index.db"` → `{evidences:[{eid,name,holder,platform,remark,...}]}`；
   同 `npm run index:ev -- --db "…"`（会话里对应 `GET $SEEU_INDEX_API/evidences`）。
+- 应用/类别选项：`GET $SEEU_INDEX_API/facets?db=…` → `{apps:[{app,n}],categories:[{category,n}],accounts:[{account,n}]}`（面板「应用」「类别」下拉与检索筛选就用它）。
 - 只读火眼：仅调用 `case ls / case open / status / glob / read`；唯一写入是 `<案件目录>\.seeu-index\`。
 - 本案实测：370/370 叶、22,777 条记录、1,594 条消息、8,185 个实体、0 失败、建库 242–329 s、引用回查 20/20 一致。
 - 设计、schema、里程碑与实测明细见 `docs/plan-case-index.md`；工具用法见 `tools/ges-index/README.md`。

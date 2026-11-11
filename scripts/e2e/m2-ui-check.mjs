@@ -180,6 +180,12 @@ report.searchEnter = report.searchTyped
 await sleep(7000)
 text = await bodyText()
 report.searchOk = /引擎 (trigram|like) · \d+ 命中/.test(text)
+// 检索视图的应用筛选应是下拉（选项来自 /facets，带记录数）
+report.searchAppOptions = await ev(`(() => {
+  const sel = [...document.querySelectorAll('select')].find(s => [...s.options].some(o => /（\\d+）$/.test(o.textContent)))
+  return sel ? sel.options.length : 0
+})()`)
+report.searchAppSelect = Number(report.searchAppOptions) > 1
 // 检索结果行的检材标签应是名称（如 LEUNG_YL_mobile.zip），而不是只有 eid
 report.searchEvNames = /(CHAN_MH_mobile\.zip|LEUNG_YL_mobile\.zip|FUNG_CC_mobile\.zip|IQ_Coin_Type_Transactions\.zip|AP3_LEUNG_YL_USB\.E01)/.test(text)
 const idx = text.indexOf('引擎')
@@ -212,6 +218,23 @@ text = await bodyText()
 report.recordsAfterCount = Number((text.match(/记录 (\d+) 条/) || [])[1] ?? 0)
 report.recordsFilterText = (text.match(/记录 \d+ 条/) || [''])[0]
 report.recordsFilterOk = report.recordsFilterPick === 'ok' && report.recordsBeforeCount > 0 && report.recordsAfterCount > 0 && report.recordsAfterCount < report.recordsBeforeCount && /LEUNG_YL_mobile\.zip/.test(text)
+// 记录视图：应用下拉（来自 /facets）——选第二个应用后条数应减少且大于 0
+report.recordsAppPick = await ev(`(() => {
+  const sel = [...document.querySelectorAll('select')].find(s => [...s.options].some(o => /（\\d+）$/.test(o.textContent)))
+  if (!sel) return 'no-select'
+  const opt = [...sel.options].find(o => o.value && /（\\d+）$/.test(o.textContent))
+  if (!opt) return 'no-option'
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set
+  setter.call(sel, opt.value)
+  sel.dispatchEvent(new Event('change', { bubbles: true }))
+  const btn = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === '查询')
+  if (btn) btn.click()
+  return opt.value
+})()`)
+await sleep(3000)
+text = await bodyText()
+report.recordsAppCount = Number((text.match(/记录 (\d+) 条/) || [])[1] ?? 0)
+report.recordsAppFilterOk = typeof report.recordsAppPick === 'string' && report.recordsAppPick !== 'no-select' && report.recordsAppPick !== 'no-option' && report.recordsAppCount > 0 && report.recordsAppCount < report.recordsBeforeCount
 await ev(`(() => {
   const btn = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === '清空')
   if (btn) btn.click()
@@ -227,7 +250,7 @@ report.timelineText = text.slice(text.indexOf('时间线'), text.indexOf('时间
 report.tabTablesClick = await openTab('表')
 text = await bodyText()
 report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
-report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true
+report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true
 
 // ---------- 浅色主题回归（SEEU_E2E_THEME=light；暗色为默认） ----------
 if (process.env.SEEU_E2E_THEME === 'light') {

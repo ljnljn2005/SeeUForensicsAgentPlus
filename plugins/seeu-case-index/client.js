@@ -380,15 +380,23 @@ window.__ModuleLoader__.load({
       const [note, setNote] = useState('');
       // 检材下拉（名称来自 /evidences），用户不用记 eid
       const [evList, setEvList] = useState([]);
+      // 应用/类别下拉：来自 /facets（按当前库的 record 统计）
+      const [facets, setFacets] = useState(null);
       useEffect(() => {
         let alive = true;
-        if (!db) { setEvList([]); return undefined; }
+        if (!db) { setEvList([]); setFacets(null); return undefined; }
         (async () => {
           try {
             const body = await api('/evidences', { db });
             if (alive) setEvList(body?.evidences ?? []);
           } catch {
             if (alive) setEvList([]);
+          }
+          try {
+            const f = await api('/facets', { db });
+            if (alive) setFacets(f?.apps?.length ? f : null);
+          } catch {
+            if (alive) setFacets(null);
           }
         })();
         return () => { alive = false; };
@@ -447,8 +455,26 @@ window.__ModuleLoader__.load({
           },
             h('option', { value: '' }, '全部检材'),
             ...evList.map((ev) => h('option', { key: ev.eid, value: String(ev.eid) }, '检材 ' + ev.eid + (ev.name ? ' · ' + ev.name : '') + (ev.platform ? ' · ' + ev.platform : '')))),
-          narrowInput(draft.app, (v) => setDraft((d) => ({ ...d, app: v })), '应用 app', { width: 96, onEnter: apply }),
-          narrowInput(draft.category, (v) => setDraft((d) => ({ ...d, category: v })), '类别 category', { width: 104, onEnter: apply }),
+          h('select', {
+            style: { ...S.input, flex: 'none', width: 150 },
+            value: draft.app ?? '',
+            disabled: !db,
+            title: '按应用筛选：下拉里是索引里出现过的应用（带记录数）',
+            onChange: (e) => setDraft((d) => ({ ...d, app: e.target.value })),
+            onKeyDown: (e) => { if (e.key === 'Enter') apply(); },
+          },
+            h('option', { value: '' }, '全部应用'),
+            ...((facets?.apps ?? []).map((a) => h('option', { key: a.app, value: a.app }, a.app + '（' + a.n + '）')))),
+          h('select', {
+            style: { ...S.input, flex: 'none', width: 150 },
+            value: draft.category ?? '',
+            disabled: !db,
+            title: '按类别筛选：下拉里是索引里出现过的类别（带记录数）',
+            onChange: (e) => setDraft((d) => ({ ...d, category: e.target.value })),
+            onKeyDown: (e) => { if (e.key === 'Enter') apply(); },
+          },
+            h('option', { value: '' }, '全部类别'),
+            ...((facets?.categories ?? []).map((a) => h('option', { key: a.category, value: a.category }, a.category + '（' + a.n + '）')))),
           narrowInput(draft.q, (v) => setDraft((d) => ({ ...d, q: v })), '关键词 q', { width: 140, onEnter: apply }),
           narrowInput(draft.from, (v) => setDraft((d) => ({ ...d, from: v })), '起 2025-04-01', { width: 108, onEnter: apply }),
           narrowInput(draft.to, (v) => setDraft((d) => ({ ...d, to: v })), '止 2025-04-30', { width: 108, onEnter: apply }),
@@ -1043,6 +1069,8 @@ window.__ModuleLoader__.load({
       const [filters, setFilters] = useState({ eid: '', app: '', from: '', to: '' });
       // 检索筛选用的检材下拉：从 /evidences 拿「eid + 名称 + 平台」，用户不用记 eid
       const [evList, setEvList] = useState([]);
+      // 应用/类别下拉：来自 /facets（按当前库的 record 统计），省得手输应用名
+      const [facets, setFacets] = useState(null);
       // 会话上下文（<DSH_HOME>/AGENTS.md）里案件概览的注入状态：让「模型已经知道检材」可见
       const [briefInfo, setBriefInfo] = useState(null);
       const [briefNote, setBriefNote] = useState('');
@@ -1057,6 +1085,12 @@ window.__ModuleLoader__.load({
             if (alive) setEvList(body?.evidences ?? []);
           } catch {
             if (alive) setEvList([]);
+          }
+          try {
+            const f = await api('/facets', { db });
+            if (alive) setFacets(f?.apps?.length ? f : null);
+          } catch {
+            if (alive) setFacets(null);
           }
         })();
         return () => { alive = false; };
@@ -1594,7 +1628,16 @@ window.__ModuleLoader__.load({
                 h('option', { value: '' }, '全部检材'),
                 ...evList.map((ev) => h('option', { key: ev.eid, value: String(ev.eid) },
                   '检材 ' + ev.eid + (ev.name ? ' · ' + ev.name : '') + (ev.platform ? ' · ' + ev.platform : '')))),
-              narrowInput(filters.app, (v) => setFilters((f) => ({ ...f, app: v })), '应用 app（精确）', { width: 116, disabled: !db, onEnter: doSearch }),
+              h('select', {
+                style: { ...S.input, flex: 'none', width: 160 },
+                value: filters.app,
+                disabled: !db,
+                title: '按应用筛选：下拉里是索引里出现过的应用（带记录数）',
+                onChange: (e) => setFilters((f) => ({ ...f, app: e.target.value })),
+                onKeyDown: (e) => { if (e.key === 'Enter') doSearch(); },
+              },
+                h('option', { value: '' }, '全部应用'),
+                ...((facets?.apps ?? []).map((a) => h('option', { key: a.app, value: a.app }, a.app + '（' + a.n + '）')))),
               narrowInput(filters.from, (v) => setFilters((f) => ({ ...f, from: v })), '起始 2025-04-01', { width: 112, disabled: !db, onEnter: doSearch }),
               narrowInput(filters.to, (v) => setFilters((f) => ({ ...f, to: v })), '结束 2025-04-30', { width: 112, disabled: !db, onEnter: doSearch }),
               actionButton('按筛选检索', doSearch, { disabled: !db || !query.trim() || busy === 'search' }),
