@@ -1558,3 +1558,27 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 **这一包相对 0.2.3 的累积改动**：案件概览导出、检索分页、导出全部命中、浅色主题回归、欢迎页最近案件 chip、窗口超限提示、网关预热、欢迎页默认本地模型 chip、检索筛选检材下拉、检索结果行显示检材名。
 
 遗留：打包过程中后台作业占用执行器，期间其它 bash 调用会报 `EXECUTOR_UNAVAILABLE`；下次打包尽量单独跑、不要在等待时并行起命令。
+
+### 20.38 会话自动注入「案件概览」（v0.2.4 之后）
+
+**问题**：本地小模型首轮不知道分析哪个检材；`ges-case-index` 技能虽然教了模型先查 `/evidences`，但小模型常常跳过这步直接猜 eid，或把上下文花在反复调工具上。
+
+**关键事实（排障过程）**：
+
+- dsh Web 的会话工作区**不是**外壳进程的 cwd：默认是 `C:\Users\<用户>\Documents\deepseek-harness\default-workspace`（会话目录名 `--C-Users-...-deepseek-harness-default-workspace--`），所以只写 `<SEEU_WORKSPACE>/AGENTS.md` 不会被读到（`src/host.ts` 的 `spawn(..., { cwd: this.workspace })` 只影响子进程 cwd，不影响 dsh 的 Workspace 默认值）。
+- `agent-instructions` 除了项目/工作区候选文件，还会读**用户级** `<DSH_HOME>/AGENTS.md`（`dsh-agent-instructions/lib/index.js:168,731`，`USER_GLOBAL_DIRECTORIES` 含 dsh home），这条与会话工作区无关，是可靠的注入点。
+- `tree(db, 'root')` 的规模数字在 `root.totals`（`records/entities/artifacts/evidences/messages/chats`），没有顶层 `records` 字段。
+
+**实现**：
+
+- `plugins/seeu-case-index/index.js` 新增 `writeCaseBrief(indexes?)`：`findIndexes(briefDirs())`（状态文件 + `SEEU_INDEX_SEARCH_DIRS`）→ 取 `tree(root)` 的 `totals/timeRange` 与 `evidences(db)` → 生成带 `<!-- seeu-case-brief ... -->` / `<!-- /seeu-case-brief -->` 标记的 Markdown 区块（案件名、索引库路径、规模、时间范围、`eid|检材|名称|平台|记录数` 表、`$SEEU_INDEX_API` 入口与「不要猜 eid」规则；最多 5 案 × 50 检材）；写入 `<DSH_HOME>/AGENTS.md`（合并式：只替换自己的标记区块，保留用户内容；无标记则追加）与 `<SEEU_WORKSPACE>/SEEU-CASE-BRIEF.md`；模块级 `briefSig` 去重。
+- 触发点：`apply()` 启动时一次、`GET /list` 扫描后（`refreshBrief(indexes)`）、`POST /build` 成功回调（`job.brief = refreshBrief()`）。失败只 `console.warn`，不影响查库。
+- `resources/forensics/cordis.patch.yml`：两个 preset 的 `agent-instructions.config` 都加 `instructionFileCandidates: ["AGENTS.md", "CLAUDE.md", "SEEU-CASE-BRIEF.md"]`。
+
+**验证**：
+
+- 真实案件直跑：`DSH_HOME=.dev/brieftest SEEU_WORKSPACE=.dev/brieftest-ws SEEU_INDEX_SEARCH_DIRS=E:/forensics/W盘_... node --input-type=module -e "import plugins/seeu-case-index/index.js → writeCaseBrief()"` → `{"ok":true,"cases":1,"chars":721}`，`AGENTS.md` 内含 `检材 5 个 · 记录 22777 条 · 实体 8191 个`、`数据时间范围：2016-12-11 16:31:16 → 2025-05-16 14:23:50`、5 行检材表（`CHAN_MH_mobile.zip`…）。
+- 合并安全性：预置用户手写内容后运行 → 用户内容保留、区块追加；连续重写 3 次文件稳定 936 字节（无增长）。
+- e2e：`scripts/e2e/local-tools-e2e.mjs` 的 mock 网关记录每个请求的 messages，新增 `briefSeen/briefChars` 并纳入 `ok` → `{"ok":true,"briefSeen":true,"briefChars":475,...}`（无索引库时的提示区块）；`npm test` 43/43、`check:overlay` OK。
+
+**遗留**：只取前 5 个案件、每案前 50 个检材；`AGENTS.md` 每次启动会重写一次（内容相同）；如果用户自己也有同标记文本会被当成 SeeU 区块替换（标记前缀已足够独特）。

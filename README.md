@@ -385,6 +385,18 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 
 注意：跨案结果是**线索级**信息，不是证据引用；写报告时要落到各案自己的 `base_handle`（面板里点提及行可直接取该案引用）。同步语义与排障见 `docs/plan-case-index.md` §18（按案删了重写、不自动清理已移除的案件、SQLITE_BUSY 等待 1–2 秒重试）。
 
+### 8.7 会话自动带上的「案件概览」（本地模型尤其需要）
+
+小模型（7B/14B）经常在第一次回答前「不知道分析哪个检材」，要么乱猜 eid，要么反复调 `/evidences` 浪费上下文。为此索引插件在**建库完成、扫描到案件、应用启动**时，把当前所有索引库的摘要写进 dsh 的用户级指令文件 `<DSH_HOME>/AGENTS.md`（带 `<!-- seeu-case-brief` 标记的区块），dsh 的 `agent-instructions` 每个会话都会自动读入——**跟会话工作区在哪无关**，所以本地模型一上来就知道：
+
+- 本机有几个案件、每个案件的数据时间范围、记录/实体规模；
+- 检材表：`eid | 检材 | 名称 | 平台 | 记录数`（就是火眼里设置的检材名）；
+- 查询入口 `$SEEU_INDEX_API`，以及「用户说检材名时按表对应 eid，不要猜」的规则。
+
+同一份内容也会写到 `<工作区>/SEEU-CASE-BRIEF.md`（overlay 已把该文件名加进 `instructionFileCandidates`，会话工作区恰好是外壳工作区时也能读到）。写入是**合并式**的：只替换自己的标记区块，绝不覆盖用户手写的 `AGENTS.md`。
+
+实测（`npm run test:e2e:tools`，mock 网关检查请求里的 messages）：`briefSeen: true`，真实案件（W盘）生成的区块约 700 字符，含 5 个检材的名称/平台/记录数。索引重建或换库后区块会自动刷新，不需要手工维护。
+
 ## 9. 本地模型（OpenAI 兼容网关）接入
 
 默认走官方 DeepSeek 账号链路；如果模型跑在本地/内网，只要网关兼容 **OpenAI**（`POST /v1/chat/completions` 支持 SSE 流式、`GET /v1/models`），改一个 JSON 就能接入——不用改代码、不用重打包。

@@ -61,6 +61,9 @@ const mock = createServer((req, res) => {
         requestChars: raw.length,
         keys: Object.keys(body).join(','),
         roles: messages.map((m) => m?.role).join(','),
+        // 工作区「案件概览」指令文件（SEEU-CASE-BRIEF.md）是否被 agent-instructions 读进上下文
+        briefSeen: messages.some((m) => String(m?.content ?? '').includes('本机案件索引概览')),
+        briefChars: messages.reduce((n, m) => n + (String(m?.content ?? '').includes('本机案件索引概览') ? String(m.content).length : 0), 0),
       })
 
       const stream = body.stream !== false
@@ -294,8 +297,10 @@ const toolCardStyleOk = toolCardStyle.count === 0 ? true : (toolCardStyle.radius
 
 // 默认本地模型配置会切到「取证分析（本地模型精简）」：工具表从 27 个降到约 12 个。
 const litePresetActive = (first.toolsCount ?? 99) <= 14
+// agent-instructions 应把 <工作区>/SEEU-CASE-BRIEF.md 读成会话指令（overlay 候选名之一）
+const briefSeen = shapes.some((x) => x.briefSeen === true)
 const summary = {
-  ok: gotReply && sawToolResult && (first.tools ?? 0) > 0 && first.maxTokensField === 'max_tokens' && first.hasStreamOptions === false && first.hasStore === false && toolCardStyleOk && litePresetActive,
+  ok: gotReply && sawToolResult && (first.tools ?? 0) > 0 && first.maxTokensField === 'max_tokens' && first.hasStreamOptions === false && first.hasStore === false && toolCardStyleOk && litePresetActive && briefSeen,
   chatCalls,
   rounds: shapes.length,
   gotReply,
@@ -306,6 +311,8 @@ const summary = {
   toolCardStyleOk,
   litePresetActive,
   litePresetTools: first.toolsCount,
+  briefSeen,
+  briefChars: (shapes.find((x) => x.briefSeen) ?? {}).briefChars ?? 0,
 
   firstRequest: {
     stream: first.stream,

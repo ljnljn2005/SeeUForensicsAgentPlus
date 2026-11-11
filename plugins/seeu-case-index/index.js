@@ -1,7 +1,7 @@
 // 宿主端：把「建库 + 查库」暴露成 Web UI 可调用的本地 HTTP 路由（前缀 /seeu-index）。
 // 桌面外壳把本包装进 web profile，Web 客户端插件（client.js）在设置页里给界面。
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
 import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records, evidences } from '../../tools/ges-index/query.mjs';
@@ -94,6 +94,7 @@ function startBuild(args) {
     job.percent = 100;
     job.result = result;
     job.cross = syncOneCase(result.db);
+    job.brief = refreshBrief();
     job.elapsedMs = Date.now() - job.startedAt;
   }).catch((error) => {
     job.status = 'failed';
@@ -123,6 +124,7 @@ async function handle(req, res) {
       ];
       const indexes = findIndexes([...new Set(dirs)]);
       rememberDirs(indexes.map((i) => i.caseDir));
+      refreshBrief(indexes);
       return send(res, 200, { indexes });
     }
     // ---------- 跨案中央库（M5） ----------
@@ -210,6 +212,135 @@ async function handle(req, res) {
  * Cordis 宿主插件入口。
  * @param {import('@deepseek-ai/cordis').Context} ctx - 宿主上下文。
  */
+// ---------- 「案件概览」指令注入 ----------
+// 本地小模型常常「不知道分析哪个检材」就乱猜，或者懒得调 /evidences。
+// 建库/扫描后把索引里的案件与检材清单写成：
+//   1. <DSH_HOME>/AGENTS.md 里的 seeu 区块（dsh 的用户级指令文件，任何会话都会读到，最可靠）；
+//   2. <工作区>/SEEU-CASE-BRIEF.md（会话工作区恰好是外壳工作区时也读得到）。
+// 两处都带标记，只替换自己的区块，绝不动用户手写内容。
+const BRIEF_NAME = 'SEEU-CASE-BRIEF.md';
+const BRIEF_MARKER = '<!-- seeu-case-brief';
+const BRIEF_END = '<!-- /seeu-case-brief -->';
+let briefSig = '';
+
+function briefDirs() {
+  const dirs = [...defaultDirs()];
+  const file = process.env.SEEU_INDEX_STATE_FILE;
+  try {
+    if (file && existsSync(file)) {
+      const parsed = JSON.parse(readFileSync(file, 'utf8'));
+      dirs.push(...(Array.isArray(parsed.dirs) ? parsed.dirs : []));
+    }
+  } catch {
+    /* 状态文件损坏就当没有 */
+  }
+  return [...new Set(dirs.map((d) => String(d ?? '').trim()).filter(Boolean))];
+}
+
+/** 生成带标记的 Markdown 区块：案件 → 检材表（eid/名称/平台/记录数）+ 查询提示。 */
+function briefText(indexes) {
+  const lines = [
+    BRIEF_MARKER + '：由 SeeU 取证智能体自动生成，重建索引后自动刷新，请勿手工编辑 -->',
+    '',
+    '## 本机案件索引概览',
+    '',
+  ];
+  if (!indexes.length) {
+    lines.push('本机当前还没有案件索引库。若用户提到检材或案件，先请他在「取证索引」面板里选择案件目录并点「建库 / 更新」，再开始分析。');
+    lines.push(BRIEF_END);
+    return lines.join('\n') + '\n';
+  }
+  lines.push(
+    '查询入口：环境变量 SEEU_INDEX_API（如 curl -s "$SEEU_INDEX_API/list"）。',
+    '规则：用户说检材名时，用下表把名称对应到 eid 再查，**不要猜 eid**；表里没有就问用户。',
+    '',
+  );
+  for (const ix of indexes.slice(0, 5)) {
+    let evs = [];
+    let totals = null;
+    let timeRange = null;
+    try {
+      const db = openIndex(ix.dbPath);
+      try {
+        const rootView = tree(db, 'root') ?? null;
+        totals = rootView?.totals ?? null;
+        timeRange = rootView?.timeRange ?? null;
+        evs = evidences(db);
+      } finally {
+        db.close();
+      }
+    } catch {
+      evs = [];
+    }
+    lines.push('### ' + (ix.caseName || ix.caseDir || ix.dbPath), '');
+    lines.push('- 索引库：' + ix.dbPath);
+    lines.push('- 规模：检材 ' + evs.length + ' 个' + (totals ? ' · 记录 ' + totals.records + ' 条 · 实体 ' + totals.entities + ' 个' : '') + (ix.builtAt ? ' · 生成 ' + ix.builtAt : ''));
+    if (timeRange?.f) lines.push('- 数据时间范围：' + timeRange.f + ' → ' + timeRange.t);
+    if (evs.length) {
+      lines.push('', '| eid | 检材 | 名称 | 平台 | 记录数 |', '| --- | --- | --- | --- | --- |');
+      for (const ev of evs.slice(0, 50)) {
+        lines.push('| ' + ev.eid + ' | 检材 ' + ev.eid + ' | ' + String(ev.name ?? '') + ' | ' + String(ev.platform ?? '') + ' | ' + (ev.recordCount ?? '') + ' |');
+      }
+    }
+    lines.push('');
+  }
+  lines.push(BRIEF_END);
+  return lines.join('\n') + '\n';
+}
+
+/** 把我们的区块合并进已有文件：有旧区块就替换，没有就追加，绝不整文件覆盖。 */
+function mergeBrief(existing, block) {
+  if (existing === null || existing.trim() === '') return block;
+  const start = existing.indexOf(BRIEF_MARKER);
+  if (start >= 0) {
+    const end = existing.indexOf(BRIEF_END, start);
+    if (end >= 0) return existing.slice(0, start) + block + existing.slice(end + BRIEF_END.length).replace(/^\n+/, '\n');
+    return existing.slice(0, start) + block;
+  }
+  return existing.replace(/\s*$/, '') + '\n\n' + block;
+}
+
+function writeBriefFile(target, block) {
+  let prev = null;
+  try {
+    if (existsSync(target)) prev = readFileSync(target, 'utf8');
+  } catch {
+    prev = null;
+  }
+  const next = mergeBrief(prev, block);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, next, 'utf8');
+  return next.length;
+}
+
+/** 写/刷新概览（内容没变就跳过）。全局 AGENTS.md 优先，工作区文件作为补充。 */
+export function writeCaseBrief(indexes) {
+  try {
+    const list = indexes ?? findIndexes(briefDirs());
+    const sig = list.map((i) => i.caseDir + '|' + i.builtAt).join(';');
+    const globalPath = process.env.DSH_HOME ? join(process.env.DSH_HOME, 'AGENTS.md') : null;
+    const wsPath = process.env.SEEU_WORKSPACE ? join(process.env.SEEU_WORKSPACE, BRIEF_NAME) : null;
+    if (sig === briefSig && ((globalPath === null || existsSync(globalPath)) && (wsPath === null || existsSync(wsPath)))) {
+      return { ok: true, skipped: true, cases: list.length };
+    }
+    const block = briefText(list);
+    const out = { ok: true, cases: list.length, chars: block.length };
+    if (globalPath !== null) out.global = { path: globalPath, bytes: writeBriefFile(globalPath, block) };
+    if (wsPath !== null) out.workspace = { path: wsPath, bytes: writeBriefFile(wsPath, block) };
+    briefSig = sig;
+    return out;
+  } catch (error) {
+    return { ok: false, error: error?.message ?? String(error) };
+  }
+}
+
+/** /list 与建库完成后顺手刷新；失败只记日志。 */
+function refreshBrief(indexes) {
+  const r = writeCaseBrief(indexes);
+  if (!r.ok && !r.skipped) console.warn('[seeu-case-index] 案件概览写入失败：' + r.error);
+  return r;
+}
+
 /** 记住最近用过的案件目录，下次启动由外壳拼进 SEEU_INDEX_SEARCH_DIRS。 */
 function rememberDirs(dirs) {
   const file = process.env.SEEU_INDEX_STATE_FILE
@@ -230,6 +361,7 @@ function rememberDirs(dirs) {
 }
 
 export function apply(ctx) {
+  try { refreshBrief(); } catch { /* 启动期失败不影响查库 */ }
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => webCtx.webServer.register({ kind: 'prefix', path: ROUTE, handler: handle }), 'seeu-case-index: /seeu-index 路由');
   });
