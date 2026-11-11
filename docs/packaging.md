@@ -772,3 +772,16 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 跨案：`SEEU_CROSS_E2E_PORT=9396 cross-case-check.mjs` → `ok:true`（`syncNote:"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。"`，两份夹具都在列表里，复制 30 条重合实体清单 2,675 字符、含两个案号与类别）。
 
 排障记录：`SEEU_UI_EXE` 必须传 **Windows 路径**（`D:/.../SeeUForensicsAgentPlus.exe`）；传 MSYS 路径（`$PWD/...` → `/d/...`）会 `spawn ... ENOENT`。打包日志里的 `duplicate dependency references` 巨量列表属正常现象（electron-builder 的依赖去重提示）。
+
+### v0.2.7 回归验证
+
+- 打包：`npm version 0.2.7 --no-git-tag-version`；`node scripts/build.mjs`、`npm run check:overlay`、`npm test`（55/55）全绿；`npx electron-builder --win --x64 -c.directories.output=release-027`（约 14 分钟，无证书跳过签名），产物搬进 `release/` 并删 0.2.6 三件（保留 0.1.7 portable）。
+- 产物：`release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B；`resources/app.asar` **168,807,728 B（19,648 entries）**；NSIS **211,936,354 B**（blockmap 220,843 B）；portable **189,590,954 B**；`release/win-unpacked` 总计 803,640,443 B。
+- asar 自检（`.probe/asar-027-check.mjs`，`listPackage` 条目前导 `\` 归一化、`extractFile` 用反斜杠无前导分隔符）：条目 19,648、16 个必需路径（多了 `tools/ges-index/csv.mjs`）`missing:[]`；代码抽查 16 项全 true，新增 `csvRecordsRoute`/`csvTableRoute`/`csvSaveIpc`（`dist/preload.cjs` 含 `save-export`）/`recordsCsvButton`/`tableCsvButton`。
+- 启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：目录版 `node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9421` → `"ok":true,"elapsedMs":4150`；portable `--port 9422 --timeout 240000` → `"ok":true,"elapsedMs":47614`。
+- 打包态 e2e（都传 Windows 路径给 `SEEU_UI_EXE`，隔离 home/userData）：
+  - `m2-ui-check`（端口默认）→ `{"m2ok":true,"searchOk":true,"searchEvNames":true,"recordsFilterOk":true,"entityPagingOk":true,"timelineFiltersOk":true,"briefVisible":true,"treeFilterOk":true,"kpiRange":true,"errors":[]}`；
+  - `export-check`（`SEEU_EXPORT_E2E_PORT=9423`，`SEEU_EXPORT_DIR` 默认 `.dev/exports`）→ `{"ok":true,"csvNote":"已导出 20000 行（共 22777 条，单次最多 20000 行）…","csvFile":{"bytes":4608566,"bom":true,"hasHeader":true,"dataLines":20000,"hasTs":true},"csvTableNote":"已导出 745 行到 …","csvTableFile":{"bytes":143621,"bom":true,"hasHeader":true,"dataLines":745},"errors":[]}`（概览 718 / 记录 14,996 / 时间线 3,235 字符不变）；
+  - `settings-check` → `{"ok":true,"presetApplied":true,"budgetText":"固定开销估算：约 6.6k tokens…","pulledContextWindow":"32768","warmupOk":true,"titleGenDefault":true,"usagePreview":true,"lightShell":true,"errors":[]}`；
+  - `cross-case-check`（`SEEU_CROSS_E2E_PORT=9424`）→ `{"ok":true,"syncNote":"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。","copyNote":"已复制 30 条重合实体清单（2675 字符）","clipboard":{"hasTwoCases":true,"hasCaseNumbers":true,"hasKinds":true},"errors":[]}`。
+- 预览仍在线（重启后 token 会变），等用户视觉验收 + 真实网关联调。

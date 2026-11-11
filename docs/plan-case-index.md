@@ -1709,3 +1709,14 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 面板：`TablesView` 头部多【导出 CSV】（与「复制本页引用清单」并排），走模块级 `saveCsvText()`（Electron 桥落盘 / web 下载），文件名 `表导出-<表名>-<时间戳>.csv`，下方提示「已导出 N 行…」。
 - 验证：`export-check` 新增步骤（`SEEU_EXPORT_E2E_PORT=9413`）→ `{"ok":true,"csvTableClicked":true,"csvTableNote":"已导出 745 行到 …","csvTableFile":{"bytes":143621,"bom":true,"hasHeader":true,"dataLines":745},"errors":[]}`；记录 CSV 与其余导出断言不变。
 - 遗留：表 CSV 只导当前表（不做多表合一个文件）；`record_id` 为空的汇总行也照样导出（Excel 里自己筛）。
+
+## 20.54 v0.2.7 打包与打包态回归（v0.2.7）
+
+- 背景：v0.2.6（`44808cb`）之后两个提交（`e0677b5` 记录 CSV、`7d513ff` 表 CSV），这次直接打 0.2.7。
+- 打包：`npm version 0.2.7 --no-git-tag-version`；`node scripts/build.mjs`、`check:overlay`、`npm test`(55/55) 全绿；`npx electron-builder --win --x64 -c.directories.output=release-027`（后台 job `bash-56e8ea2697e24c47`，约 14 分钟），产物搬进 `release/` 并删 0.2.6 三件。
+- 产物：exe 246,329,856 B；`app.asar` 168,807,728 B（19,648 entries，多了 `tools/ges-index/csv.mjs`）；NSIS 211,936,354 B（blockmap 220,843）；portable 189,590,954 B；`release/win-unpacked` 803,640,443 B。
+- asar 自检 `.probe/asar-027-check.mjs`：16 个必需路径 `missing:[]`，16 项代码抽查全 true（新增两个 CSV 路由、preload 的 `save-export`、两个导出按钮）。
+- 启动：目录版 4,150 ms、portable 47,614 ms（`SEEU_DEV_MULTI=1`）。
+- 打包态 e2e 全绿：面板 `m2-ui-check`（`m2ok:true`，筛选/分页/时间线/会话语境/树过滤/KPI 全 true）；导出 `export-check`（记录 CSV 20,000 行 4,608,566 B BOM 正常、表 CSV 745 行 143,621 B；概览/记录/时间线清单不变）；设置页 `settings-check`（精简预设、开销估算、网关自报窗口、预热、标题开关、浅色）；跨案 `cross-case-check`（2 案、30 条重合实体）。
+- 坑与上轮相同：`SEEU_UI_EXE` 必须 Windows 路径；`SEEU_DEV_MULTI=1` 不能漏（否则被用户实例的单实例锁挡住、拿不到页面）。
+- 文档：README §2 产物表换 0.2.7 + 「### v0.2.7 改了什么」；`docs/packaging.md` 追加本节对应内容；预览重启后 token 变化，等用户视觉验收 + 真实网关。

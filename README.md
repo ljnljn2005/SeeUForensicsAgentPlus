@@ -57,28 +57,28 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.2.6**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.2.7**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,628,886 B ≈ 766 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,796,171 B（330/330 个 `@deepseek-ai` 包齐全，19,647 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
-| `release/SeeUForensicsAgentPlus-0.2.6-x64.exe`（NSIS 安装包） | 211,934,094 B（blockmap 220,737 B） |
-| `release/SeeUForensicsAgentPlus-0.2.6-x64-portable.exe` | 189,542,424 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,640,443 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,807,728 B（330/330 个 `@deepseek-ai` 包齐全，19,648 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
+| `release/SeeUForensicsAgentPlus-0.2.7-x64.exe`（NSIS 安装包） | 211,936,354 B（blockmap 220,843 B） |
+| `release/SeeUForensicsAgentPlus-0.2.7-x64-portable.exe` | 189,590,954 B |
 
-实测冷启动到 dsh UI：目录版 4083 ms；portable 首次 51.6s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
+实测冷启动到 dsh UI：目录版 4150 ms；portable 首次 47.6s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
 更细的打包说明见 `docs/packaging.md`。
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
 
-### v0.2.7 待发布（未打包）
+### v0.2.7 改了什么
 
-> v0.2.6（`44808cb`）之后的改动，尚未打包；等验收后统一进 0.2.7。
+> 以下改动已进入 v0.2.7 安装包（v0.2.6 `44808cb` 之后的 2 个提交），打包态回归见 `docs/packaging.md`。
 
 - **记录视图【导出 CSV】**：把当前筛选（检材/应用/类别/关键词/起止日期）命中的记录整批导出成 CSV 文件，Excel 双击打开不乱码（UTF-8 BOM + CRLF，逗号/引号/换行按 RFC 4180 转义）；默认导出前 20000 行（共 22,777 条时提示截断），文件落盘到 `<下载>/seeu-exports`（`SEEU_EXPORT_DIR` 可覆盖，e2e 用它读回断言）；web 预览（无 Electron 桥）自动回退为浏览器下载；
 - **表视图【导出 CSV】**：把当前选中 typed 表（联系人/短信/账号/通话…）按当前筛选整张导出，列与表头一致（`id/record_id/eid/app/account/subcat/…`）；本案「联系人」表实测 745 行 → 143,621 B；
 - **CSV 后端**：新增 `tools/ges-index/csv.mjs`（纯函数，5 个单测）与插件接口 `GET /seeu-index/export/records.csv`、`GET /seeu-index/export/table.csv`（响应头带 `x-seeu-rows/x-seeu-total/x-seeu-truncated`）；
-- **测试**：`npm test` 现 **55/55**（新增 CSV 5 例）；`export-check` 增加两处落盘文件校验（记录 CSV BOM/表头/20000 行/时间列、表 CSV BOM/表头/745 行）。
+- **测试**：`npm test` 现 **55/55**（新增 CSV 5 例）；`scripts/e2e/` 16 个脚本；打包态回归 `m2-ui-check` / `settings-check` / `export-check`（含两处 CSV 落盘校验）/ `cross-case-check` 全绿。
 
 ### v0.2.6 改了什么
 
