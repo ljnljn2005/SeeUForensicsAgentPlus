@@ -814,3 +814,20 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - `cross-case-check`（`SEEU_CROSS_E2E_PORT=9456`）→ `ok:true`（`syncNote:"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。"`，30 条重合实体清单 2,675 字符、含两个案号）。
 - 尝试用 `real-gateway-ui.mjs` 直接跑打包版（临时给脚本加过 `SEEU_UI_EXE` 支持）：页面能起、但打包版首次启动会落在「选择工作区」页，composer 驱动不稳（`stage:"type-failed"`），脚本改动已回滚；真机联调仍以 dev Electron 版脚本（`SEEU_UI_TOOL=1`，`ok:true`）+ headless 版为准。
 - 预览仍在线（重启后 token 会变），等用户视觉验收与手动工具路径设置。
+
+### v0.3.0 回归验证
+
+- 打包：版本由 Gitea `main` 合并带入 **0.3.0**（`package-lock.json` 同步 0.3.0）；`node scripts/build.mjs`、`npm test`（85/85）、`npm run check:overlay` 全绿；`npx electron-builder --win --x64 -c.directories.output=release-030`（约 13 分钟、无证书跳过签名），产物搬进 `release/` 并删 0.2.9 的 NSIS/blockmap（0.2.9 portable 因正在运行被占用，保留）。
+- 本批内容：Gitea `main` 的技能上传/管理器（`117b391`）+ 本仓库的镜像挂载接口（`f56aa57`）。
+- 产物：`release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B；`resources/app.asar` **169,101,956 B（19,686 entries）**；NSIS **212,013,664 B**（blockmap 221,709 B）；portable **189,622,254 B**；`release/win-unpacked` 总计 803,946,399 B。
+- asar 自检（`.probe/asar-030-check.mjs`）：条目 19,686、`missing:[]`；39 项内容检查全 true —— 新增 `lovelyCarveRow`（设置页第三行 LovelyCarve CLI）、`settingsToolsCount`（三行 `data-tool`）、`mountsHtml`（`dist/renderer/mounts.html` 含「镜像挂载」与 `btnMount`）、`mountsModule`（`dist/main.cjs` 含 `createMountManager`/`SEEU_MOUNTS_FILE`——`tools/image-mount.mjs` 同样被打进主进程）、`mountsIpc`（`seeu:mounts:mount` + preload `mounts`）、`mountsEnv`（`mountHostEnv`/`SEEU_OPEN_MOUNTS`）、`mountsMenu`（`openMountsWindow` + `Ctrl+Shift+M`；中文菜单项在产物里是 `\u` 转义，按函数/快捷键查）、`skillsUpload`、`skillsWindow`（`dist/renderer/skills.html`）。
+- 启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：目录版 `node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9483` → `"ok":true,"elapsedMs":5118`；portable `--port 9484 --timeout 240000` → `"ok":true,"elapsedMs":50535`。
+- 打包态 e2e（`SEEU_UI_EXE` 传 Windows 路径，隔离 home/userData）：
+  - `m2-ui-check` → `m2ok:true`、`errors:[]`（检索/记录/实体分页/时间线/概览/树过滤/KPI 全绿）；
+  - `settings-check --exe "<win-unpacked exe>"` → `ok:true`，页面来自 asar 内 `dist/renderer/local-model.html`，`toolsRows:3`、`toolsApiSaved/toolsUiSaved/toolsFileOk/toolsClearOk` 全 true，`pulledContextWindow:"32768"`、`warmupOk:true`、`titleGenDefault:true`、`usagePreview:true`、`probeNoContextWindow:false`、`probeMismatch":{"configured":131072,"gateway":32768}`、`lightShell:true`、`errors:[]`；
+  - `export-check`（`SEEU_EXPORT_E2E_PORT=9495`）→ `ok:true`（概览 713 字符且 `hasRange:true`、记录 CSV 20,000 行 4,608,566 B BOM true、表 CSV 745 行 143,621 B、记录 14,996 / 实体 1,888 / 时间线 3,235 字符、`savedTab:"timeline"`）；
+  - `cross-case-check`（`SEEU_CROSS_E2E_PORT=9496`）→ `ok:true`（两案同步、30 条重合实体清单 2,675 字符含两个案号）；
+  - `mount-check --exe "<win-unpacked exe>"`（`SEEU_MOUNT_E2E_PORT=9497`，假 CLI）→ `ok:true`：窗口来自 `app.asar/dist/renderer/mounts.html`，`inspect` 2 个分区 → 挂 `X:` → `mounts.json` 1 条 → 页面刷新显示 → 卸载后 0；截图 `.dev/shots/mounts-030.png`；
+  - `skills-check --exe "<win-unpacked exe>"`（`SEEU_SKILLS_E2E_PORT=9498`）→ `ok:true`：preload 7 个技能方法齐全，`skillsList()` 返回 7 个随包技能，含 `lovelycarve-forensics`（4 个文件）。
+- 排障：打包过程中 `app.asar` 会被 electron-builder 重写，**在 NSIS/portable 阶段读 asar 可能抽到半成品**（`extractFile` 报 `was not found`；等 job 结束即正常）；`SEEU_UI_EXE` 必须 Windows 路径。
+- 遗留：真实 LovelyCarve + 真实镜像未跑（本机没装，挂载用假 CLI 验协议层）；打包态真机 UI 回归仍建议用 dev Electron。

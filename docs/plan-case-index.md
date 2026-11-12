@@ -1870,3 +1870,15 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：`tests/image-mount.test.mjs` 4 例（路径/CLI 解析/默认盘符/完整 inspect→mount→清单→unmount→dispose，用 `tests/fixtures/fake-lovelycarve-cli.mjs`）→ `npm test` **85/85**；`npm run test:e2e:mounts`（`scripts/e2e/mount-check.mjs`，端口 9461，假 CLI 复制到隔离 HOME）→ `{"ok":true,"inspect":{"partitions":2},"mount":{"mountPoint":"X:"},"state":{"count":1},"listVisible":true,"unmount":true,"stateAfter":0}`，截图 `.dev/shots/mounts.png`；`settings-check` `toolsRows:3` 全绿；`m2-ui-check` `m2ok:true`。
 - 踩坑：① `mount()` 里对已占用盘符依赖 `existsSync('X:\\')`，e2e 机器上 `X:` 未占用所以能过；真实机器要先选空盘符；② 挂载 id 优先取 `mounts create` 返回值，没有则从 `mounts list` 按盘符匹配，再兜底生成（不同 CLI 版本返回结构可能略有差异）；③ 窗口脚本的 `#mountRow` 用 `display:flex` 切换，初始 `display:none` 要一起改。
 - 遗留：未在真实 LovelyCarve + 真实镜像上跑（本机没装）；挂载清单里的 `exists` 只按 `X:\\` 是否存在判断，盘符被手动卸载后不会自动清理；会话侧技能还没有「读 mounts.json」的专门提示（下一步可在 SKILL.md / brief 里加一句）；等用户验收后再打 v0.2.10。
+
+## 20.65 v0.3.0 打包（2026-11-12，含 Gitea main 技能上传 + 镜像挂载）
+
+- 版本：合并 Gitea `main`（`186eb84`）后 `package.json` 已是 0.3.0，`package-lock.json` 仍是 0.2.9 → 手动同步（`npm version 0.3.0 --no-git-tag-version` 因「版本未变化」拒绝，改为 node 脚本改 lock 顶层与 `packages[""].version`）。
+- 本批内容：`117b391` 技能上传/管理器（菜单 + 管理器页面 + ZIP/文件夹导入 + 6 个 IPC + `scripts/test-skill-upload.mjs` 22 断言）、`f56aa57` 镜像挂载（`tools/image-mount.mjs`、`renderer/mounts.html`、`src/mounts.ts`、IPC/菜单/托盘、`SEEU_MOUNTS_FILE` 下发、假 CLI + mount e2e）。
+- 新增 `scripts/e2e/skills-check.mjs`（`npm run test:e2e:skills`）：起真 Electron/打包版 → 等页面 → 检查 preload 7 个技能方法 → `skillsList()` 必须 7 个随包技能且含 `lovelycarve-forensics`/`lovelymem-cli`/`lovelyspark-cli`；dev 与打包态均 `ok:true`。
+- 打包：`npx electron-builder --win --x64 -c.directories.output=release-030`（约 13 分钟，无证书跳过签名）；产物搬进 `release/`（删除 0.2.9 NSIS/blockmap；0.2.9 portable 正被用户运行、无法删）。
+- 产物：exe 246,329,856 B；app.asar 169,101,956 B（19,686 entries）；NSIS 212,013,664 B（blockmap 221,709）；portable 189,622,254 B；win-unpacked 803,946,399 B。
+- asar 自检 `.probe/asar-030-check.mjs`：39 项全 true（新增 mounts/skills 相关 9 项）。坑：① 中文菜单项在 `dist/main.cjs` 里被 esbuild 转成 `\u955C\u50CF…`，不能用中文字面量查，改查 `openMountsWindow`/`Ctrl+Shift+M`；② 打包进行中 asar 会被重写，读取可能报 `was not found`，要等 job 结束再抽。
+- 打包态回归：`verify-launch` 目录版 5118 ms / portable 50535 ms；`m2-ui-check`、`settings-check`（toolsRows 3）、`export-check`、`cross-case-check`、`mount-check`、`skills-check` 全部 `ok:true`。
+- 文档：README §2 产物表换 v0.3.0 +「### v0.3.0 改了什么」（技能上传、镜像挂载、测试 85/85、e2e 20 个脚本）、`docs/packaging.md`「### v0.3.0 回归验证」。
+- 遗留：真实 LovelyCarve/真实镜像未验证（本机未安装；假 CLI 覆盖协议与状态机）、挂载清单 `exists` 仍只按盘符存在判断、0.2.9 portable 占用文件未能删除。

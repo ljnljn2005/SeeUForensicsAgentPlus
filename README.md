@@ -63,30 +63,31 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.2.9**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.3.0**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,679,886 B ≈ 766 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,835,443 B（19,654 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`dist/renderer/local-model.html`） |
-| `release/SeeUForensicsAgentPlus-0.2.9-x64.exe`（NSIS 安装包） | 211,947,119 B（blockmap 220,827 B） |
-| `release/SeeUForensicsAgentPlus-0.2.9-x64-portable.exe` | 189,553,401 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,946,399 B ≈ 767 MiB） |
+| `release/win-unpacked/resources/app.asar` | 169,101,956 B（19,686 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`dist/renderer/{local-model,mounts,skills}.html`） |
+| `release/SeeUForensicsAgentPlus-0.3.0-x64.exe`（NSIS 安装包） | 212,013,664 B（blockmap 221,709 B） |
+| `release/SeeUForensicsAgentPlus-0.3.0-x64-portable.exe` | 189,622,254 B |
 
-实测冷启动到 dsh UI：目录版 5249 ms；portable 首次 37.4s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
+实测冷启动到 dsh UI：目录版 5118 ms；portable 首次 50.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-> 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
+> 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.2.9-x64-portable.exe`，因为打包时它正在运行、文件被占用无法删除；0.3.0 的产物不受影响。
 
-### v0.2.10 待发布（v0.2.9 之后、尚未打包）
+### v0.3.0 改了什么
 
-> 工作树已包含 Gitea `main` 的最新提交（`186eb84`：技能上传 —— 菜单/管理器导入 ZIP 或文件夹，直达 agent 技能根），以及下面的镜像挂载接口。
+> 以下改动已进入 v0.3.0 安装包（v0.2.9 `a112f49` 之后：Gitea `main` 的技能上传 `186eb84` + 镜像挂载 `f56aa57`），打包态回归见 `docs/packaging.md`。
 
 - **镜像挂载（取证镜像 → 只读盘符）**：菜单「工具 → 镜像挂载…」（`Ctrl+Shift+M`，托盘同项）打开新窗口 —— 选镜像（E01 / RAW / VMDK / VHDX / QCOW2 / ISO…）→ 解析分区（`/part:N`、卷标、文件系统、大小）→ 选分区与盘符 → 挂载为只读盘。挂载点由 LovelyCarve CLI 的 `mounts` 命令组提供，**只在 SeeU 运行期间有效**，卸载或关闭外壳即释放；同一案件不能被桌面端与 CLI 同时打开，Dokan 挂载可能要求管理员权限；
 - **接口实现**：新增 `tools/image-mount.mjs`（纯 Node）：`resolveLovelyCarveCli` 按「环境变量 → 设置窗口保存的 `lovely-cli.json` → 常见安装位置」找 CLI；`LovelyCarveHost` 起一个常驻 `lovelycarve-cli -q shell` 进程（stdin 写命令、stdout 逐行 JSON），因为挂载点是进程内资源；`createMountManager` 提供 `status / inspect / mount / unmount / dispose`，挂载清单写 `<DSH_HOME>/mounts.json` 并通过 `SEEU_MOUNTS_FILE` 下发给 dsh 会话，技能可直接读；测试用假 CLI（`tests/fixtures/fake-lovelycarve-cli.mjs`）不需要真装 LovelyCarve；
 - **CLI 路径仍为手动指定**：设置窗口「本机取证工具路径」从两行扩为三行（LovelyMem V3 / LovelySpark / LovelyCarve CLI），同样写 `lovely-cli.json`、`SEEU_LOVELYCARVE_CLI` 仅供调试；未配置时挂载窗口直接提示去设置，不会自己猜路径；
-- **测试**：`npm test` **85/85**（新增 `tests/image-mount.test.mjs` 4 例）；新增 `npm run test:e2e:mounts`（`scripts/e2e/mount-check.mjs`：假 CLI 下 get → 解析 2 个分区 → 挂载 → 校验 `mounts.json` → 页面刷新显示 → 卸载清空）；`settings-check` 断言工具路径区三行；`check:overlay` OK。
+- **技能上传 / 技能管理器（合并 Gitea `main` 的 `117b391`）**：「技能」菜单新增技能管理器、导入文件夹、导入 ZIP、打开技能目录 —— 自研最小 ZIP 解析（中央目录 + `inflateRaw`，拒绝 ZIP64/加密/分卷，逐段消毒防 `..` 穿越），校验 `SKILL.md` frontmatter，随包技能受保护不可覆盖；导入写 `<DSH_HOME>/skills/<name>`，dsh 技能目录 watch 自动重扫，新会话立即生效；
+- **测试**：`npm test` **85/85**（新增 `tests/image-mount.test.mjs` 4 例；`npm run test:skill-upload` 22/22）；`scripts/e2e/` 下 20 个脚本，新增 `npm run test:e2e:mounts`（假 CLI：get → 解析 2 个分区 → 挂载 → 校验 `mounts.json` → 页面刷新显示 → 卸载清空）与 `npm run test:e2e:skills`（`window.seeu.skillsList()` 列出 7 个随包技能，含 `lovelycarve-forensics`）；`settings-check` 断言工具路径区三行；`check:overlay` OK。
 
 ### v0.2.9 改了什么
 

@@ -62,7 +62,8 @@
     "test:e2e:shots": "node scripts/e2e/acceptance-shots.mjs",
     "test:e2e:real-gateway": "node scripts/e2e/real-gateway-headless.mjs",
     "test:e2e:real-gateway-ui": "node scripts/e2e/real-gateway-ui.mjs",
-    "test:e2e:mounts": "node scripts/e2e/mount-check.mjs"
+    "test:e2e:mounts": "node scripts/e2e/mount-check.mjs",
+    "test:e2e:skills": "node scripts/e2e/skills-check.mjs"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.1.0",
