@@ -241,11 +241,28 @@ await sleep(700)
     await sleep(900)
     report.activityRowsAfterRemove = await ev("document.querySelectorAll('[data-activity-kind]').length")
     report.activityRemoveOk = report.activityRowsBeforeRemove === 2 && report.activityRowsAfterRemove === 1
+
+    // 第 43 轮：活动文本筛选（案件名 / 表名 / 类型）。
+    const setActivitySearch = (value) => ev(`(() => { const i = document.querySelector('[data-activity-search]'); if (!i) return 'no-input'; const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(i, ${JSON.stringify(value)}); i.dispatchEvent(new Event('input', { bubbles: true })); return 'ok' })()`)
+    report.activitySearchInput = await ev("document.querySelectorAll('[data-activity-search]').length")
+    await setActivitySearch('昨日')
+    await sleep(600)
+    report.activitySearchRows = await ev("document.querySelectorAll('[data-activity-kind]').length")
+    report.activitySearchCountText = String(await ev("(document.querySelector('[data-activity-search-count]') || {}).textContent || ''"))
+    await setActivitySearch('不存在')
+    await sleep(600)
+    report.activitySearchEmpty = await ev("Boolean(document.querySelector('[data-activity-empty]'))")
+    report.activitySearchEmptyText = String(await ev("(document.querySelector('[data-activity-empty]') || {}).textContent || ''"))
+    await setActivitySearch('')
+    await sleep(600)
+    report.activitySearchRestored = await ev("document.querySelectorAll('[data-activity-kind]').length")
+    report.activitySearchOk = report.activitySearchInput === 1 && report.activitySearchRows === 1 && /1 条匹配/.test(report.activitySearchCountText) && report.activitySearchEmpty === true && /没有匹配/.test(report.activitySearchEmptyText) && report.activitySearchRestored === 1
+    if (!report.activitySearchOk) throw new Error('活动筛选失败：' + JSON.stringify({ input: report.activitySearchInput, rows: report.activitySearchRows, count: report.activitySearchCountText, empty: report.activitySearchEmpty, emptyText: report.activitySearchEmptyText, restored: report.activitySearchRestored }))
     if (!report.activityRemoveOk) throw new Error('移除活动失败：' + JSON.stringify({ before: report.activityRowsBeforeRemove, after: report.activityRowsAfterRemove }))
   }
 
   report.activitySummaryText = await ev("(() => { const el = document.querySelector('[data-activity-summary]'); return el ? el.textContent.trim() : '' })()")
-  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true) && report.activitySummaryPresent === 1 && report.activityBars === 7 && report.activityDayFilterOk === true && report.activityOpenNoteOk === true && report.activityRemoveOk === true
+  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true) && report.activitySummaryPresent === 1 && report.activityBars === 7 && report.activityDayFilterOk === true && report.activityOpenNoteOk === true && report.activityRemoveOk === true && report.activitySearchOk === true
 }
 report.idxFilterOk = report.idxFilterChips === 4 && report.idxFilterClickMyos === true && report.idxFilterEmpty === true && report.idxFilterClickAll === true && report.idxFilterRestore === true
 report.rootText = text.slice(text.indexOf('取证案件索引'), text.indexOf('取证案件索引') + 900)

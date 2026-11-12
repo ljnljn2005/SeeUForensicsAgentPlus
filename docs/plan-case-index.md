@@ -2537,3 +2537,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `renderer/mounts.html`：CLI 状态卡新增 `#remountRow`（`#btnRemount` + `#remountHint`），`renderStatus()` 缓存 `lastView`，仅当 `lastMount.imagePath` 存在时显示；`remount()` 依次 `api.inspect(原镜像)` → `api.mount({imagePath, partition: last.partition||0, mountPoint: last.mountPoint})` → 提示「✓ 已重新挂载到 X:（耗时）」→ `refresh()`；失败给可操作文案（镜像不可用/挂载失败+hint）。
 - `scripts/e2e/mount-check.mjs`：卸载/已卸载摘要断言之后，断言 `#remountRow` 可见 → 点【重新挂载】轮询 `window.seeu.mounts.get()` 至 1 条（最多 16 s）→ 校验 `remountedPoint`、提示含「已重新挂载」→ 再卸载收尾，全部纳入 `report`。
 - 坑：e2e 里判断元素可见性时把表达式包了 `String(...)`，返回字符串 `"true"` 与 `!== true` 比较恒失败 → 直接返回布尔表达式。
+
+### 20.122 最近活动文本筛选（第 43 轮）
+
+- 动机：活动多了以后（尤其批量导入留下多行），想按案件名/表名找一条只能肉眼扫。
+- `plugins/seeu-case-index/client.js`：新增 `activityQuery` state 与 `matchesActivity(item)`（title/detail/kind 小写包含），`activityShown` = 当天过滤（`activityDay`）后再按文本过滤，列表与「当天 N 条 · 共 M 条」都用它；标题行加筛选框（`data-activity-search`，placeholder「筛选活动（案件名 / 表名 / 类型）」）与 `[data-activity-search-count]`（`N 条匹配` / `没有匹配的活动`）；列表空时渲染 `[data-activity-empty]`（有筛选词显示「没有匹配的活动」，否则保留原引导文案）。
+- e2e：`m2-ui-check` 在移除单条后（剩「昨日导入样例」）→ 筛选「昨日」断言 1 行 + 「1 条匹配」→ 筛选「不存在」断言空态文案 → 清空恢复 1 行 → `activitySearchOk:true` 纳入 `activityOk`。
+- 坑：初版预期筛「今日」，但前一步刚移除「今日建库样例」，行数必然为 0——e2e 断言要跟数据顺序一致。

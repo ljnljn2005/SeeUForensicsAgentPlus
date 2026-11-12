@@ -81,6 +81,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 ### v0.3.12 待发布（未打包）
 
+- **最近活动文本筛选**（第 43 轮）：「最近活动」标题行新增筛选框（`data-activity-search`，按案件名/表名/类型），旁边显示「N 条匹配」；无匹配时列表位显示「没有匹配的活动」；与「点选某天」过滤叠加生效，清空恢复。`m2-ui-check` 断言筛选/空态/恢复（`activitySearchOk:true`）。
 - **重新挂载最近镜像**（第 42 轮）：挂载窗口在存在 `lastMount` 时显示【重新挂载最近镜像】——点一下自动 `inspect` 原镜像 + 按上次分区/盘符重新挂载，并提示耗时；`mount-check` 断言卸载后按钮出现 → 点击 → 挂载恢复 1 条 → 提示「已重新挂载」→ 收尾卸载。
 - **挂载窗口显示「最近一次挂载」**（第 41 轮）：`mounts.json` 现在持久化 `lastMount`（挂载点、镜像名、分区、挂载时间；卸载后补 `releasedAt`），`status()` 一并返回；挂载窗口顶部显示「最近一次挂载：X: ← disk.E01（分区 0） · 2026-11-13 06:25:55 · 运行中/已卸载」，重启外壳也能看到上次挂载。单测与 `mount-check` 均断言挂载中/已卸载两种文案。
 - **活动可逐条移除**（第 40 轮）：每行右侧【移除】（`data-activity-remove`，`stopPropagation` 不会误触发打开）→ `POST /activity/remove {at,title}` 精确删一条并刷新统计/条形；`removeActivity()` 单测 +1（按 at+title、未命中不改文件）；`m2-ui-check` 断言移除后行数 2→1（`activityRemoveOk:true`）。

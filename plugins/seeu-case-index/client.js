@@ -1513,9 +1513,25 @@ window.__ModuleLoader__.load({
       const [activitySummary, setActivitySummary] = useState('');
       const [activityBuckets, setActivityBuckets] = useState([]);
       const [activityDay, setActivityDay] = useState('');
+      const [activityQuery, setActivityQuery] = useState('');
       const [activityNote, setActivityNote] = useState('');
 
       // 移除单条活动：失败时给提示，成功后同步刷新统计与条形。
+      // 活动文本筛选（案件名/表名/类型），空串放行。
+      const matchesActivity = (item) => {
+        const q = activityQuery.trim().toLowerCase();
+        if (!q) return true;
+        return `${item?.title ?? ''} ${item?.detail ?? ''} ${item?.kind ?? ''}`.toLowerCase().includes(q);
+      };
+      const activityShown = (activityDay
+        ? activity.filter((item) => {
+            const t = Date.parse(String(item.at ?? ''));
+            if (!Number.isFinite(t)) return false;
+            const dt = new Date(t);
+            return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}` === activityDay;
+          })
+        : activity).filter(matchesActivity);
+
       const dropActivity = async (item) => {
         try {
           const body = await post('/activity/remove', { at: item?.at ?? '', title: item?.title ?? '' });
@@ -2119,6 +2135,15 @@ window.__ModuleLoader__.load({
             h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, '最近活动'),
             h('span', { 'data-activity-count': '1', style: S.muted }, activity.length ? (activityDay ? `当天 ${activity.filter((item) => { const t = Date.parse(String(item.at ?? '')); if (!Number.isFinite(t)) return false; const dt = new Date(t); const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; return key === activityDay; }).length} 条 · 共 ${activity.length} 条` : `共 ${activity.length} 条 · 点一行打开对应索引`) : '还没有活动记录'),
             h('span', { 'data-activity-summary': '1', title: activitySummary || '', style: { ...S.muted, marginLeft: 6 } }, activitySummary),
+            h('input', {
+              'data-activity-search': '1',
+              value: activityQuery,
+              placeholder: '筛选活动（案件名 / 表名 / 类型）',
+              'aria-label': '筛选最近活动',
+              style: { width: 200, fontSize: 11, padding: '2px 6px' },
+              onChange: (event) => setActivityQuery(event.target.value),
+            }),
+            activityQuery.trim() ? h('span', { 'data-activity-search-count': '1', style: S.muted }, activityShown.length ? `${activityShown.length} 条匹配` : '没有匹配的活动') : null,
             activityDay ? h('span', {
               'data-activity-filter': '1',
               style: { fontSize: 11, color: C_ACC, marginLeft: 6 },
@@ -2158,8 +2183,7 @@ window.__ModuleLoader__.load({
                 try { await post('/activity/clear', {}); setActivity([]); setActivitySummary(''); setActivityBuckets([]); } catch { /* 忽略 */ }
               },
             }, '清空') : null),
-          activity.length
-            ? (activityDay ? activity.filter((item) => { const t = Date.parse(String(item.at ?? '')); if (!Number.isFinite(t)) return false; const dt = new Date(t); const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; return key === activityDay; }) : activity).slice(0, 6).map((item) => h('div', {
+          activityShown.length ? activityShown.slice(0, 6).map((item) => h('div', {
               key: `${item.at ?? ''}-${item.title ?? ''}`,
               className: 'seeu-activity-row',
               'data-activity-kind': item.kind ?? '',
@@ -2202,7 +2226,7 @@ window.__ModuleLoader__.load({
               style: { fontSize: 10.5, padding: '1px 6px', opacity: 0.75 },
               onClick: (event) => { event.stopPropagation(); void dropActivity(item); },
             }, '移除')))
-            : h('div', { style: S.muted }, '建库或从 MYOS 导入后，这里会按时间列出最近的工作，点一行可直接打开对应索引。'),
+            : h('div', { 'data-activity-empty': '1', style: S.muted }, activityQuery.trim() ? '没有匹配的活动' : '建库或从 MYOS 导入后，这里会按时间列出最近的工作，点一行可直接打开对应索引。'),
           activityNote ? h('div', {
             'data-activity-note': '1',
             style: { ...S.muted, color: C_WARN, fontSize: 12 },
