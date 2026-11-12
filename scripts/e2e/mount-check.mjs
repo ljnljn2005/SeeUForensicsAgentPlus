@@ -188,6 +188,10 @@ try {
   report.listVisible = bodyText.includes(mountPoint) && bodyText.includes('disk.E01')
   if (!report.listVisible) throw new Error('页面刷新后没有显示活动挂载')
   log('页面列表', `显示 ${mountPoint} · disk.E01`)
+  // 第 41 轮：最近一次挂载摘要（挂载中 / 已卸载）。
+  report.lastMountText = String(await evaluate(client, "(document.querySelector('[data-last-mount]') || {}).textContent || ''"))
+  report.lastMountOk = /最近一次挂载：/.test(report.lastMountText) && report.lastMountText.includes('disk.E01') && /运行中/.test(report.lastMountText)
+  if (!report.lastMountOk) throw new Error('最近一次挂载摘要不对（挂载中）：' + report.lastMountText)
 
   const unmounted = await evaluate(client, `window.seeu.mounts.unmount(${JSON.stringify(mounted.mount.id)})`)
   report.unmount = unmounted?.ok
@@ -198,6 +202,11 @@ try {
   report.stateAfter = after.mounts?.length ?? 0
   if (report.stateAfter !== 0) throw new Error(`卸载后 mounts.json 应为空，实际 ${report.stateAfter}`)
   log('卸载', '清单已清空')
+  await evaluate(client, "document.getElementById('btnRefresh').click(), true")
+  await sleep(900)
+  report.lastMountReleasedText = String(await evaluate(client, "(document.querySelector('[data-last-mount]') || {}).textContent || ''"))
+  report.lastMountReleasedOk = /已卸载/.test(report.lastMountReleasedText) && report.lastMountReleasedText.includes('disk.E01')
+  if (!report.lastMountReleasedOk) throw new Error('最近一次挂载摘要不对（已卸载）：' + report.lastMountReleasedText)
 
   const shot = await client.send('Page.captureScreenshot', { format: 'png' })
   mkdirSync(join(OUT, '..'), { recursive: true })

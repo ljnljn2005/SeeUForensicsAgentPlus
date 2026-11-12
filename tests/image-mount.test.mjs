@@ -117,6 +117,10 @@ test('MountManager：inspect → mount（写 mounts.json） → unmount', async 
   assert.equal(state.mounts[0].imagePath, imagePath)
   assert.equal(state.mounts[0].partition, 0)
   assert.match(String(state.note), /关闭外壳即释放/)
+  // 第 41 轮：lastMount 记录最近一次挂载（运行中 releasedAt 为空）。
+  assert.equal(state.lastMount.imagePath, imagePath)
+  assert.equal(state.lastMount.mountPoint, state.mounts[0].mountPoint)
+  assert.equal(state.lastMount.releasedAt, undefined)
 
   const afterMount = await manager.status()
   assert.equal(afterMount.mounts.length, 1)
@@ -126,6 +130,11 @@ test('MountManager：inspect → mount（写 mounts.json） → unmount', async 
   assert.equal(unmounted.ok, true, unmounted.error)
   assert.equal(Number(unmounted.ms) > 0, true, 'unmount 应返回耗时')
   assert.deepEqual(JSON.parse(readFileSync(stateFile, 'utf8')).mounts, [])
+  const releasedState = JSON.parse(readFileSync(stateFile, 'utf8'))
+  assert.equal(releasedState.mounts.length, 0)
+  assert.equal(releasedState.lastMount.imagePath, imagePath)
+  assert.equal(typeof releasedState.lastMount.releasedAt, 'string')
+  assert.equal((await manager.status()).lastMount.imagePath, imagePath)
 
   const missingMount = await manager.unmount(mounted.mount.id)
   assert.equal(missingMount.ok, false)

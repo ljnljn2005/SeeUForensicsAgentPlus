@@ -2523,3 +2523,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 插件：`POST /activity/remove {at,title}` → 返回 `{ok, entries, summary, summaryText}`（与 `/activity` 同口径）。
 - 面板：活动行右侧加【移除】小按钮（`data-activity-remove`、`stopPropagation`），成功后同步 `activity/activitySummary/activityBuckets` 并清空提示。
 - 测试：`tests/activity.test.mjs` +1 例（删除命中/未命中不改文件）→ 8/8；`m2-ui-check` 断言 `activityRowsBeforeRemove:2` → 点击移除 → `activityRowsAfterRemove:1`、`activityRemoveOk:true` 并纳入 `activityOk`。
+
+### 20.120 挂载窗口「最近一次挂载」（第 41 轮）
+
+- 动机：挂载窗口只在挂载期间有列表；卸载或重启后就想不起上次挂的哪个镜像、哪个盘符。
+- `tools/image-mount.mjs`：`readMountState()` 读取并返回 `lastMount`（保留对象，缺失为 null）；`mount()` 成功时 `writeMountState(..., { lastMount: record })`；`unmount()` 成功时写 `{ ...previous, releasedAt }`（`previous` 优先取 `state.lastMount`，否则用当前记录）；`status()` 返回 `lastMount`，且异常退出清理列表时**保留** `lastMount`（此前会丢）。
+- `renderer/mounts.html`：CLI 状态卡新增 `[data-last-mount]` 行，`lastMountText()` 渲染「最近一次挂载：X: ← disk.E01（分区 0） · 本地时间 · 运行中/已卸载」。
+- 测试：`tests/image-mount.test.mjs` 增加挂载后 `lastMount.releasedAt` 为空、卸载后 `releasedAt` 为字符串、`status().lastMount` 仍在 → 5/5；`mount-check` 新增 `lastMountOk`（挂载中含镜像名 + 运行中）与 `lastMountReleasedOk`（刷新后含已卸载）。

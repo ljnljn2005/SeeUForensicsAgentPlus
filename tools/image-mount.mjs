@@ -272,15 +272,16 @@ export class LovelyCarveHost {
 
 function readMountState(env) {
   const file = mountsFile(env)
-  if (!existsSync(file)) return { mounts: [] }
+  if (!existsSync(file)) return { mounts: [], lastMount: null }
   try {
     const text = readFileSync(file, 'utf8').replace(/^\uFEFF/, '')
     if (!text.trim()) return { mounts: [] }
     const value = JSON.parse(text)
     const mounts = Array.isArray(value?.mounts) ? value.mounts : []
-    return { mounts: mounts.filter((item) => item && typeof item === 'object') }
+    const lastMount = value?.lastMount && typeof value.lastMount === 'object' ? value.lastMount : null
+    return { mounts: mounts.filter((item) => item && typeof item === 'object'), lastMount }
   } catch {
-    return { mounts: [] }
+    return { mounts: [], lastMount: null }
   }
 }
 
@@ -486,7 +487,7 @@ ${out.stderr ?? ''}`
     // 进程退出时挂载会被系统释放；此时还留在清单里的记录属于上次异常退出，清掉。
     const live = host !== undefined && host.running
     const mounts = live ? all : all.filter((item) => item.exists)
-    if (!live && mounts.length !== all.length) writeMountState(current, mounts)
+    if (!live && mounts.length !== all.length) writeMountState(current, mounts, { lastMount: state.lastMount })
     return {
       ok: true,
       cli: { path: resolved.path, source: resolved.source, version: cliVersionOf(resolved.path), error: resolved.path ? undefined : resolved.error },
@@ -495,6 +496,7 @@ ${out.stderr ?? ''}`
       hostRunning: host !== undefined && host.running,
       defaultMountPoint: defaultMountPoint(current, mounts.map((item) => item.mountPoint)),
       mounts,
+      lastMount: state.lastMount,
     }
   }
 
@@ -593,7 +595,7 @@ ${out.stderr ?? ''}`
         caseDir,
       }
       const mounts = state.mounts.filter((item) => String(item.mountPoint).toUpperCase() !== point).concat(record)
-      writeMountState(currentEnv(), mounts)
+      writeMountState(currentEnv(), mounts, { lastMount: record })
       return { ok: true, mount: record, mounts, ms: Date.now() - startedAt }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -637,7 +639,8 @@ ${out.stderr ?? ''}`
         }
       }
       const mounts = state.mounts.filter((item) => String(item.id) !== key)
-      writeMountState(currentEnv(), mounts)
+      const previous = state.lastMount && String(state.lastMount.id) === key ? state.lastMount : record
+      writeMountState(currentEnv(), mounts, { lastMount: { ...previous, releasedAt: new Date().toISOString() } })
       return { ok: true, mounts, released, fallback, ms: Date.now() - startedAt }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }

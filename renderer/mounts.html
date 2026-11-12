@@ -99,6 +99,7 @@
     </div>
     <div id="cliHint" class="hint"></div>
     <div id="timing" class="hint"></div>
+    <div id="lastMount" class="hint" data-last-mount="1"></div>
   </div>
 
   <div class="card">
@@ -136,6 +137,7 @@
     cliPath: document.getElementById('cliPath'),
     cliHint: document.getElementById('cliHint'),
     timing: document.getElementById('timing'),
+    lastMount: document.getElementById('lastMount'),
     imagePath: document.getElementById('imagePath'),
     inspectHint: document.getElementById('inspectHint'),
     partitions: document.getElementById('partitions'),
@@ -196,6 +198,15 @@
     document.getElementById('btnRefresh').disabled = next;
   }
 
+  function lastMountText(last) {
+    if (!last || !last.mountPoint) return '最近一次挂载：还没有记录。';
+    var when = last.releasedAt || last.mountedAt || '';
+    var time = when ? new Date(when).toLocaleString('zh-CN', { hour12: false }) : '';
+    var part = last.partition === undefined || last.partition === null ? '' : '（分区 ' + last.partition + '）';
+    var state = last.releasedAt ? '已卸载' : '运行中';
+    return '最近一次挂载：' + last.mountPoint + ' ← ' + (last.imageName || last.imagePath || '') + part + ' · ' + time + ' · ' + state;
+  }
+
   function renderStatus(view) {
     status = view;
     if (!view) return;
@@ -211,6 +222,7 @@
       els.cliHint.textContent = '来源：' + (cli.source || '') + (view.hostRunning ? ' · 常驻 CLI 进程运行中' : '');
     }
     els.stateFile.textContent = view.stateFile || '';
+    els.lastMount.textContent = lastMountText(view.lastMount);
     if (!els.mountPoint.value) els.mountPoint.value = view.defaultMountPoint || 'X:';
 
     var mounts = view.mounts || [];
