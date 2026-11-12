@@ -61,30 +61,32 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.2.7**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.2.8**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,640,443 B ≈ 766 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,807,728 B（330/330 个 `@deepseek-ai` 包齐全，19,648 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`dist/renderer/local-model.html`） |
-| `release/SeeUForensicsAgentPlus-0.2.7-x64.exe`（NSIS 安装包） | 211,936,354 B（blockmap 220,843 B） |
-| `release/SeeUForensicsAgentPlus-0.2.7-x64-portable.exe` | 189,590,954 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,669,553 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,818,135 B（19,655 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`dist/renderer/local-model.html`） |
+| `release/SeeUForensicsAgentPlus-0.2.8-x64.exe`（NSIS 安装包） | 211,947,042 B（blockmap 220,668 B） |
+| `release/SeeUForensicsAgentPlus-0.2.8-x64-portable.exe` | 189,582,714 B |
 
-实测冷启动到 dsh UI：目录版 4150 ms；portable 首次 47.6s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
+实测冷启动到 dsh UI：目录版 5130 ms；portable 首次 36.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
 
-### v0.2.8 待发布（v0.2.7 之后、尚未打包）
+### v0.2.8 改了什么
+
+> 以下改动已进入 v0.2.8 安装包（v0.2.7 `c3f22e1` 之后：真机联调修复、检索 CSV、验收材料、LovelyMem/LovelySpark 集成），打包态回归见 `docs/packaging.md`。
 
 - **检索结果【导出 CSV】**：检索视图把当前关键词 + 筛选（检材/应用/起止日期）命中的记录整批写成 CSV 落盘（`<下载>/seeu-exports`，`SEEU_EXPORT_DIR` 可覆盖），列：检材号/检材名称/应用/账号/类别/时间/行号/记录ID/摘要；UTF-8 BOM + CRLF，Excel 双击直接开；一次最多 20000 行，超过时提示「共 N 条」；
 - **真机网关联调通过（首次接真实端点）**：`deepseek-flash`（`http://10.10.250.120:8080/v1`）实测 —— `/v1/models` 117 ms（只有 id，无窗口字段）；流式首字节 86 ms、纯文本 4.3 s / 105 分片约 17 tok/s；**推理模型**（delta 先 `reasoning_content` 再 `content`，dsh 会显示成思考块）；流式工具调用 1.8 s、并行 2 个工具调用 1.6 s；`include_usage` 有效（可开「流式 token 用量」）。headless 真机 e2e：案件概览注入后模型 **5/5 检材全部答对**（明确说「取自概览表格，未推断」），`pwsh node -v` 工具闭环返回 `v24.18.0`；首字 23.8 s、首步输入 9,145 tokens（精简预设 + 概览注入）。
 - **网关不自报上下文窗口时给提示**：`deepseek-flash` 的 `/models` 只回 id，设置页拉取模型不会自动填窗口 → 探测结果新增 `noContextWindow` 标记，界面黄字提示「按表单里的 128k 使用；模型实际窗口更小会报 400，请按模型文档手填」；
 - **记录数口径修复**：会话概览里「规模：记录 22777 条」与检材表各行相加对不上（表内取的是火眼 `evidence.record_count`，如 3065/13718）→ `evidences()` 改为按索引内 `record` 行数统计（`recordCount`，本案 1/1/8,443/1/14,331，合计 22,777），火眼原值保留在 `reportedRecordCount`；会话概览表格下方加注说明口径；
 - **接入本机 LovelyMem V3 / LovelySpark CLI**（合并 Gitea 分支 `feat/local-lovely-cli`）：会话按需加载 `lovelymem-cli` / `lovelyspark-cli` 技能，通过现有 shell 调用，不新增工具 schema/服务/依赖；自动发现本机 CLI（环境变量 → 配置 → PATH → 注册表/已运行进程/快捷方式 → 常见目录），完整 stdout/stderr 落盘 `<工作区>/lovely-runs/`、模型只收限长预览；打包版把 `tools/lovely-cli/*.mjs` 放进 `app.asar.unpacked` 供 shell 调用。本机实测：LovelyMem **3.1.11**（engines `starmem`/`vol3`）、LovelySpark **0.3.20** 均通过包装器成功执行；新增 `npm run test:lovely`（23 例，含 dev/asar 两种模式下 host→dsh→shell 的环境隔离）；
-- **测试**：`npm test` **80/80**（56 + 23 lovely CLI + host 集成）；新增 `npm run test:e2e:real-gateway`（`scripts/e2e/real-gateway-headless.mjs`，凭据走 `GW_BASE/GW_KEY/GW_MODEL` 环境变量，不落盘）。
+- **测试**：`npm test` **80/80**（56 + 23 lovely CLI + host 集成）；新增 `npm run test:e2e:real-gateway`（`scripts/e2e/real-gateway-headless.mjs`，凭据走 `GW_BASE/GW_KEY/GW_MODEL` 环境变量，不落盘）。v0.2.8 打包后 asar 19,655 条目、打包态 `m2-ui-check` / `settings-check` / `export-check` / `cross-case-check` 全绿；`app.asar.unpacked` 里的 lovely CLI 实跑 `status` 能发现 LovelyMem 3.1.11 与 LovelySpark 0.3.20。
 
 ### v0.2.7 改了什么
 

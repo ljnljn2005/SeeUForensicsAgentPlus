@@ -785,3 +785,18 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - `settings-check` → `{"ok":true,"presetApplied":true,"budgetText":"固定开销估算：约 6.6k tokens…","pulledContextWindow":"32768","warmupOk":true,"titleGenDefault":true,"usagePreview":true,"lightShell":true,"errors":[]}`；
   - `cross-case-check`（`SEEU_CROSS_E2E_PORT=9424`）→ `{"ok":true,"syncNote":"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。","copyNote":"已复制 30 条重合实体清单（2675 字符）","clipboard":{"hasTwoCases":true,"hasCaseNumbers":true,"hasKinds":true},"errors":[]}`。
 - 预览仍在线（重启后 token 会变），等用户视觉验收 + 真实网关联调。
+
+### v0.2.8 回归验证
+
+- 打包：`npm version 0.2.8 --no-git-tag-version`；`node scripts/build.mjs`、`npm run check:overlay`、`npm test`（80/80）全绿；`npx electron-builder --win --x64 -c.directories.output=release-028`（约 12 分钟，无证书跳过签名），产物搬进 `release/` 并删 0.2.7 三件（保留 0.1.7 portable）。
+- 产物：`release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B；`resources/app.asar` **168,818,135 B（19,655 entries）**；NSIS **211,947,042 B**（blockmap 220,668 B）；portable **189,582,714 B**；`release/win-unpacked` 总计 803,669,553 B。
+- asar 自检（`.probe/asar-028-check.mjs`）：条目 19,655、必需路径（含 `tools/lovely-cli/cli.mjs`、`discovery.mjs`、两个 `SKILL.md`、`tools/ges-index/csv.mjs`）`missing:[]`；22 项代码抽查全 true，新增 `lovelyCli`/`lovelyDiscovery`/`lovelySkillMem`/`lovelySkillSpark`/`hostLovelyEnv`/`lovelyUnpacked`（`resources/app.asar.unpacked/tools/lovely-cli/*.mjs` 存在）、`reportedRecordCount`、`briefCountNote`、`searchCsvButton`。
+- 打包版 lovely CLI 实跑：`node release/win-unpacked/resources/app.asar.unpacked/tools/lovely-cli/cli.mjs status` → `{"lovelymem":{"path":"E:\\CTFTools\\...lovelymem.v3.exe","found":true},"lovelyspark":{"path":"E:\\CTFTools\\...lovelyspark.exe","found":true}}`。
+- 启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：目录版 `node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9441` → `"ok":true,"elapsedMs":5130`；portable `--port 9442 --timeout 240000` → `"ok":true,"elapsedMs":36459`。
+- 打包态 e2e（都传 Windows 路径给 `SEEU_UI_EXE`，隔离 home/userData）：
+  - `m2-ui-check` → `{"m2ok":true,"searchOk":true,"searchEvNames":true,"recordsFilterOk":true,"recordsAppFilterOk":true,"entityPagingOk":true,"entityEvSelectOk":true,"timelineFiltersOk":true,"briefVisible":true,"treeFilterOk":true,"kpiRange":true,"errors":[]}`；
+  - `settings-check --exe "<win-unpacked exe>"` → `{"ok":true,"presetApplied":true,"pulledContextWindow":"32768","warmupOk":true,"titleGenDefault":true,"usagePreview":true,"probeNoContextWindow":false,"probeMismatch":{"configured":131072,"gateway":32768},"probeMissing":["ghost-7b"],"lightShell":true,"errors":[]}`；
+  - `export-check`（`SEEU_EXPORT_E2E_PORT=9445`）→ `ok:true`（案件概览 713 字符且 `hasRange:true`、记录 CSV 20,000 行 4,608,566 B BOM true、表 CSV 745 行 143,621 B、记录 14,996 / 实体 1,888 / 时间线 3,235 字符、`savedTab:"timeline"`）；
+  - `cross-case-check`（`SEEU_CROSS_E2E_PORT=9446`）→ `ok:true`（`syncNote:"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。"`，复制 30 条重合实体清单 2,675 字符、含两个案号与类别）。
+- 排障：同 v0.2.7，`SEEU_UI_EXE` 必须 Windows 路径；`release-028` 中间目录在产物搬完后删除。
+- 预览仍在线（重启后 token 会变），等用户视觉验收；真实网关（`deepseek-flash`）已联调通过。

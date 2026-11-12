@@ -1780,3 +1780,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 回归：`npm run test:lovely` **23/23**（含 `host → dsh 环境过滤 → shell → CLI` 的 dev/asar 两种模式）；`npm test` **80/80**；`node scripts/build.mjs` OK；`npm run check:overlay` OK。
 - 文档：`docs/lovely-cli.md`（分支自带，含发现顺序/缓存/失败处理）；README §2 顶部加接入说明、v0.2.8 段加本项与测试数。
 - 遗留：本机未做真实内存镜像分析（`doctor`/`plugins` 会拉起 V3 进程，耗时与授权取决于本机），只验证到 `version`；Luxe 2.5.0 的 `--cli` 会启动 GUI，不视为 V3 兼容；模型侧「按技能主动调用」只验证了技能文件落盘与 shell 环境，未跑真实模型会话（留给下次真机联调）。
+
+---
+
+## 20.59 v0.2.8 打包与打包态回归
+
+- 版本：`npm version 0.2.8 --no-git-tag-version`（`package.json`、`package-lock.json` 顶层与 `packages[""].version`）；`node scripts/build.mjs`、`npm run check:overlay`、`npm test`（80/80）全绿后打包。
+- 打包：`npx electron-builder --win --x64 -c.directories.output=release-028`（后台 job `bash-17ec5ffd47244c84`，exit 0，约 12 分钟，无证书跳过签名）；产物搬进 `release/` 并删 0.2.7 三件（保留用户可能在跑的 0.1.7 portable），`release-028` 删除。
+- 产物：`release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B；`resources/app.asar` **168,818,135 B（19,655 entries）**；NSIS **211,947,042 B**（blockmap 220,668 B）；portable **189,582,714 B**；`release/win-unpacked` 总计 803,669,553 B。
+- asar 自检脚本 `.probe/asar-028-check.mjs`（在 027 版基础上加 lovely 路径与检查、`reportedRecordCount`、`briefCountNote`、`searchCsvButton`）：`{"entries":19655,"missing":[],"checks":{22 项全 true}}`；`client.js` 117,405 B、`index.js` 19,011 B、`query.js` 28,331 B。
+- 打包版 lovely CLI 实跑：`node release/win-unpacked/resources/app.asar.unpacked/tools/lovely-cli/cli.mjs status` 通过缓存发现 `lovelymem.v3.exe` 与 `lovelyspark.exe`（`found:true`），说明 `asarUnpack` 与 `src/paths.ts` 的 `lovelyCliEntry()` 在打包态成立。
+- 启动验证（`SEEU_DEV_MULTI=1`、不跑 `scripts/kill-app.mjs`）：目录版 `--port 9441` → `"ok":true,"elapsedMs":5130`；portable `--port 9442 --timeout 240000` → `"ok":true,"elapsedMs":36459`。
+- 打包态 e2e：`m2-ui-check` `m2ok:true / errors:[]`（检索/记录/实体/时间线/会话概览/树过滤/KPI 全绿）；`settings-check` `ok:true`（`probeNoContextWindow:false`、`warmupOk`、`titleGenDefault/usagePreview/lightShell` 全 true）；`export-check` `ok:true`（概览 713 字符含时间范围、记录 CSV 20,000 行、表 CSV 745 行、时间线 3,235 字符）；`cross-case-check` `ok:true`（双案同步、30 条重合实体清单 2,675 字符）。
+- 文档：README §2 产物表换 v0.2.8 + 「### v0.2.8 改了什么」；`docs/packaging.md` 追加「### v0.2.8 回归验证」；本节。
+- 遗留：真机仍只有 `deepseek-flash` 一个模型跑过（`qwen3.8-flash-next` 未测）；推理模型首字约 21–24 s 属模型侧思考；Lovely 未做真实镜像分析会话（只验证到 `version`/发现）；等用户视觉验收。
