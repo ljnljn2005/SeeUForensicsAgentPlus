@@ -2065,3 +2065,6 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - persona 体量（字符）：standard 5,668 / seeu-lite 1,416 / traffic 2,782 / log 1,208 / memory 4,074 / data 3,504 / mobile 5,144 / exe 5,586 / db 3,753；全部含 `Q<n>｜答案` 与「本机实测（2026-11-12）」。
 - 坑：① 应用脚本第一版在 block 内遇到 `- id:` 就 break，把 persona 插件行当成区段结尾 → 改为「缩进 ≤ 预设行缩进且以 `- id: ` 开头」才 break；② 旧测试断言写死「禁止全盘递归搜索」「先 lovelyspark-cli」，与新 persona 措辞不一致 → 放宽为标准预设 `/(禁止|不许).{0,4}全盘递归/`、流量 `先 load \`lovelyspark-cli\``；③ Qiko 通用段落里的工具名（ssh-mcp/ida-mcp/jadx-mcp、`C:\Users\HP\.workbuddy\...`）必须整体删除，否则模型会去找不存在的 MCP。
 - 遗留：Qiko 图片鉴伪/隐写、URL 溯源技能需要联网或额外模型时只能出「本地痕迹结论」；`myos-plugin-*` 两个大插件未导入（体积）；v0.3.5 未打包。
+
+- 追加（同日）：用户要求「apk分析不能放手机取证啊，要隔开」⇒ 拆成两个独立预设：`preset-apk`（7）恢复为「APK 分析」（原弘连 APK 专家 persona + Qiko `apk-reverse`/`apk-dynamic-forensics`/`android-malware-analysis`，只处理样本本身），新增 `preset-mobile`（10）「手机取证（Mobile）」（Qiko 手机/微信 persona，iOS/Android/鸿蒙、提取包、备份、微信/IM 与应用数据，APK 深挖指引切换预设）；两者都用 `customSkillDirs: [SEEU_SKILL_SET_QIKO]`；`check-overlay` 的 `expertPresets` 与 `tests/presets-config.test.mjs`（专项预设 4→5、mobile persona 关键词、本机实测段）同步；`npm test` 122/122。
+

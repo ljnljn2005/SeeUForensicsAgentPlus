@@ -128,7 +128,8 @@ function main() {
     // 三个专项预设（专家 persona 改造）：工具面同样只读，技能根走默认技能目录。
     const expertPresets = [
       ['preset-data', '数据分析与研判'],
-      ['preset-apk', '手机取证（Mobile）'],
+      ['preset-apk', 'APK 分析'],
+      ['preset-mobile', '手机取证（Mobile）'],
       ['preset-exe', 'EXE 逆向分析'],
       ['preset-db', '数据库取证（Database）'],
     ]

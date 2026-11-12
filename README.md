@@ -81,7 +81,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 - **融合 Qiko 专家（7 份提示词 + 75 个技能库）并进现有预设**（用户要求「并进现有预设、改成比赛式」）：
   - `preset-standard`（取证分析）← 火眼 + 弘连服务器 + **Qiko 服务器/计算机专家**（画像与题型分流、时间锚点法、可疑文件分级、Windows 痕迹矩阵、断网降级与加密恢复）；
-  - `preset-apk` 改名 **手机取证（Mobile）** ← 原 APK + **Qiko 手机/微信专家**（iOS/Android 提取包、微信 SQLCipher、资金链、撤回与删除恢复、APK 子集）；
+  - `preset-apk` 保持独立并恢复为 **APK 分析** ← 原 APK 专家 + Qiko APK/逆向/恶意分析技能（样本静态/动态、签名、native/加壳、IOC），不碰整机与聊天记录；新增 **preset-mobile「手机取证（Mobile）」**（order 10）← Qiko 手机/微信专家（iOS/Android/鸿蒙 镜像与提取包、iTunes/厂商备份、微信 SQLCipher、资金链、撤回与删除恢复），两者分工明确；
   - `preset-traffic` ← + **Qiko 流量包专家**（预检分流、流量画像、协议分流与三级还原、帧号级定位）；
   - `preset-data` 改名 **数据分析与研判** ← 网钜资金 + **Qiko 案件研判/网络犯罪情报专家**（资金链、人物关系、涉赌诈骗账号、图片鉴伪/水印/隐写、URL 溯源）；
   - 日志/内存/EXE/数据库/精简预设保持领域不变，统一补「比武比赛模式」与「本机实测」段；
@@ -820,7 +820,8 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 | 日志分析（Log） | 4 | `lovelyspark-cli` + Qiko 比武技能组 | 系统/应用日志、时间线还原 |
 | 内存分析（Memory） | 5 | `starmem-cli`（`lovelymem-cli` 兜底）+ Qiko 比武技能组 | 内存镜像、进程/服务/注册表/凭据 |
 | 数据分析与研判 | 6 | Qiko 比武技能组（资金/关系/情报） | 网钜等导出数据清洗、资金链、人物关系、涉赌诈骗与 URL/图片研判 |
-| 手机取证（Mobile） | 7 | Qiko 比武技能组（iOS/Android/微信/APK） | 手机镜像与提取包、微信/IM、应用 APK 逆向与 IOC |
+| APK 分析 | 7 | Qiko 比武技能组（APK/逆向/恶意分析） | APK/APKS/XAPK/AAB 静态分析：清单/权限/组件、签名、SDK、native/加壳、IOC 与威胁研判 |
+| 手机取证（Mobile） | 10 | Qiko 比武技能组（iOS/Android/微信） | 手机镜像与提取包、iTunes/厂商备份、微信/IM 聊天记录与应用数据（APK 深挖交给 APK 分析） |
 | EXE 逆向分析 | 8 | Qiko 比武技能组 | Windows PE 结构、导入导出、查壳、静态行为研判 |
 | 数据库取证（Database） | 9 | Qiko 比武技能组 | SQLite/MySQL 等数据库原件、备份与日志的只读核验、结构查看、检索与受限恢复 |
 
