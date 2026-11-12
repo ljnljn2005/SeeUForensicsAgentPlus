@@ -11,7 +11,7 @@
  * 用法：node scripts/e2e/settings-check.mjs [--out scripts/e2e/shots/local-model.png]
  */
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -201,6 +201,10 @@ try {
   env.SEEU_OPEN_SETTINGS = '1'
   env.SEEU_DSH_HOME = HOME
   env.SEEU_USER_DATA = UD
+  const EXPORT_DIR = join(REPO, '.dev', 'settings-exports')
+  rmSync(EXPORT_DIR, { recursive: true, force: true })
+  mkdirSync(EXPORT_DIR, { recursive: true })
+  env.SEEU_EXPORT_DIR = EXPORT_DIR
   delete env.SEEU_LOCAL_MODEL_JSON
 
   child = spawn(EXE, [...EXE_ARGS, `--remote-debugging-port=${CDP_PORT}`, `--user-data-dir=${UD}`], {
@@ -528,6 +532,21 @@ try {
   report.envCopyOk = /SeeU 环境体检/.test(envClipboard) && /合计：/.test(envClipboard) && /外部工具路径/.test(envClipboard)
   if (!report.envCopyOk) throw new Error('复制体检结果内容不符：' + String(envClipboard).slice(0, 160))
   log('复制体检结果', `${report.envClipboardChars} 字符`)
+
+  // 第 38 轮：导出体检报告 .md（走 save-export IPC，落 SEEU_EXPORT_DIR）。
+  await evaluate(client, `document.getElementById('btn-env-export').click(), true`)
+  await sleep(700)
+  const exported = readdirSync(EXPORT_DIR).filter((f) => f.toLowerCase().endsWith('.md'))
+  const latest = exported.map((f) => ({ f, t: statSync(join(EXPORT_DIR, f)).mtimeMs })).sort((a, b) => b.t - a.t)[0]
+  report.envExportFile = latest ? join(EXPORT_DIR, latest.f) : ''
+  report.envExportText = latest ? readFileSync(join(EXPORT_DIR, latest.f), 'utf8') : ''
+  report.envExportOk = latest
+    ? /^# SeeU 运行环境体检/.test(report.envExportText) &&
+      /\| 项目 \| 状态 \| 详情 \| 提示 \|/.test(report.envExportText) &&
+      /合计：\*\*\d+ 项正常/.test(report.envExportText)
+    : false
+  if (!report.envExportOk) throw new Error('导出体检报告 .md 失败：' + JSON.stringify({ files: exported, head: String(report.envExportText).slice(0, 120) }))
+  log('导出体检报告', report.envExportFile)
 
   // 真实点「从网关拉取模型列表」按钮：应把 /v1/models 的 id 填进 textarea（保留已有显示名）
   await evaluate(client, `document.getElementById('btn-models').click(), true`)

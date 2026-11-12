@@ -40,7 +40,7 @@ import {
 import { LOVELY_TOOL_SPECS, lovelyToolsView, saveLovelyToolPaths } from './lovely-tools.js'
 import { mountHostEnv, mountManager, setMountLogger } from './mounts.js'
 import { TOOL_PATH_SPECS, saveToolPaths, toolPathsEnv, toolPathsView } from './tool-paths.js'
-import { collectEnvReport, envReportText } from './env-report.js'
+import { collectEnvReport, envReportMarkdown, envReportText } from './env-report.js'
 import { ensureBundledPluginPackages, installBundledPluginBundles } from './dsh-plugins.js'
 import { bundledSkillsDir, installBundledSkills, userSkillsDir } from './skills.js'
 import {
@@ -1022,7 +1022,7 @@ function registerIpc(): void {
     try {
       const report = await collectEnvReport()
       logShell(`env report: ${report.summary.ok} 正常 / ${report.summary.warn} 注意 / ${report.summary.fail} 不可用`)
-      return { ok: true, report, text: envReportText(report) }
+      return { ok: true, report, text: envReportText(report), markdown: envReportMarkdown(report) }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }

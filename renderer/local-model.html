@@ -333,6 +333,7 @@
     <div class="actions" style="margin:10px 0 6px">
       <button id="btn-env-check">开始体检</button>
       <button id="btn-env-copy" disabled>复制结果</button>
+      <button id="btn-env-export" disabled>导出 .md</button>
       <span id="env-summary" class="hint" style="margin-left:8px"></span>
     </div>
     <div id="env-items"></div>
@@ -770,8 +771,11 @@
       box.append(row)
     }
     lastEnvText = report.text || ''
+    lastEnvMarkdown = report.markdown || ''
     const copyButton = $('btn-env-copy')
     if (copyButton) copyButton.disabled = !lastEnvText
+    const exportButton = $('btn-env-export')
+    if (exportButton) exportButton.disabled = !lastEnvMarkdown
     const sum = report.summary || {}
     const summary = $('env-summary')
     summary.textContent = '体检结果：' + (sum.ok || 0) + ' 项正常 · ' + (sum.warn || 0) + ' 项注意 · ' + (sum.fail || 0) + ' 项不可用'
@@ -779,6 +783,7 @@
   }
 
   let lastEnvText = ''
+  let lastEnvMarkdown = ''
 
   async function copyEnvReport() {
     if (!lastEnvText) return
@@ -792,6 +797,36 @@
     }
   }
 
+  async function exportEnvReport() {
+    if (!lastEnvMarkdown) return
+    const status = $('env-copy-status')
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+    const name = 'SeeU-环境体检-' + stamp + '.md'
+    try {
+      if (window.seeu && typeof window.seeu.saveExport === 'function') {
+        const res = await window.seeu.saveExport(name, lastEnvMarkdown)
+        if (res && res.ok) {
+          status.textContent = '已导出到 ' + res.path + '（' + res.bytes + ' 字节）'
+          status.style.color = 'var(--muted)'
+          return
+        }
+        throw new Error((res && res.error) || '保存失败')
+      }
+      const blob = new Blob([lastEnvMarkdown], { type: 'text/markdown;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = name
+      link.click()
+      URL.revokeObjectURL(url)
+      status.textContent = '已下载 ' + name
+      status.style.color = 'var(--muted)'
+    } catch (error) {
+      status.textContent = '导出失败：' + (error && error.message ? error.message : error)
+      status.style.color = 'var(--err)'
+    }
+  }
+
   async function runEnvCheck() {
     const button = $('btn-env-check')
     button.disabled = true
@@ -800,7 +835,7 @@
       if (!envApi) throw new Error('预加载桥不可用（window.seeu.env 缺失）')
       const res = await envApi.report()
       if (!res || !res.ok || !res.report) throw new Error((res && res.error) || '体检失败')
-      renderEnvReport({ ...res.report, text: res.text })
+      renderEnvReport({ ...res.report, text: res.text, markdown: res.markdown })
     } catch (error) {
       $('env-summary').textContent = '体检失败：' + (error && error.message ? error.message : error)
       $('env-summary').style.color = 'var(--err)'
@@ -1117,6 +1152,8 @@
   if (envButton) envButton.addEventListener('click', () => { void runEnvCheck() })
   const envCopyButton = $('btn-env-copy')
   if (envCopyButton) envCopyButton.addEventListener('click', () => { void copyEnvReport() })
+  const envExportButton = $('btn-env-export')
+  if (envExportButton) envExportButton.addEventListener('click', () => { void exportEnvReport() })
   void loadToolPaths()
   void load()
 </script>

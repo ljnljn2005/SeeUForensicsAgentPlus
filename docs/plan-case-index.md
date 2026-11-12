@@ -2499,3 +2499,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `plugins/seeu-case-index/client.js`：新增 `activityDay` state；每根条形加 `data-activity-day`、`role=button`、`onClick` 切换（再点同一根取消）、选中态描边 `C_ACC`；标题行计数 span 加 `data-activity-count`，筛选时显示「当天 N 条 · 共 M 条」；出现「只看 YYYY-MM-DD · 点条形取消」提示；列表按本地日期过滤（`Date.parse(at)` → 年-月-日 与 `activityDay` 比较），最多仍显示 6 条。
 - e2e：`m2-ui-check` 现在预置活动（paho home 的 `index-activity.json` 写今天 1 条 + 昨天 1 条）→ `activityBars:7`、点最后一根 → `activityFilterText:"只看 2026-11-13 · 点条形取消"`、`activityHeaderText:"当天 1 条 · 共 2 条"`、`activityFilterCleared:true`、`activityDayFilterOk:true`；纳入 `activityOk`。
 - 坑：`SEEU_DSH_HOME` 传**相对路径**时插件侧 `activityFile()` 会按 dsh 进程 cwd 解析、读不到 e2e 预置文件（表现为「还没有活动记录」）；e2e 必须传绝对路径（`D:/.../.dev/ui-home37`）。
+
+### 20.117 体检报告导出 .md（第 38 轮）
+
+- 动机：纯文本适合贴聊天，但不适合留档/进工单；体检结果应该有可导出的结构化文件。
+- `tools/env-report.mjs` 新增 `envReportMarkdown(report)`：一级标题「# SeeU 运行环境体检」、检查时间、合计加粗、四列表格（项目/状态/详情/提示），单元格转义 `|` 与换行，末尾一句来源说明；`src/env-report.ts` re-export；`src/main.ts` 的 `seeu:env:report` 额外返回 `markdown`；`src/preload.ts` 类型加 `markdown?`。
+- 设置页：新增「导出 .md」按钮（无报告时 disabled），走已有的 `window.seeu.saveExport(name, text)` IPC（`SEEU_EXPORT_DIR` 可覆盖落盘目录），文件名 `SeeU-环境体检-<UTC 时间戳>.md`；成功在状态行显示完整路径与字节数。
+- 测试：`tests/env-report.test.mjs` +1 例（标题、表头、合计、表格行数 = items 数、提示为空）；坑：统计行时要把 Markdown 分隔行 `| --- |` 排除，否则比 items 多 1。
+- e2e：`settings-check` 设置 `SEEU_EXPORT_DIR=.dev/settings-exports`，体检后点【导出 .md】，读最新 .md 断言首行、表头、合计 → `envExportOk:true`，文件名 `SeeU-环境体检-2026-11-12-22-02-32.md`。
+- 坑：`runEnvCheck()` 里 `renderEnvReport({ ...res.report, text: res.text })` 漏传 `markdown` → 按钮始终 disabled、e2e 无文件；必须把 `res.markdown` 一起并进对象。

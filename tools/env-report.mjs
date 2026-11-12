@@ -181,3 +181,26 @@ export function formatEnvReport(report) {
   lines.push(`合计：${summary.ok} 项正常 / ${summary.warn} 项注意 / ${summary.fail} 项不可用`)
   return lines.join('\n')
 }
+
+/** Markdown 版体检报告（用于「导出 .md」，比纯文本更适合留档/贴工单）。 */
+export function envReportMarkdown(report) {
+  const icon = { ok: '✓', warn: '!', fail: '×' }
+  const summary = report?.summary ?? { ok: 0, warn: 0, fail: 0 }
+  const lines = [
+    '# SeeU 运行环境体检',
+    '',
+    `- 检查时间：${report?.checkedAt ?? ''}`,
+    `- 合计：**${summary.ok} 项正常 / ${summary.warn} 项注意 / ${summary.fail} 项不可用**`,
+    '',
+    '| 项目 | 状态 | 详情 | 提示 |',
+    '| --- | --- | --- | --- |',
+  ]
+  const escapeCell = (value) => String(value ?? '').replace(/\|/g, '\|').replace(/\r?\n/g, ' ')
+  for (const entry of report?.items ?? []) {
+    const status = `${icon[entry.status] ?? '?'} ${entry.status ?? ''}`.trim()
+    lines.push(`| ${escapeCell(entry.label)} | ${escapeCell(status)} | ${escapeCell(entry.detail)} | ${escapeCell(entry.status === 'ok' ? '' : entry.hint)} |`)
+  }
+  lines.push('')
+  lines.push('> 由 SeeU 设置页「运行环境体检」生成；提示列给出可操作的下一步。')
+  return lines.join('\n')
+}

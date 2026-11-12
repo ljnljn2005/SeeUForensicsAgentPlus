@@ -141,3 +141,5 @@ export async function collectEnvReport(): Promise<EnvReport> {
 export function envReportText(report: EnvReport): string {
   return formatEnvReport(report)
 }
+
+export { envReportMarkdown } from '../tools/env-report.mjs'

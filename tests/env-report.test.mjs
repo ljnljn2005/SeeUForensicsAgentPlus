@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { buildEnvReport, formatEnvReport, worstStatus } from '../tools/env-report.mjs'
+import {
+  buildEnvReport,
+  envReportMarkdown,
+  formatEnvReport,
+  worstStatus
+} from '../tools/env-report.mjs'
 
 const fullFacts = () => ({
   tools: { total: 13, ready: 13, missing: [] },
@@ -67,4 +72,27 @@ test('空事实不抛异常；worstStatus / formatEnvReport 可用', () => {
   assert.match(text, /合计：/)
   assert.equal(worstStatus([{ status: 'ok' }, { status: 'warn' }]), 'warn')
   assert.equal(worstStatus([]), 'ok')
+})
+
+test('envReportMarkdown：标题/合计/表格行/提示列', () => {
+  const report = buildEnvReport(
+    {
+      plugins: { total: 6, resolvable: 6 },
+      skills: { bundled: 6, skillSets: 4, installed: 6 },
+      tools: { ready: 13, total: 13 },
+      localModel: { enabled: false },
+      mounts: { cliConfigured: false, active: 0 },
+      myos: { mcpPath: 'D:/Programs/MYOS/Client/tools/mcp/myos_mcp_server.exe' },
+      indexDirs: [],
+    },
+    Date.parse('2026-11-13T06:00:00+08:00'),
+  )
+  const markdown = envReportMarkdown(report)
+  assert.match(markdown, /^# SeeU 运行环境体检/)
+  assert.match(markdown, /\| 项目 \| 状态 \| 详情 \| 提示 \|/)
+  assert.match(markdown, /\*\*\d+ 项正常 \/ \d+ 项注意 \/ \d+ 项不可用\*\*/)
+  const lines = markdown.split('\n').filter((line) => line.startsWith('| ') && !line.startsWith('| 项目') && !line.startsWith('| ---'))
+  assert.equal(lines.length, report.items.length)
+  assert.ok(lines.some((line) => line.includes('案件索引目录')))
+  assert.ok(lines.some((line) => line.includes('→') === false))
 })
