@@ -326,6 +326,17 @@ export function contextWindowMismatch(contextWindow, modelIds, gatewayModels) {
   return { configured, gateway }
 }
 
+/**
+ * 网关 /v1/models 有没有自报可用的上下文窗口。
+ * vLLM 会给 max_model_len、llama.cpp 给 n_ctx；Ollama 与部分代理只给 id，
+ * 这时设置页里的窗口只能按模型文档手填，需要在探测行里说明，避免用户误以为配对了。
+ * @param {{ id?: string, contextWindow?: number }[]} gatewayModels /v1/models 解析结果
+ * @returns {boolean}
+ */
+export function gatewayContextReported(gatewayModels) {
+  return (gatewayModels ?? []).some((item) => item && Number(item.contextWindow) >= 2048)
+}
+
 export function normalizeGatewayModels(data) {
   if (!Array.isArray(data)) return []
   const out = []

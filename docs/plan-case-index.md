@@ -1745,3 +1745,24 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `docs/acceptance.md`：截图表（每张写明该看什么）+ 六步动手验收（启动/欢迎页/面板/导出 CSV/设置页/深浅色）+ 真机联调需要用户提供的信息（baseURL、模型 id、apiKey、并发/窗口）+ 已自动验证项 + 已知限制。
 - README §2 加验收清单链接；`package.json` 加 `test:e2e:shots`（e2e 脚本 16 → 17 个）。
 - 遗留：截图是 1280×800 窗口的整屏图，不含缩放比例差异；浅色面板截图靠去 `data-ds-dark-theme` 模拟，与 Windows 系统切换的下次重启路径等价。
+
+---
+
+## 20.57 真机网关联调（deepseek-flash）+ 记录数口径修复
+
+- 背景：目标里的「本地模型真机联调」多轮缺少输入；用户 m09759 给出 `http://10.10.250.120:8080/v1`、模型 `deepseek-flash`、apiKey（只走环境变量 `SEEU_LOCAL_LLM_API_KEY`，不落仓库）。恢复 goal 后先做协议探针，再做端到端。
+- 协议探针（`.probe/real-gw-probe.mjs`、`.probe/real-gw-probe2.mjs`，gitignored）：
+  - `/v1/models` 200 / 117 ms，ids `deepseek-flash` / `qwen3.8-flash-next`，条目只有 id 类字段 → `modelContextWindow()` 取不到窗口；
+  - 非流式 2.6 s / usage `{37,4,41}`；流式首字节 86 ms、纯文本 4.3 s / 105 分片 / ≈17 tok/s、usage `{47,247,294}`；
+  - **推理模型**：delta 先 `reasoning_content`（镜像 `reasoning`）再 `content`；`max_tokens` 太小时正文为空；
+  - 流式工具调用 1.75 s（`case_evidences {"eid":3}`）、并行工具调用 1.61 s（2 个 call）；`include_usage` 有效。
+- 桌面 UI 驱动该网关两次失败（脚本已删，教训保留）：① 用「页面文本含 检材」当回复信号 → 命中静态文案，43 ms 假成功；② `[data-composer-input]` 偶发查不到（DOM 里连 `textarea/contenteditable` 都没有），随后 `Runtime.evaluate` 永挂。结论：真机联调用 headless + 与外壳相同的 overlay，不再赌 CDP 的输入时序。
+- 真机 headless e2e：新增 `scripts/e2e/real-gateway-headless.mjs`（`npm run test:e2e:real-gateway`，凭据 `GW_BASE/GW_KEY/GW_MODEL`），用 `dsh --profile headless --patch ` + 取证 overlay + `.dev/real-ud/local-model.patch.yml`，解析 JSON 事件流；`cwd` 用 `tmpdir()/seeu-real-work`（**工作区放仓库里会触发沙箱 `SetNamedSecurityInfoW failed (Win32 5): grantWrite(D:\\Coding\\...)`**，命令执行前就失败）。
+- 实测 `REPORT {"ok":true,...}`：
+  - 问题轮：`elapsedMs:24004, firstTextMs:23803, thinkingSeen:true, firstStepInputTokens:9145, totalTokens:9607`，`briefUsed` 5 个检材名全中，回答声明「取自概览表格，未做推断」；
+  - 工具轮：`pwsh node -v` → `resultStatus:"completed"`、`answer:"v24.18.0"`，30,779 ms。
+- 顺带修两处：
+  - **网关不自报窗口**：`tools/local-model.mjs` 加 `gatewayContextReported()`；`src/main.ts` 探测状态加 `noContextWindow`（`probe.ok && ids.length>0 && !gatewayContextReported(probe.models)`）并写 shell log；`renderer/local-model.html` 黄字提示「按表单里的 128k 使用；模型实际窗口更小会报 400，请按模型文档手填」。单测 +1（56/56），`settings-check` 断言「自报窗口的网关不得标记」。
+  - **记录数口径**：会话概览「规模：记录 22777 条」与表内各行相加不一致（模型当场指出）。根因是 `evidences()` 取火眼 `evidence.record_count`（3065/3/13718/68/25669）。改为按索引内 `record` 行数统计（1/1/8443/1/14331，合计 22,777），火眼原值保留为 `reportedRecordCount`；`briefText()` 表格下加注「记录数按本索引实际解析入库的行数统计…各检材之和等于记录总数」。
+- 验证：`npm test` 56/56、`node scripts/build.mjs` OK、`settings-check`（dev mock）`ok:true`（`probeNoContextWindow:false`、`probeMismatch{131072,32768}`、`warmupOk` 等全绿）。
+- 遗留：真机只有 `deepseek-flash` 一个模型跑过（`qwen3.8-flash-next` 未测）；推理模型的首字 23.8 s 主要是模型侧推理，外壳只能靠「精简预设 + 概览注入 + 可关标题生成」压输入；`noContextWindow` 目前只在设置页提示，未按模型 id 预置窗口表。

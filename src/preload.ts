@@ -41,6 +41,8 @@ export interface LocalModelProbeState {
   readonly missing?: string[]
   /** 配置的上下文窗口超过网关自报能力时给出两者数值。 */
   readonly mismatch?: { configured: number; gateway: number }
+  /** 网关没有自报上下文窗口（Ollama 等）：窗口只能按模型文档手填。 */
+  readonly noContextWindow?: boolean
 }
 
 export interface LocalModelView {

@@ -15,6 +15,7 @@ import {
   estimateContextBudget,
   explainGatewayError,
   contextWindowMismatch,
+  gatewayContextReported,
 } from '../tools/local-model.mjs'
 
 const require = createRequire(import.meta.url)
@@ -282,6 +283,15 @@ test('contextWindowMismatch 只在配置超过网关自报能力时返回数值'
   assert.equal(contextWindowMismatch(16384, ['qwen'], gw), null)
   assert.equal(contextWindowMismatch(131072, ['missing'], gw), null)
   assert.equal(contextWindowMismatch(131072, ['qwen'], [{ id: 'qwen' }]), null)
+})
+
+test('gatewayContextReported：只有 id 的网关算没自报窗口', () => {
+  assert.equal(gatewayContextReported([{ id: 'deepseek-flash' }, { id: 'qwen3.8-flash-next' }]), false)
+  assert.equal(gatewayContextReported([{ id: 'a', contextWindow: 32768 }]), true)
+  assert.equal(gatewayContextReported([{ id: 'a' }, { id: 'b', contextWindow: 2048 }]), true)
+  assert.equal(gatewayContextReported([{ id: 'a', contextWindow: 512 }]), false)
+  assert.equal(gatewayContextReported([]), false)
+  assert.equal(gatewayContextReported(undefined), false)
 })
 
 test('titleGeneration 默认给 session-title-llm 配小输出；关掉时整行 disabled', () => {

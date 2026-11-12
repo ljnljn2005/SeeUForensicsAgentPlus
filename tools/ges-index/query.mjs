@@ -98,11 +98,25 @@ export function evidences(db) {
   } catch {
     rows = db.prepare('select eid,name,holder,platform,type,timezone from evidence order by eid').all();
   }
+  // evidence.record_count 是火眼自己统计的数字，和索引里实际解析入库的 record 行数常常不一致
+  // （例如某检材在火眼里 3065 条，索引里按会话展开后 8443 条）。面板/概览/会话概览必须用同一来源，
+  // 否则「总记录」和「各检材记录数之和」对不上——真机联调时模型当场指出了这个矛盾。
+  let counts = new Map();
+  try {
+    counts = new Map(
+      db.prepare('select eid, count(*) c from record where eid is not null group by eid').all()
+        .map((r) => [Number(r.eid), Number(r.c)]),
+    );
+  } catch {
+    counts = new Map();
+  }
   return rows.map((r) => ({
     eid: r.eid, name: r.name ?? '', holder: r.person_name || r.holder || '',
     platform: r.platform ?? '', type: r.type ?? '', timezone: r.timezone ?? '',
     remark: r.remark ?? '', evidenceNumber: r.evidence_number ?? '',
-    recordCount: r.record_count ?? null, sizeBytes: r.size_bytes ?? null,
+    recordCount: counts.get(Number(r.eid)) ?? r.record_count ?? null,
+    reportedRecordCount: r.record_count ?? null,
+    sizeBytes: r.size_bytes ?? null,
     sha256: r.sha256 ?? null,
     label: [r.name, r.person_name || r.holder, r.platform].filter(Boolean).join(' · '),
   }));

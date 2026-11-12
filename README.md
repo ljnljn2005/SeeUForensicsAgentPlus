@@ -76,7 +76,10 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 ### v0.2.8 待发布（v0.2.7 之后、尚未打包）
 
 - **检索结果【导出 CSV】**：检索视图把当前关键词 + 筛选（检材/应用/起止日期）命中的记录整批写成 CSV 落盘（`<下载>/seeu-exports`，`SEEU_EXPORT_DIR` 可覆盖），列：检材号/检材名称/应用/账号/类别/时间/行号/记录ID/摘要；UTF-8 BOM + CRLF，Excel 双击直接开；一次最多 20000 行，超过时提示「共 N 条」；
-- **测试**：`npm test` 55/55 不变；`npm run test:e2e:search` 增加 CSV 步骤（筛选后导出 12 行 → 读回落盘文件断言 BOM/表头/行数）；
+- **真机网关联调通过（首次接真实端点）**：`deepseek-flash`（`http://10.10.250.120:8080/v1`）实测 —— `/v1/models` 117 ms（只有 id，无窗口字段）；流式首字节 86 ms、纯文本 4.3 s / 105 分片约 17 tok/s；**推理模型**（delta 先 `reasoning_content` 再 `content`，dsh 会显示成思考块）；流式工具调用 1.8 s、并行 2 个工具调用 1.6 s；`include_usage` 有效（可开「流式 token 用量」）。headless 真机 e2e：案件概览注入后模型 **5/5 检材全部答对**（明确说「取自概览表格，未推断」），`pwsh node -v` 工具闭环返回 `v24.18.0`；首字 23.8 s、首步输入 9,145 tokens（精简预设 + 概览注入）。
+- **网关不自报上下文窗口时给提示**：`deepseek-flash` 的 `/models` 只回 id，设置页拉取模型不会自动填窗口 → 探测结果新增 `noContextWindow` 标记，界面黄字提示「按表单里的 128k 使用；模型实际窗口更小会报 400，请按模型文档手填」；
+- **记录数口径修复**：会话概览里「规模：记录 22777 条」与检材表各行相加对不上（表内取的是火眼 `evidence.record_count`，如 3065/13718）→ `evidences()` 改为按索引内 `record` 行数统计（`recordCount`，本案 1/1/8,443/1/14,331，合计 22,777），火眼原值保留在 `reportedRecordCount`；会话概览表格下方加注说明口径；
+- **测试**：`npm test` **56/56**；新增 `npm run test:e2e:real-gateway`（`scripts/e2e/real-gateway-headless.mjs`，凭据走 `GW_BASE/GW_KEY/GW_MODEL` 环境变量，不落盘）。
 ### v0.2.7 改了什么
 
 > 以下改动已进入 v0.2.7 安装包（v0.2.6 `44808cb` 之后的 2 个提交），打包态回归见 `docs/packaging.md`。
@@ -558,7 +561,7 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 纯函数（配置归一化 / patch 生成 / 路径分类 / CSV 与 chat 解析 / typed 表头投影）用 `node --test` 覆盖，不需要 Electron：
 
 ```bash
-npm test                                  # 40 个单元测试（本地模型配置、解析层、typed 投影）
+npm test                                  # 56 个单元测试（本地模型配置、解析层、typed 投影、CSV、实体分页）
 ```
 
 端到端脚本各自起 mock OpenAI 网关 + 真 Electron，用 CDP 操作界面，不需要真实网关：
@@ -575,6 +578,15 @@ node scripts/e2e/local-diagnose-check.mjs # 能力自检：支持工具的模型
 - 低并发重试：`REPORT {"ok":true,"chatCalls":3,"failTimes":2,"retried":true,"gotReply":true,"errors":[]}` —— 429 由 `retryPolicy.maxRetries: 3` 吸收，用户只看到一次正常回复。
 - 能力自检：`REPORT {"ok":true,"checks":{"firstOk":true,"toolsRowBad":true,"summaryMentionsChatOnly":true}...}` —— 支持工具的模型三项全绿（模型列表 / 基础对话 / 工具调用），`no-tool-model` 的工具项标红并提示「只能聊天，不能查案件库」。
 
+接真实网关的端到端（默认不跑，需要你提供地址与凭据）：
+
+```bash
+GW_BASE=http://10.10.250.120:8080/v1 GW_KEY=sk-... GW_MODEL=deepseek-flash \
+  npm run test:e2e:real-gateway
+```
+
+它用与外壳完全相同的 overlay（取证 preset + 本地模型 patch）起 headless dsh，先注入案件概览、再问「本机有哪些检材」，然后让模型用 `pwsh` 执行 `node -v`；成功输出形如 `REPORT {"ok":true,"question":{"elapsedMs":24004,"firstTextMs":23803,"firstStepInputTokens":9145,"briefUsed":[…5 个检材名…]},"tool":{"called":true,"resultStatus":"completed","answer":"v24.18.0"}}`。凭据只走环境变量，不写进仓库。
+
 脚本都会用 `taskkill` 清理 Electron，结束后不留进程。
 
 ### 9.4 注意
@@ -586,6 +598,23 @@ node scripts/e2e/local-diagnose-check.mjs # 能力自检：支持工具的模型
 - **面板首次使用引导**：没有任何索引库时显示「三步开始」，空库场景由 `npm run test:e2e:panel-empty` 验证。
 - **加载页会显示本地模型状态行**：探测完成后（约 1 秒）显示「本地模型：qwen2.5-32b-instruct · http://…」或「本地模型网关不可用（仍可用官方模型）：net::ERR_CONNECTION_REFUSED」；`npm run test:e2e:loading` 用一个必然连不上的网关验证这一行。
 - **探测结果在界面上可见**：托盘 tooltip 显示当前模型（`SeeU 取证 · 本地模型 qwen2.5-32b-instruct` / `… · 官方模型`）；菜单 `工具 → 本地模型状态…` 打开对话框（配置路径、探测地址/时间/结果，可点「重新探测」）；设置窗口顶部有「启动探测」行，探测完成会由外壳推送刷新（不需要关窗口重开）；`工具 → 重新探测本地网关` 可手动触发一次。
+
+### 9.5 真机联调记录（`deepseek-flash`，2026-11）
+
+第一次接真实端点，结论按「能不能用、哪里要调」两条列：
+
+| 项目 | 实测 | 结论 |
+| --- | --- | --- |
+| `GET /v1/models` | 200 / 117 ms，`["deepseek-flash","qwen3.8-flash-next"]`，条目只有 `id/object/created/owned_by` | 拉取模型列表可用；**没有上下文窗口字段** → 设置页提示 `noContextWindow`，窗口需按模型文档手填（本机填 131072） |
+| 非流式对话 | 200 / 2.6 s，usage `{37,4,41}` | 协议正常 |
+| 流式对话 | 首字节 **86 ms**、总 1.8~4.3 s、105 分片、约 **17 tok/s**；usage `{47,247,294}` | SSE 正常；`stream_options.include_usage` 有效 → 可勾「流式 token 用量」 |
+| 推理内容 | delta 先给 `reasoning_content`（并镜像 `reasoning`）再给 `content` | dsh 会把它显示成思考块（`thinkingSeen:true`），不是错误；配 `maxTokens` 太小会全被推理吃掉、正文为空 |
+| 工具调用 | 流式 1.75 s / 非流式 6.1 s，`finish:"tool_calls"`、`case_evidences {"eid":3}` | 工具调用支持，且**并行**（一次 2 个 call，1.6 s）——dsh 的多工具调用可正常工作 |
+| 干扰项 | 工作区在仓库内时 `pwsh` 报 `SetNamedSecurityInfoW failed (Win32 5): grantWrite(D:\Coding\...)` | 是沙箱对工作区目录的 ACL 限制，不是网关/产品缺陷；headless 测试用临时目录当 cwd 即可（外壳真实工作区是 `C:\Users\<用户>\Documents\SeeUForensicsWorkspace`，不受影响） |
+
+真机会话（headless，与外壳同一 overlay）：案件概览注入 `<DSH_HOME>/AGENTS.md` 后，模型**直接答出 5 个检材**（CHAN_MH_mobile.zip / IQ_Coin_Type_Transactions.zip / LEUNG_YL_mobile.zip / AP3_LEUNG_YL_USB.E01 / FUNG_CC_mobile.zip），并主动声明「取自概览表格，未推断」；第二轮 `pwsh node -v` → `v24.18.0`。指标：首字 **23.8 s**、首步输入 **9,145 tokens**、单轮总计 9,607 tokens（精简预设 12 工具 + 概览注入）；工具轮 30.8 s。这个首字延迟主要是模型侧推理耗时，不是外壳开销 —— 网络 RTT 与 TTFB 都在 100 ms 级。
+
+联调还发现一处数据口径 bug 并已修：会话概览「规模：记录 22777 条」与检材表各行相加不一致（`evidences()` 原来取火眼 `evidence.record_count`）。现在按索引内 `record` 行数统计（本案 1/1/8,443/1/14,331，合计 22,777），火眼原值保留在 `reportedRecordCount` 字段，概览表格下方也加了口径说明。
 
 ## 10. 许可与来源
 

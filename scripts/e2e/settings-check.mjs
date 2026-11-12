@@ -413,6 +413,12 @@ try {
   if (!/超过网关自报/.test(report.probeText)) throw new Error('设置页没有显示窗口超限提示：' + report.probeText)
   log('窗口超限', report.probeText)
 
+  // 本 mock 网关自报了 max_model_len ⇒ 不应该出现「没有自报窗口」的提示
+  report.probeNoContextWindow = ghostProbe?.noContextWindow ?? false
+  if (report.probeNoContextWindow !== false) {
+    throw new Error('自报窗口的网关不应标记 noContextWindow：' + JSON.stringify(ghostProbe))
+  }
+
   const bad = await evaluate(client, `window.seeu.localModel.test({ baseURL: 'http://127.0.0.1:19999/v1' })`)
   report.badGatewayRejected = bad?.ok === false
   report.badGatewayHint = bad?.hint

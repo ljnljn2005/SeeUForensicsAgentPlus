@@ -311,6 +311,7 @@
       const notes = []
       if (missing.length > 0) notes.push(`配置的模型 ${missing.join(', ')} 不在网关列表`)
       if (mismatch) notes.push(`配置窗口 ${k(mismatch.configured)} 超过网关自报的 ${k(mismatch.gateway)}，超出部分请求会被拒`)
+      if (probe.noContextWindow) notes.push(`网关没有自报上下文窗口，当前按表单里的 ${k(Number(document.getElementById('contextWindow').value) || 0)} 使用；模型实际窗口更小会报 400，请按模型文档手填`)
       const suffix = notes.length > 0 ? `｜${notes.join('；')}` : ''
       probeEl.textContent = `启动探测：可用 · ${models} · ${probe.baseURL} · ${at}${suffix}`
       probeEl.className = notes.length > 0 ? 'hint warn' : 'hint ok'

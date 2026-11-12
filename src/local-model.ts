@@ -23,9 +23,10 @@ import {
   normalizeGatewayModels,
   normalizeLocalModel,
   contextWindowMismatch,
+  gatewayContextReported,
 } from '../tools/local-model.mjs'
 
-export { contextWindowMismatch }
+export { contextWindowMismatch, gatewayContextReported }
 
 export interface LocalModelPrepared {
   /** 生成出来的补丁文件；未启用时为 undefined（不要传给 dsh）。 */

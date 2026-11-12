@@ -370,6 +370,7 @@ function briefText(indexes) {
       for (const ev of evs.slice(0, 50)) {
         lines.push('| ' + ev.eid + ' | 检材 ' + ev.eid + ' | ' + String(ev.name ?? '') + ' | ' + String(ev.platform ?? '') + ' | ' + (ev.recordCount ?? '') + ' |');
       }
+      lines.push('', '（记录数按本索引实际解析入库的行数统计，与火眼界面上的「记录数」口径不同；各检材之和等于上面的记录总数。）');
     }
     lines.push('');
   }

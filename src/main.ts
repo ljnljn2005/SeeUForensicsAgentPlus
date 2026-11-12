@@ -31,6 +31,7 @@ import {
   testLocalGateway,
   warmupLocalGateway,
   contextWindowMismatch,
+  gatewayContextReported,
   writeLocalModelConfig,
 } from './local-model.js'
 import { installBundledSkills } from './skills.js'
@@ -153,6 +154,8 @@ interface LocalModelProbeState {
   readonly missing?: string[]
   /** 配置的上下文窗口超过网关自报能力时给出两者数值。 */
   readonly mismatch?: { configured: number; gateway: number }
+  /** 网关 /v1/models 没有自报任何上下文窗口（Ollama 等）时为 true：窗口只能按模型文档手填。 */
+  readonly noContextWindow?: boolean
   readonly error?: string
   readonly at: string
 }
@@ -193,6 +196,7 @@ async function probeLocalModelGateway(reason: 'startup' | 'manual' = 'startup'):
     const ids = (probe.models ?? []).map((item) => item.id ?? item.name ?? '').filter(Boolean)
     const missing = target.models.filter((id) => !ids.includes(id))
     const mismatch = contextWindowMismatch(target.contextWindow, target.models, probe.models)
+    const noContextWindow = probe.ok && ids.length > 0 && !gatewayContextReported(probe.models)
     localModelProbeState = probe.ok
       ? {
           ok: true,
@@ -200,6 +204,7 @@ async function probeLocalModelGateway(reason: 'startup' | 'manual' = 'startup'):
           models: ids,
           ...(missing.length === 0 ? {} : { missing }),
           ...(mismatch === null ? {} : { mismatch }),
+          ...(noContextWindow ? { noContextWindow: true } : {}),
           at: new Date().toISOString(),
         }
       : { ok: false, baseURL, models: [], ...(probe.error === undefined ? {} : { error: probe.error }), at: new Date().toISOString() }
@@ -212,6 +217,9 @@ async function probeLocalModelGateway(reason: 'startup' | 'manual' = 'startup'):
       }
       if (mismatch !== null) {
         logShell(`local model probe: 配置的上下文窗口 ${mismatch.configured} 超过网关自报的 ${mismatch.gateway}，超出部分请求会被拒`)
+      }
+      if (noContextWindow) {
+        logShell(`local model probe: 网关没有自报上下文窗口（只有模型 id），按配置的 ${target.contextWindow} 使用，模型实际窗口更小会报 400`)
       }
       return localModelProbeState
     }
