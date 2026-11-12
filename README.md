@@ -61,29 +61,32 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.2.8**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.2.9**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,669,553 B ≈ 766 MiB） |
-| `release/win-unpacked/resources/app.asar` | 168,818,135 B（19,655 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`dist/renderer/local-model.html`） |
-| `release/SeeUForensicsAgentPlus-0.2.8-x64.exe`（NSIS 安装包） | 211,947,042 B（blockmap 220,668 B） |
-| `release/SeeUForensicsAgentPlus-0.2.8-x64-portable.exe` | 189,582,714 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,679,886 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,835,443 B（19,654 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`dist/renderer/local-model.html`） |
+| `release/SeeUForensicsAgentPlus-0.2.9-x64.exe`（NSIS 安装包） | 211,947,119 B（blockmap 220,827 B） |
+| `release/SeeUForensicsAgentPlus-0.2.9-x64-portable.exe` | 189,553,401 B |
 
-实测冷启动到 dsh UI：目录版 5130 ms；portable 首次 36.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
+实测冷启动到 dsh UI：目录版 5249 ms；portable 首次 37.4s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
 
-### v0.2.9 待发布（v0.2.8 之后、尚未打包）
+### v0.2.9 改了什么
+
+> 以下改动已进入 v0.2.9 安装包（v0.2.8 `ce02349` 之后：真机技能链路、工具路径手动指定），打包态回归见 `docs/packaging.md`。
 
 - **技能链路真机验证**：`npm run test:e2e:real-gateway` 新增可选第三轮（`SEEU_REAL_SKILL=1`）——模型按需加载 `lovelymem-cli` 技能后，用技能里写的命令 `& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelymem -- version` 调包装器，实测 51.8 s、2 次工具调用、答出 `Lovelymem / 3.1.11 / starmem、vol3`（`skillLoaded:true`、`wrapperUsed:true`）。headless 脚本同时补齐了技能安装（`resources/forensics/skills` → `<DSH_HOME>/skills`）与 `SEEU_CLI_NODE`/`SEEU_LOVELY_CLI`/`SEEU_LOVELYMEM_EXE` 注入 —— 之前只装外壳时才有这些，headless 直接跑会「技能不可用」；
 - 这一步补上了 v0.2.8 遗留的最后一条「模型主动调技能未做真机会话」。
 
 - **本机取证工具路径改为手动指定（不做自动发现）**：按你的要求，删掉了自动发现（PATH / 注册表 / 已运行进程 / 快捷方式 / 常见目录搜索，含 `tools/lovely-cli/discovery.mjs`）；设置窗口新增「本机取证工具路径」卡片：LovelyMem V3 / LovelySpark 两行，各自「选择…」选 exe、「清除」删配置，保存后写入 `<DSH_HOME>/lovely-cli.json`（`SEEU_LOVELY_CONFIG` 可覆盖），技能调用时每次重读、不用重启。未配置时包装器明确报「未配置 … 路径：打开外壳「设置 → 本机取证工具路径」选择 exe」，配置失效报「配置的 … 路径不存在」，不会再自己去找 exe；两个 SKILL.md 也改成「不要自己找，让用户去设置」；
 - 新增 `tools/lovely-tools.mjs`（读/写/校验工具路径：绝对路径、文件存在、`.exe` 后缀；清空单项时只删该键）与 6 例单测；`settings-check` e2e 增加工具路径区断言（两行渲染、API 保存、真实点「保存工具路径」写盘、清空后配置删键）；
+- **测试与打包**：`npm test` **79/79**（56 + 22 lovely CLI + host/config）、`npm run test:lovely` 22/22、`check:overlay` OK；v0.2.9 打包后 asar 19,654 条目、`missing:[]`，24 项内容检查全 true（含 `lovelyManualOnly`：asar 内不再有 discovery、`cli.mjs` 不再 import 它）；打包态 `m2-ui-check` / `settings-check`（工具路径区在 asar 内实测可用）/ `export-check` / `cross-case-check` 全绿；目录版冷启动 5249 ms、portable 37.4 s。
 
 ### v0.2.8 改了什么
 

@@ -1843,3 +1843,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 踩坑：① `saveLovelyToolPaths` 里 `.exe` 判断误写成 `/\\\\.exe$/i`（正则里是「反斜杠 + .exe」），所有 exe 都报「需要选择 .exe 文件」；② 配置默认路径先只认 `DSH_HOME`，而外壳用 `SEEU_DSH_HOME`，e2e 里写到了 `C:\Users\ASUS\.dsh` 导致读不到 → 改成三个变量按序回退；③ e2e 先用 API 只保存 LovelyMem，页面输入框不会自动刷新，接着点 UI 保存会把 LovelyMem 清掉（UI 是整个表单的真相）→ 断言前把两行输入都填好。
 - 顺带提交：`scripts/e2e/real-gateway-ui.mjs` 的工具轮补丁（`ask()` 复用、`SEEU_UI_TOOL=1` 第二轮 `pwsh node -v`、`[data-tool]` 卡片断言、截图 `11-real-gateway-tool.png`）。
 - 遗留：手动路径只存在用户机器上，打包/换机不会带；真实镜像分析（`doctor`/`plugins`/`run`）仍未跑；等用户视觉验收后再打 v0.2.9。
+
+## 20.63 v0.2.9 打包（2026-11-12）
+
+- 版本 0.2.8 → 0.2.9（`package.json` + `package-lock.json` 顶层与 `packages[""].version`）；`node scripts/build.mjs`、`npm test` 79/79 通过。
+- `npx electron-builder --win --x64 -c.directories.output=release-029`（约 12 分钟，无证书跳过签名）。产物：exe 246,329,856 B；app.asar 168,835,443 B（19,654 entries）；NSIS 211,947,119 B（blockmap 220,827）；portable 189,553,401 B；win-unpacked 803,679,886 B。
+- 本批内容：真机技能链路（`caf616f`）、工具路径手动指定 + 删除自动发现（`d1474ee`）。
+- asar 自检 `.probe/asar-029-check.mjs`：24 项全 true，其中 `lovelyToolsModule` 因 `tools/lovely-tools.mjs` 被 esbuild 打进 `dist/main.cjs`，改为检查主进程产物而不是 asar 文件；`lovelyUnpacked` 断言 `app.asar.unpacked/tools/lovely-cli/cli.mjs` 存在、`discovery.mjs` 不存在。
+- 打包态回归：`verify-launch` 目录版 5249 ms / portable 37389 ms；`m2-ui-check`、`settings-check`（含工具路径区：两行、API 保存、真实点保存写盘、清空删键）、`export-check`、`cross-case-check` 全绿。
+- 尝试让 `real-gateway-ui.mjs` 支持 `SEEU_UI_EXE` 跑打包版：能起页面但停在「选择工作区」，composer 定位失败（`type-failed`），改动已用 `git checkout` 回滚，避免留下未验证路径。真机 UI 验证仍用 dev Electron。
+- 遗留：手动工具路径只存本机；打包版首启的「选择工作区」页对 CDP 脚本不友好，后续若要打包态真机 UI 回归，需先写默认工作区或用 `--user-data-dir` 预置 workspace。

@@ -800,3 +800,17 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - `cross-case-check`（`SEEU_CROSS_E2E_PORT=9446`）→ `ok:true`（`syncNote:"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。"`，复制 30 条重合实体清单 2,675 字符、含两个案号与类别）。
 - 排障：同 v0.2.7，`SEEU_UI_EXE` 必须 Windows 路径；`release-028` 中间目录在产物搬完后删除。
 - 预览仍在线（重启后 token 会变），等用户视觉验收；真实网关（`deepseek-flash`）已联调通过。
+
+### v0.2.9 回归验证
+
+- 打包：`npm version 0.2.9 --no-git-tag-version`；`node scripts/build.mjs`、`npm test`（79/79）全绿；`npx electron-builder --win --x64 -c.directories.output=release-029`（约 12 分钟、无证书跳过签名），产物搬进 `release/` 并删 0.2.8 三件（保留 0.1.7 portable）。
+- 产物：`release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B；`resources/app.asar` **168,835,443 B（19,654 entries）**；NSIS **211,947,119 B**（blockmap 220,827 B）；portable **189,553,401 B**；`release/win-unpacked` 总计 803,679,886 B。
+- asar 自检（`.probe/asar-029-check.mjs`）：条目 19,654、`missing:[]`；24 项内容检查全 true —— 新增 `lovelyManualOnly`（asar 里没有 discovery、`cli.mjs` 不再 `import ./discovery.mjs`）、`lovelyToolsIpc`（`dist/main.cjs` 含 `seeu:lovely-tools:save`、preload 有 `lovelyTools`）、`settingsLovelyTools`（设置页含「本机取证工具路径」与 `btn-tools-save`）、`lovelyToolsModule`（`dist/main.cjs` 里有 `saveLovelyToolPaths`/`lovelyToolsView`——`tools/lovely-tools.mjs` 被 esbuild 打进主进程，不在 asar 里单列）、`lovelySkipHint`（SKILL.md 含「手动指定」）、`lovelyUnpacked`（unpacked 里有 `cli.mjs`、没有 `discovery.mjs`）。
+- 启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：目录版 `node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9451` → `"ok":true,"elapsedMs":5249`；portable `--port 9452 --timeout 240000` → `"ok":true,"elapsedMs":37389`。
+- 打包态 e2e（`SEEU_UI_EXE` 传 Windows 路径，隔离 home/userData）：
+  - `m2-ui-check` → `{"m2ok":true,"searchOk":true,"searchEvNames":true,"recordsFilterOk":true,"entityPagingOk":true,"timelineFiltersOk":true,"briefVisible":true,"treeFilterOk":true,"kpiRange":true,"errors":[]}`；
+  - `settings-check --exe "<win-unpacked exe>"` → `{"ok":true,"toolsConfigFile":"…\.dev\settings-home\lovely-cli.json","toolsRows":2,"toolsSectionVisible":true,"toolsApiSaved":true,"toolsUiSaved":true,"toolsFileOk":true,"toolsAfterClear":{"lovelyspark":"…fake-lovelyspark.exe"},"toolsClearOk":true,"pulledContextWindow":"32768","warmupOk":true,"titleGenDefault":true,"usagePreview":true,"probeNoContextWindow":false,"lightShell":true,"errors":[]}`；
+  - `export-check`（`SEEU_EXPORT_E2E_PORT=9455`）→ `ok:true`（概览 713 字符且 `hasRange:true`、记录 CSV 20,000 行 4,608,566 B BOM true、表 CSV 745 行 143,621 B、记录 14,996 / 实体 1,888 / 时间线 3,235 字符、`savedTab:"timeline"`）；
+  - `cross-case-check`（`SEEU_CROSS_E2E_PORT=9456`）→ `ok:true`（`syncNote:"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。"`，30 条重合实体清单 2,675 字符、含两个案号）。
+- 尝试用 `real-gateway-ui.mjs` 直接跑打包版（临时给脚本加过 `SEEU_UI_EXE` 支持）：页面能起、但打包版首次启动会落在「选择工作区」页，composer 驱动不稳（`stage:"type-failed"`），脚本改动已回滚；真机联调仍以 dev Electron 版脚本（`SEEU_UI_TOOL=1`，`ok:true`）+ headless 版为准。
+- 预览仍在线（重启后 token 会变），等用户视觉验收与手动工具路径设置。
