@@ -220,6 +220,7 @@ export class DshHost extends EventEmitter {
       SEEU_SKILL_SET_TRAFFIC: join(this.homeDir, 'skill-sets', 'traffic'),
       SEEU_SKILL_SET_LOG: join(this.homeDir, 'skill-sets', 'log'),
       SEEU_SKILL_SET_MEMORY: join(this.homeDir, 'skill-sets', 'memory'),
+      SEEU_SKILL_SET_QIKO: join(this.homeDir, 'skill-sets', 'qiko'),
       // 复用 shell + 按需技能调用本机 CLI，不常驻服务、不增加模型工具 schema。
       SEEU_LOVELY_CLI: lovelyCliEntry(),
       SEEU_CLI_NODE: nodeBinary,

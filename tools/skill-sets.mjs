@@ -6,6 +6,8 @@
  *   - 取证预设：<DSH_HOME>/skills（默认根，含 ges-case-index / lovelycarve-forensics 等）
  *   - 流量分析 / 日志分析：<DSH_HOME>/skill-sets/traffic、<DSH_HOME>/skill-sets/log（lovelyspark-cli）
  *   - 内存分析：<DSH_HOME>/skill-sets/memory（starmem-cli 主用；lovelymem-cli 兜底）
+ *   - 取证/流量/手机/数据与研判：额外的 Qiko 技能组 <DSH_HOME>/skill-sets/qiko
+ *     （从 QikoAgent 迁移并做过 SeeU 工具链适配的技能，比武比赛用）
  * 各个预设的 `skill-filesystem` 通过 `customSkillDirs` 指向自己那组技能根，
  * 默认根仍保留（案件索引技能所有预设都要用）。
  *
@@ -17,7 +19,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, wri
 import { dirname, join } from 'node:path'
 
 /** 独立技能组的目录名（与 resources/forensics/skill-sets/<id> 对应）。 */
-export const SKILL_SET_IDS = ['traffic', 'log', 'memory']
+export const SKILL_SET_IDS = ['traffic', 'log', 'memory', 'qiko']
 
 /** 曾经装在 <DSH_HOME>/skills 下、现在改为按预设分组的技能（升级时要清掉，避免取证预设还看得到）。 */
 export const RETIRED_SKILL_DIRS = ['lovelymem-cli', 'lovelyspark-cli']

@@ -23,7 +23,7 @@ function fixture() {
 }
 
 test('skillSet 目录常量', () => {
-  assert.deepEqual(SKILL_SET_IDS, ['traffic', 'log', 'memory'])
+  assert.deepEqual(SKILL_SET_IDS, ['traffic', 'log', 'memory', 'qiko'])
   assert.deepEqual(RETIRED_SKILL_DIRS, ['lovelymem-cli', 'lovelyspark-cli'])
   assert.equal(skillSetsHomeDir('H:/h'), join('H:/h', 'skill-sets'))
   assert.equal(skillSetHomeDir('H:/h', 'memory'), join('H:/h', 'skill-sets', 'memory'))

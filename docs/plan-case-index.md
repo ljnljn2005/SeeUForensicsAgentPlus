@@ -2053,3 +2053,15 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 校验与测试适配：`scripts/check-overlay.mjs` 的 `expertPresets` 增加 `['preset-db','数据库取证（Database）']`（名称 + tool-fs 只读）；`tests/presets-config.test.mjs` 的专项预设循环加 order 9、persona 关键词（`数据库`/`sqlite_master`/`evidence_mounts`）、bash/本机实测/`SEEU_TOOL_` 断言集合都加入 `preset-db`。
 - README：§13 标题与表格加「数据库取证（Database）」行；「### v0.3.5 待发布」段加本预设说明。
 - 验证：`check:overlay` OK、`npm test` 122/122。
+
+### 20.79 融合 Qiko 专家（7 份提示词 + 75 个技能库）并进现有预设（0.3.5，未打包）
+
+- 需求（用户 2026-11-12）：「qiko开头的是我从另一款软件里弄出来的，融合一下，skill都放在了D:\Programs\UniversalPlatform\QikoAgent\resources\skills，你帮我看看」；追加要求：「并进现有预设，不新增」+ custom「我就是为了比武比赛的，所以尽量改成比赛式」。
+- 来源解析：`E:\取证桌面` 新增 7 份 qiko 提示词（微信 172.5 KB / 手机 134.8 KB / 服务器 130.5 KB / 案件研判 73.1 KB / 流量包 68.0 KB / 网络犯罪情报 56.8 KB / 计算机 133.5 KB，19:42–19:50 落盘）。格式=Qiko 通用 system 段落 + `{"model":"fake-model","messages":[...]}` 请求体；从 `{"model"` 处 JSON 解析后 `messages[0]`=system（24,029–36,072 字符），再按 `## 当前专家模式` 切出专家段（18,771–30,814 字符）。提取物在 `.probe/qiko/<专家>-system.md` / `-expert.md`。
+- Qiko 技能库：75 个目录、37 MB；大头 `myos-plugin-computer` 16.5 MB、`myos-plugin-mobile` 16.1 MB、`json-report-analysis` 2.1 MB（未导入）。共 49 个取证技能复制到 `resources/forensics/skill-sets/qiko/`（1,162 KB），每个 `SKILL.md` 末尾追加「SeeU 环境适配」段（`ssh-mcp`→`bash`、`ida-mcp`/`jadx-mcp`→`$SEEU_TOOL_IDA`/`$SEEU_TOOL_JADX`、Python→`$SEEU_TOOL_PYTHON`、7z/sqlite3/tshark/adb/apktool/StarMem 路径、检材定位四步、比武输出极简）。
+- 映射（并进现有 9 个预设，不新增）：`preset-standard` ← 火眼+弘连服务器+Qiko 服务器/计算机；`preset-apk` 改名「手机取证（Mobile）」← APK+Qiko 手机/微信；`preset-traffic` ← +Qiko 流量包；`preset-data` 改名「数据分析与研判」← 网钜资金+Qiko 案件研判/网络犯罪情报；log/memory/exe/db/seeu-lite 保持领域，统一追加「比武比赛模式」与「本机实测」段。
+- 实现：`tools/skill-sets.mjs` 的 `SKILL_SET_IDS` 加 `qiko`；`src/host.ts` 注入 `SEEU_SKILL_SET_QIKO`；overlay 给 standard/traffic/log/memory/data/apk/exe/db 加 `customSkillDirs: !!js "[…].filter(Boolean)"`（流量/日志/内存为专用组+QIKO 并集，其余仅 QIKO，`preset-seeu-lite` 不加）；`preset-data`/`preset-apk` 改名与 description 同步；4 份合并 persona（`.probe/persona-standard-v2.txt` 10,499 B、`persona-mobile-v2.txt` 8,159 B、`persona-traffic-v2.txt` 6,130 B、`persona-data-v2.txt` 7,127 B）由 4 个 subagent 起草，`.probe/apply-personas-v2.py` 按 `- id:`→`prefix: |` 区段替换并自动缩进。
+- 校验：`scripts/check-overlay.mjs` 改名与 QIKO 断言；`tests/presets-config.test.mjs` 改 standard 仅注入 QIKO、专项预设名称、skill-sets 目录含 qiko 技能；`tests/skill-sets.test.mjs` 常量改 4 项；`npm test` 122/122；`check:overlay` OK；`node scripts/build.mjs` OK；`--dump-config` 确认 9 个预设与 `customSkillDirs` 表达式（standard `[QIKO]`、traffic `[TRAFFIC, QIKO]`、log `[LOG, QIKO]`、memory `[MEMORY, QIKO]`、其余 `[QIKO]`）。
+- persona 体量（字符）：standard 5,668 / seeu-lite 1,416 / traffic 2,782 / log 1,208 / memory 4,074 / data 3,504 / mobile 5,144 / exe 5,586 / db 3,753；全部含 `Q<n>｜答案` 与「本机实测（2026-11-12）」。
+- 坑：① 应用脚本第一版在 block 内遇到 `- id:` 就 break，把 persona 插件行当成区段结尾 → 改为「缩进 ≤ 预设行缩进且以 `- id: ` 开头」才 break；② 旧测试断言写死「禁止全盘递归搜索」「先 lovelyspark-cli」，与新 persona 措辞不一致 → 放宽为标准预设 `/(禁止|不许).{0,4}全盘递归/`、流量 `先 load \`lovelyspark-cli\``；③ Qiko 通用段落里的工具名（ssh-mcp/ida-mcp/jadx-mcp、`C:\Users\HP\.workbuddy\...`）必须整体删除，否则模型会去找不存在的 MCP。
+- 遗留：Qiko 图片鉴伪/隐写、URL 溯源技能需要联网或额外模型时只能出「本地痕迹结论」；`myos-plugin-*` 两个大插件未导入（体积）；v0.3.5 未打包。

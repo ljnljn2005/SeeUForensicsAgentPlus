@@ -71,11 +71,15 @@ test('流量/日志预设注入 lovelyspark-cli 技能根，内存预设注入 s
   assert.match(byId.get('preset-memory').config.plugins[0].config.prefix, /lovelymem-cli/)  // 兜底说明保留
 })
 
-test('取证预设不再引用分组技能根（只在默认根里保留通用技能）', () => {
-  for (const id of ['preset-standard', 'preset-seeu-lite']) {
-    const dirs = skillPlugin(byId.get(id)).config?.customSkillDirs
-    assert.equal(dirs, undefined, `${id} 不应配置 customSkillDirs`)
+test('取证预设只注入 Qiko 比武技能组，不引用流量/日志/内存专用组', () => {
+  const standard = skillPlugin(byId.get('preset-standard')).config?.customSkillDirs
+  assert.equal(typeof standard?.js, 'string', 'preset-standard 未配置 Qiko 技能组')
+  assert.match(standard.js, /SEEU_SKILL_SET_QIKO/)
+  for (const env of ['SEEU_SKILL_SET_TRAFFIC', 'SEEU_SKILL_SET_LOG', 'SEEU_SKILL_SET_MEMORY']) {
+    assert.ok(!new RegExp(env).test(standard.js), `preset-standard 不应引用 ${env}`)
   }
+  const lite = skillPlugin(byId.get('preset-seeu-lite')).config?.customSkillDirs
+  assert.equal(lite, undefined, 'preset-seeu-lite 不应配置 customSkillDirs')
 })
 
 test('随包技能目录：通用技能在 skills/，lovelyspark/starmem 在 skill-sets/', () => {
@@ -91,6 +95,9 @@ test('随包技能目录：通用技能在 skills/，lovelyspark/starmem 在 ski
     ['log', 'lovelyspark-cli'],
     ['memory', 'starmem-cli'],
     ['memory', 'lovelymem-cli'],
+    ['qiko', 'server-forensics-playbook'],
+    ['qiko', 'ios-mobile-forensics'],
+    ['qiko', 'wechat-people-relationship-explosion-map'],
   ]) {
     const dir = join(setRoot, id)
     assert.ok(existsSync(join(dir, skill, 'SKILL.md')), `skill-sets/${id}/${skill}/SKILL.md 不存在`)
@@ -99,8 +106,8 @@ test('随包技能目录：通用技能在 skills/，lovelyspark/starmem 在 ski
 
 test('新增四个专项预设（数据/APK/EXE/数据库），顺序、名称与只读工具面正确', () => {
   for (const [id, name, order] of [
-    ['preset-data', '数据分析（网钜资金）', 6],
-    ['preset-apk', 'APK 分析', 7],
+    ['preset-data', '数据分析与研判', 6],
+    ['preset-apk', '手机取证（Mobile）', 7],
     ['preset-exe', 'EXE 逆向分析', 8],
     ['preset-db', '数据库取证（Database）', 9],
   ]) {
@@ -109,7 +116,8 @@ test('新增四个专项预设（数据/APK/EXE/数据库），顺序、名称�
     assert.equal(preset.config.name, name)
     assert.equal(preset.config.order, order)
     assert.ok(preset.config.description.length > 10)
-    assert.equal(skillPlugin(preset).config?.customSkillDirs, undefined, `${id} 不应注入分组技能根`)
+    const dirs = skillPlugin(preset).config?.customSkillDirs
+    assert.match(dirs?.js ?? '', /SEEU_SKILL_SET_QIKO/, `${id} 未注入 Qiko 比武技能组`)
     const fs = preset.config.plugins.find((item) => item.id === 'tool-fs')
     assert.equal(fs.config.write, false, `${id} 的 tool-fs.write 应为 false`)
     assert.equal(fs.config.edit, false, `${id} 的 tool-fs.edit 应为 false`)
@@ -119,7 +127,7 @@ test('新增四个专项预设（数据/APK/EXE/数据库），顺序、名称�
 test('persona 已改造成各专业专家的精简版（含关键纪律与工具入口）', () => {
   const persona = (id) => byId.get(id).config.plugins[0].config.prefix
   const cases = [
-    ['preset-standard', /Goldeneyes:\/\//, /evidence_mounts/, /禁止全盘递归搜索/, /元数据/],
+    ['preset-standard', /Goldeneyes:\/\//, /evidence_mounts/, /(禁止|不许).{0,4}全盘递归/, /元数据/],
     ['preset-traffic', /lovelyspark-cli/, /\$SEEU_WORKSPACE/],
     ['preset-memory', /starmem-cli/, /\$SEEU_WORKSPACE/],
     ['preset-data', /网钜/, /\$SEEU_WORKSPACE/],
@@ -150,7 +158,7 @@ test('命令执行统一优先 bash 工具，pwsh 仅作降级', () => {
 
 test('分析预设写明本机实测工具与 lovelyspark 优先', () => {
   const traffic = byId.get('preset-traffic').config.plugins[0].config.prefix
-  assert.match(traffic, /先 lovelyspark-cli/)
+  assert.match(traffic, /先 load `lovelyspark-cli`/)
   assert.match(traffic, /tshark 3\.4\.0/)
   assert.match(traffic, /E:\/CTFTools\/Forensics\/4-其他工具/)
   assert.ok(!/Get-Command tshark/.test(traffic), 'traffic persona 不应再写 PWsh 探测空话')
