@@ -1223,6 +1223,135 @@ window.__ModuleLoader__.load({
                 : h('div', { style: S.muted }, '（该案提及只保留最近 8 条，可能被截断）')))))) : null));
     }
 
+    // 「从 MYOS 导入」对话框：列案件 → 检材 → 结果库表 → 导入为 SeeU 索引。
+    function MyosDialog({ initialDir, onClose, onImported }) {
+      const [cases, setCases] = useState([]);
+      const [caseId, setCaseId] = useState('');
+      const [materials, setMaterials] = useState([]);
+      const [materialId, setMaterialId] = useState('');
+      const [dbPath, setDbPath] = useState('');
+      const [tables, setTables] = useState([]);
+      const [tableName, setTableName] = useState('');
+      const [sql, setSql] = useState('');
+      const [outDir, setOutDir] = useState(initialDir || '');
+      const [caseName, setCaseName] = useState('');
+      const [evidenceName, setEvidenceName] = useState('');
+      const [busy, setBusy] = useState('');
+      const [error, setError] = useState('');
+      const [result, setResult] = useState(null);
+
+      useEffect(() => {
+        let alive = true;
+        (async () => {
+          setBusy('cases');
+          try {
+            const body = await api('/myos/cases');
+            if (!alive) return;
+            const list = body.cases ?? [];
+            setCases(list);
+            if (list.length === 1) pickCase(list[0].caseId, list);
+          } catch (e) { if (alive) setError(String(e.message ?? e)); }
+          finally { if (alive) setBusy(''); }
+        })();
+        return () => { alive = false; };
+      }, []);
+
+      const pickCase = async (id, known) => {
+        const list = known ?? cases;
+        setCaseId(id);
+        setMaterials([]);
+        setMaterialId('');
+        const hit = list.find((c) => c.caseId === id);
+        if (hit) setCaseName(hit.caseName || hit.displayName || '');
+        setBusy('materials');
+        setError('');
+        try {
+          const body = await api('/myos/materials', { caseId: id });
+          setMaterials(body.materials ?? []);
+        } catch (e) { setError(String(e.message ?? e)); }
+        finally { setBusy(''); }
+      };
+
+      const pickMaterial = (id) => {
+        setMaterialId(id);
+        const hit = materials.find((m) => m.materialId === id);
+        if (hit && !evidenceName) setEvidenceName(hit.name || '');
+      };
+
+      const loadTables = async () => {
+        if (!dbPath.trim()) { setError('先填结果库路径（MYOS 结果目录里的 .mfs，例如 …/data/MApps.mfs）'); return; }
+        setBusy('tables');
+        setError('');
+        try {
+          const body = await api('/myos/tables', { db: dbPath.trim() });
+          const list = body.tables ?? [];
+          setTables(list);
+          if (list.length === 1) { setTableName(list[0]); setSql('select * from "' + list[0] + '" limit 2000'); }
+        } catch (e) { setError(String(e.message ?? e)); }
+        finally { setBusy(''); }
+      };
+
+      const pickTable = (name) => {
+        setTableName(name);
+        setSql('select * from "' + name + '" limit 2000');
+      };
+
+      const doImport = async () => {
+        if (!sql.trim()) { setError('先填要执行的 SQL（选表后会自动生成 select * from … limit 2000）'); return; }
+        if (!outDir.trim()) { setError('先填输出案件目录（索引会写到 <目录>/.seeu-index/case-index.db）'); return; }
+        setBusy('import');
+        setError('');
+        setResult(null);
+        try {
+          const body = await post('/myos/import', {
+            caseId: caseId.trim(), db: dbPath.trim(), sql: sql.trim(), outDir: outDir.trim(),
+            caseName: caseName.trim(), evidenceName: evidenceName.trim(),
+          });
+          setResult(body);
+        } catch (e) { setError(String(e.message ?? e)); }
+        finally { setBusy(''); }
+      };
+
+      const row = (label, node) => h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+        h('span', { style: { ...S.muted, width: 92, flex: 'none', fontSize: 11.5 } }, label), node);
+      const select = (value, onChange, items, placeholder) => h('select', {
+        style: { ...S.input, flex: 1 }, value, onChange: (e) => onChange(e.target.value),
+      },
+        h('option', { value: '' }, placeholder),
+        ...items.map((item) => h('option', { key: item.value, value: item.value }, item.label)));
+
+      return h('div', {
+        style: {
+          position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(3, 8, 20, .62)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+        },
+        onClick: (e) => { if (e.target === e.currentTarget) onClose(); },
+      },
+        h('div', { className: 'seeu-scroll', style: { ...S.card, width: 'min(680px, 94vw)', maxHeight: '86vh', overflow: 'auto', gap: 8, background: C_BG1, border: '1px solid ' + C_L2 } },
+          h('div', { style: { ...S.row, justifyContent: 'space-between' } },
+            h('span', { style: { color: C_FG, fontSize: 13.5, fontWeight: 650 } }, '从超级取证大师（MYOS）导入'),
+            actionButton('关闭', onClose, {})),
+          h('div', { style: { ...S.muted, fontSize: 11.5 } }, '先启动「超级取证大师」。导入会把 MYOS 结果库里一张表的数据写进 SeeU 索引（record + 全文索引 + 实体），之后面板与 AI 都只查这份索引。'),
+          row('案件', select(caseId, (id) => pickCase(id), cases.map((c) => ({ value: c.caseId, label: (c.caseName || c.displayName || c.caseId) + (c.casePath ? ' · ' + c.casePath : '') })), busy === 'cases' ? '读取案件…' : '选择 MYOS 案件')),
+          materials.length ? row('检材', select(materialId, pickMaterial, materials.map((m) => ({ value: m.materialId, label: (m.name || m.materialId) + (m.status ? ' · ' + m.status : '') })), '选择检材（可选）')) : null,
+          row('结果库', h('input', { style: { ...S.input, flex: 1 }, value: dbPath, placeholder: 'D:/Programs/MYOS/Case/<案件>/dev/<检材>/data/MApps.mfs', onChange: (e) => setDbPath(e.target.value), spellCheck: false })),
+          h('div', { style: { ...S.row, paddingLeft: 100 } }, actionButton(busy === 'tables' ? '读取中…' : '列出表', loadTables, { disabled: busy === 'tables' })),
+          tables.length ? row('表', select(tableName, pickTable, tables.map((t) => ({ value: t, label: t })), '选择表')) : null,
+          row('SQL', h('textarea', { style: { ...S.input, flex: 1, minHeight: 54, fontFamily: 'ui-monospace, monospace', fontSize: 11.5 }, value: sql, onChange: (e) => setSql(e.target.value), spellCheck: false })),
+          row('输出目录', h('input', { style: { ...S.input, flex: 1 }, value: outDir, placeholder: '案件目录（索引写到 .seeu-index/case-index.db）', onChange: (e) => setOutDir(e.target.value), spellCheck: false })),
+          row('案件名', h('input', { style: { ...S.input, flex: 1 }, value: caseName, onChange: (e) => setCaseName(e.target.value), spellCheck: false })),
+          row('检材名', h('input', { style: { ...S.input, flex: 1 }, value: evidenceName, onChange: (e) => setEvidenceName(e.target.value), spellCheck: false })),
+          h('div', { style: S.row },
+            actionButton(busy === 'import' ? '导入中…' : '导入为 SeeU 索引', doImport, { primary: true, disabled: busy === 'import' }),
+            h('span', { style: { ...S.muted, fontSize: 11 } }, '只读 MYOS 结果库，不改 MYOS 数据；重复导入会整库重建。')),
+          error ? h('div', { style: S.noticeErr }, error) : null,
+          result ? h('div', { style: S.noticeOk },
+            `已导入 ${result.records} 条记录 · ${result.entities} 个实体 → ${result.dbFile}`,
+            result.truncated ? '（查询结果被截断，可调大 SQL 的 limit 后重导）' : '',
+            h('div', { style: { ...S.row, marginTop: 6 } },
+              actionButton('完成并查看索引', () => onImported(result), { primary: true }))) : null));
+    }
+
     function Panel() {
       const [dir, setDir] = useState(() => localStorage.getItem('seeu.indexDir') ?? '');
       const [indexes, setIndexes] = useState([]);
@@ -1314,6 +1443,7 @@ window.__ModuleLoader__.load({
       const [progress, setProgress] = useState(null);
       const [error, setError] = useState('');
       const [crumbs, setCrumbs] = useState([]);
+      const [myosOpen, setMyosOpen] = useState(false);
 
       // 跨案 badge 需要提前知道数量；失败静默（badge 不显示），不影响主流程。
       const crossInfo = useLoad(() => api('/cross/list', {}), []);
@@ -1718,7 +1848,8 @@ window.__ModuleLoader__.load({
               onChange: (e) => setDir(e.target.value), spellCheck: false,
             }),
             actionButton('扫描已有索引', () => scan(dir.trim() || undefined), { disabled: busy === 'build' }),
-            actionButton(busy === 'build' ? '建库中…' : '建库 / 更新', startBuild, { primary: true, disabled: busy === 'build' })),
+            actionButton(busy === 'build' ? '建库中…' : '建库 / 更新', startBuild, { primary: true, disabled: busy === 'build' }),
+            actionButton('从 MYOS 导入…', () => setMyosOpen(true), { disabled: busy === 'build', title: '从超级取证大师（MYOS）的结果库导入为 SeeU 索引' })),
           progress ? (() => {
             const bp = progress.progress ?? null;
             const tag = bp?.phaseLabel ?? progress.phase ?? '建库';
@@ -1771,6 +1902,15 @@ window.__ModuleLoader__.load({
                 })))
             : h(EmptyState, { title: '还没有索引库', text: '在顶部填入案件目录（火眼全解析结果目录），点「建库 / 更新」；已有索引库时可点「扫描已有索引」。' })),
         onboarding,
+        myosOpen ? h(MyosDialog, {
+          initialDir: dir.trim(),
+          onClose: () => setMyosOpen(false),
+          onImported: async (info) => {
+            setMyosOpen(false);
+            await scan(info.caseDir);
+            if (info.dbFile) { setDb(info.dbFile); loadNode(info.dbFile, 'root'); }
+          },
+        }) : null,
         error ? h('div', { style: S.noticeErr }, error) : null,
 
         h('div', { style: S.panel },

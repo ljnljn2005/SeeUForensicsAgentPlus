@@ -155,6 +155,15 @@ report.briefRefreshText = (await bodyText()).match(/已刷新|刷新失败[^\n]{
   ? (await bodyText()).match(/已刷新|刷新失败[^\n]{0,60}/)[0]
   : ''
 report.briefRefreshOk = /已刷新/.test(report.briefRefreshText)
+// MYOS 导入入口：按钮存在，点开对话框（未启动 MYOS 时对话框内显示错误提示，属预期）
+report.myosButton = await clickText('从 MYOS 导入…', 'button')
+await sleep(1500)
+{
+  const t = await bodyText()
+  report.myosDialog = /从超级取证大师（MYOS）导入/.test(t) && /结果库/.test(t) && /案件/.test(t)
+}
+await clickText('关闭', 'button')
+await sleep(600)
 report.rootText = text.slice(text.indexOf('取证案件索引'), text.indexOf('取证案件索引') + 900)
 report.drill3 = await clickText('检材 3', 'div')
 await sleep(6000)
@@ -279,7 +288,8 @@ report.timelineFiltersOk = report.timelineFilterOptions.ev > 1 && report.timelin
 report.tabTablesClick = await openTab('表')
 text = await bodyText()
 report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
-report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true && report.timelineFiltersOk === true && report.entityPagingOk === true && report.entityEvSelectOk === true && report.indexMeta === true
+report.myosImportOk = String(report.myosButton ?? '').startsWith('clicked') && report.myosDialog === true
+report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true && report.timelineFiltersOk === true && report.entityPagingOk === true && report.entityEvSelectOk === true && report.indexMeta === true && report.myosImportOk === true
 
 // ---------- 浅色主题回归（SEEU_E2E_THEME=light；暗色为默认） ----------
 if (process.env.SEEU_E2E_THEME === 'light') {

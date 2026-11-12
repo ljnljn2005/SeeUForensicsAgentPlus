@@ -2271,3 +2271,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 **坑**：① MYOS 未启动时所有工具返回「请先运行 MYOS 取证软件」，真机端到端要用户先开软件；② `.mfs` 用 `node:sqlite` 直接打开报 `file is not a database`，必须走 MCP；③ `extractEntities` 的 kind 是英文（email/url/ip/phone/wallet），不要再用中文 `ENTITY_TYPES` 过滤；④ manifest 不写则面板只能显示库大小、没有规模/建库时间。
 
 **遗留**：面板里的「从 MYOS 导入」入口（选案件/检材/表可视化）与真机导入端到端尚未做；下一步可在 `plugins/seeu-case-index` 增加 `/myos/*` 路由与面板按钮。
+
+### 20.93 面板「从 MYOS 导入」入口（第 14 轮）
+
+**实现**：
+- 宿主端新增 `plugins/seeu-case-index/myos.mjs`：`myosCases` / `myosMaterials` / `myosTables` / `myosImport`，统一把 MCP 错误归一为可操作提示（未启动 → 503「先启动超级取证大师」；找不到服务端 → 503 提示 `SEEU_MYOS_MCP`；其它 → 502）。
+- `plugins/seeu-case-index/index.js` 新增 `/seeu-index/myos/{cases,materials,tables,import}`（POST import 用 `readBody`，最大 64 KB；outDir 由面板选择，导入后写 `<outDir>/.seeu-index/case-index.db`）。
+- `plugins/seeu-case-index/client.js` 新增 `MyosDialog`（案件/检材下拉、结果库路径、列出表、SQL、输出目录、案件名/检材名、导入结果），面板工具栏加「从 MYOS 导入…」按钮；导入成功回调里 `scan()` 并切换到新库。
+- `electron-builder.yml` 的 `files` 增加 `tools/myos-index/**`（插件运行时动态 import，必须原样进 asar）。
+
+**验证**：`tests/plugin-myos.test.mjs` 6/6（列案件/检材/表、导入建库、缺参 400、服务端缺失 503）；`npm test` **156/156**；`check:overlay` OK、build OK；`m2-ui-check` 新增 `myosImportOk`（按钮 + 弹窗文案）→ `m2ok:true, myosImportOk:true, errors:[]`。
+
+**坑**：① `MyosDialog` 用了不存在的颜色常量 `C_BG`，导致 slot entry crash（`ReferenceError: C_BG is not defined`），改用 `C_BG1`；② 对话框在 `useEffect` 里调用后声明的 `pickCase`，靠 React 副作用执行时机（渲染后）避免 TDZ，后续若改成同步调用要提前声明；③ MYOS 未启动时弹窗仍可打开，只是案件列表显示 503 提示（不要把「打不开」当成 UI bug）。
+
+**遗留**：真实 MYOS 端到端导入（需用户启动软件并选结果库）；结果库路径仍要手工粘贴，可在 `query_phone_forensics_results_overview` 返回里自动取 `mfs` 路径。

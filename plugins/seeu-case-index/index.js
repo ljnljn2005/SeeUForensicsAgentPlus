@@ -10,6 +10,7 @@ import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTable
 import { genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
 import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.mjs';
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
+import { myosCases, myosImport, myosMaterials, myosTables } from './myos.mjs';
 
 const ROUTE = '/seeu-index';
 const jobs = new Map();
@@ -204,6 +205,27 @@ async function handle(req, res) {
         current = null;
       }
       return send(res, 200, { state: briefState, current, dshHome: process.env.DSH_HOME ?? null });
+    }
+    // ---------- MYOS（超级取证大师）取证结果导入 ----------
+    // 面板「从 MYOS 导入」走这里：列案件/检材/结果库表，再把一张表落成 SeeU 索引。
+    if (path.startsWith('/myos/')) {
+      if (req.method === 'GET' && path === '/myos/cases') {
+        const cases = await myosCases({ keyword: url.searchParams.get('keyword') ?? '' });
+        return send(res, 200, { cases });
+      }
+      if (req.method === 'GET' && path === '/myos/materials') {
+        const materials = await myosMaterials(url.searchParams.get('caseId') ?? '');
+        return send(res, 200, { materials });
+      }
+      if (req.method === 'GET' && path === '/myos/tables') {
+        const tables = await myosTables(url.searchParams.get('db') ?? '');
+        return send(res, 200, { tables });
+      }
+      if (req.method === 'POST' && path === '/myos/import') {
+        const result = await myosImport(await readBody(req));
+        return send(res, 200, result);
+      }
+      return send(res, 404, { error: `未知 MYOS 接口 ${path}` });
     }
     // ---------- 跨案中央库（M5） ----------
     if (path.startsWith('/cross/')) {
