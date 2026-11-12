@@ -79,6 +79,10 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
+### v0.3.10 待发布（未打包）
+
+- **本机网关基准脚本（第 29 轮）**：`npm run bench:gateway`（`scripts/bench/local-gateway-bench.mjs`）直接打 Spark 单机/双机网关，测非流式延迟、流式 TTFB/tok/s/思考流、工具调用，报告落地 `.dev/bench/*.json`；假网关单测 6 例（`tests/local-gateway-bench.test.mjs`）。用法见 [benchmarks](docs/benchmarks.md)。
+
 ### v0.3.9 改了什么
 
 - **打包与打包态回归（第 16 轮，v0.3.8）**：v0.3.8 已出 NSIS `281,879,944 B`、portable `236,575,720 B`、`app.asar` `426,495,680 B`（34,220 entries）；`.probe/asar-038-check.mjs` 全部检查通过（含 `tools/myos-index/**`、`plugins/seeu-case-index/myos.mjs`、`/myos/*` 路由与面板入口）；目录版冷启动 **6180 ms**、portable 48.8 s；打包态 `m2-ui-check`（`m2ok:true, myosImportOk:true`）、`settings-check`（13 行外部工具、五项自检、思考流保存）、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（Qiko 43 个）、`hero-check`（本机工具 13/13、快捷入口齐全）、`mount-check`（inspect 154 ms）全绿。

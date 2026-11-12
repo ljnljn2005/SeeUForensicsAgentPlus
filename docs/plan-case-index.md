@@ -2417,3 +2417,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `npm version 0.3.9`；build、`npm test` 173/173、`check:overlay` 通过；`electron-builder --win --x64 -c.directories.output=release-039`（后台 job，约 16 分钟，无签名）。
 - 产物：NSIS 281,886,671 B、portable 236,647,317 B、`app.asar` 426,530,364 B（34,223 entries）、win-unpacked 1,110,881,592 B；asar-039 全 true；冷启动 5076 ms、portable 58.7 s；打包态 m2/settings/plugins/skills/hero/mount/真实 MYOS 导入全绿。
 - 坑：asar-039 首次 `myosDbName:false`——`resolveDbByName` 位于 `myos.mjs`，检查脚本误读 `index.js`；打包期间 portable 仍分两段 7z 压缩（约 10 分钟），不要提前搬产物。
+
+### 20.107 本机模型网关基准脚本（第 29 轮）
+
+- 新增 `scripts/bench/local-gateway-bench.mjs`：`GW_BASE/GW_KEY/GW_MODELS` 环境变量；每个模型跑「非流式对话 / 流式（`stream_options.include_usage`）/ 工具调用」三项，输出 TTFB、总耗时、chunk、输出 token、tok/s、`reasoning_content` 字符数、`tool_calls` 名称与 `finish_reason`；报告写 `.dev/bench/gateway-<ts>.json`。
+- 导出可测函数：`normalizeBaseURL`、`tokensPerSecond`、`readSSE`、`benchModel`、`runBench`、`formatReport`；网关不可用返回 `errors` 而不是抛异常，模型不在 `/models` 里也仍尝试调用并标记。
+- 测试 `tests/local-gateway-bench.test.mjs` 6 例（本地 `node:http` 假网关：SSE 思考流解析、非流式/工具调用、两模型遍历、网关不可用降级）→ 6/6；`npm test` 179/179。
+- `package.json` 加 `bench:gateway`；`docs/benchmarks.md` 增加「本机模型网关基准」章节（指标表 + 待填真实数据）；README 增加「v0.3.10 待发布」条目。
+- 遗留：真实 Spark 单机/双机数据要等用户给网关凭据后跑一次（脚本已就绪，避免凭据落盘）。
+
+- 坑：假网关极快时 `TTFB` 与总耗时可能落在同一毫秒，`tokensPerSecond(completion, ms - ttfb)` 会除以 0 得 `null`（单测在完整套件并发时暴露）→ 改成 `Math.max(1, ms - ttfb)`；另用 `.probe/mock-gw.mjs` 跑了一遍 CLI 全链路（输出结构见 `docs/benchmarks.md` 自检段）。

@@ -75,3 +75,42 @@ node scripts/e2e/real-tools-bench.mjs
 - 挂载与卸载都在 **亚秒级**（160–270 ms / 154 ms），可以在会话里放心「挂载 → 浏览 → 卸载」，不必一次挂一整天；
 - LovelySpark 的单次分析是 **10 秒级**，前端/技能的提示词里要提前说明「分析需要等待」，不要把它当毫秒级工具；
 - 内存分析预设目前只能承诺「命令链路可用」，采集结果依赖用户提供完整镜像；这一点在 README 与 persona 里都写明了。
+
+## 本机模型网关基准（脚本就绪，待真实网关数据）
+
+Spark 单机（`qwen3.8-flash-next`）与 Spark 双机（`dsv4.1-flash`）的体验指标由脚本直接打网关测量，不经过 dsh，
+避免把 UI/插件开销混进模型延迟：
+
+```bash
+GW_BASE=http://127.0.0.1:8080/v1 GW_KEY=sk-... node scripts/bench/local-gateway-bench.mjs
+# 可选：GW_MODELS=qwen3.8-flash-next,dsv4.1-flash  GW_BENCH_OUT=.dev/bench/spark.json
+# 或：npm run bench:gateway
+```
+
+每个模型跑三项，全部真实 HTTP：
+
+| 项 | 测量内容 | 关注点 |
+| --- | --- | --- |
+| 非流式对话 | 延迟、`usage`、正文 | 端到端是否可用、token 统计是否正常 |
+| 流式对话（`stream_options.include_usage`） | TTFB、总耗时、chunk 数、输出 token、tok/s、是否出现 `reasoning_content` | 首字延迟与思考流格式（决定设置页 `thinkingFormat` 该选哪个） |
+| 工具调用 | 是否返回 `tool_calls`、`finish_reason`、延迟 | 取证 Agent 的工具链路是否可用 |
+
+脚本对网关不可用、模型缺失、单项失败都会给出明确标记（`skipped` / `error`），不会伪造数字；
+报告同时写入 `.dev/bench/` 下的 JSON，便于对比两台机器/两种部署。
+
+> 待补：开发机暂未连真实 Spark 网关（需要 `baseURL + 模型 id + apiKey`），跑通后把两张表填在下方。
+
+### 脚本自检（假网关，非真实数据）
+
+用本地假网关（`node:http`，与单测共用协议）验证脚本输出结构：
+
+```
+网关：http://127.0.0.1:18200/v1
+
+【qwen3.8-flash-next】
+  非流式：ok · 6 ms · usage {"prompt_tokens":9,"completion_tokens":2,"total_tokens":11}
+  流式：TTFB 17 ms · 总 17 ms · 3 chunk · 输出 24 tok · 思考 5 字符
+  工具调用：ok · 15 ms · finish tool_calls · 1 个调用（ping_tool）
+```
+
+> 上面是假网关的自检输出，只证明脚本能正确解析 SSE 思考流/usage/工具调用；真实 Spark 数字等连上网关后再填。
