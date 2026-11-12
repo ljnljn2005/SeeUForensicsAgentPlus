@@ -2319,3 +2319,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：新增「append 模式：同一案件追加第二个检材/表不覆盖已有记录」→ `tests/myos-index.test.mjs` 13/13、`npm test` 162/162（含数组行/真实路径等前序用例）。
 - 真实 MYOS 复跑：`.dev/myos-merge` 先导 `MApps` 5 条（eid 1），再 `--append` 导 `TBL_PR_ANDROIDBROWSER_BROWSE_HISTORY` 2 条（eid 2）→ `records 7 / entities 2 / artifacts 2 / evidences 2`，manifest 同步。
 - 坑：`ingest_log.leaf` 是主键，追加时必须带 eid 前缀；`artifact.virtual_path` 是 unique，追加时必须区分检材。
+
+### 20.97 MYOS 批量导入（第 18 轮）
+
+- 需求：MYOS 一个检材的结果分散在十几张表里，逐表导入点太多次。
+- `plugins/seeu-case-index/myos.mjs`：新增 `myosImportBatch({caseId, db, tables, outDir, caseName, evidenceName, app, maxRows})`——打开案件一次，逐表 `select * from "表" limit N`，`importMyosRows({mode:'append'})` 追加；每张表一个检材（eid 递增、`evidenceName = <检材名> · <表名>`）；空表/查询失败记入 `skipped`；返回 `{tables:[{table,records,entities,eid,truncated}], skipped, totals, dbFile}`。
+- 路由 `POST /myos/import-batch`（`plugins/seeu-case-index/index.js:235`）。
+- 面板 `MyosDialog`：表列表多选（全选/清空/勾选），按钮「批量导入选中 N 张表」，结果显示每张表记录数、跳过原因、索引现有总数。
+- 测试：`tests/plugin-myos.test.mjs` 增至 10/10（两表批量 → eid 1/2、2 个检材、totals 累计、缺 tables 400）。
+- 真机：`MApps` 1 张表 5 条（eid1）；`AndroidBrowser` 2 张表 → 浏览历史 2 条（eid2）、下载表因「没有数据」跳过；合计 7 条 / 2 检材 / 2 实体。
+- 坑：JSX 结果区两个相邻三元表达式嵌套导致 `Uncaught SyntaxError: Unexpected token ')'`（插件入口 import failed，整块面板不显示）→ 改为在 `return` 前定义 `resultNode` 单一表达式；改完用 esbuild `transformSync(loader:'jsx')` + `m2-ui-check` 双验证。

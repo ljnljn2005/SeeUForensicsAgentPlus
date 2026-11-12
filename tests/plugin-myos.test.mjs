@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { myosCases, myosImport, myosMaterials, myosResultDbs, myosTables } from '../plugins/seeu-case-index/myos.mjs'
+import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTables } from '../plugins/seeu-case-index/myos.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const FAKE = join(HERE, 'fixtures', 'fake-myos-mcp.mjs')
@@ -99,4 +99,43 @@ test('myosResultDbs：从结果概览自动发现 .mfs 路径', withEnv(async ()
 
 test('myosResultDbs：缺 caseId/materialId 时 400', withEnv(async () => {
   await assert.rejects(() => myosResultDbs({}), (error) => error.status === 400)
+}))
+
+test('myosImportBatch：多张表追加进同一索引，每张表一个检材', withEnv(async () => {
+  const root = mkdtempSync(join(tmpdir(), 'seeu-myos-batch-'))
+  try {
+    const outDir = join(root, '案件戊')
+    const result = await myosImportBatch({
+      caseId: 'case-1',
+      db: 'D:/MYOS/Case/案件戊/dev/手机-data.D01/data/MApps.mfs',
+      tables: ['TBL_APPDATA_MANAGER', 'TBL_CHAT'],
+      outDir,
+      caseName: '案件戊',
+      evidenceName: '手机-data.D01',
+    })
+    assert.equal(result.ok, true)
+    assert.equal(result.tables.length, 2)
+    assert.equal(result.tables[0].eid, 1)
+    assert.equal(result.tables[1].eid, 2)
+    assert.ok(result.totals.records >= 4)
+    assert.equal(result.totals.evidences, 2)
+    const db = new DatabaseSync(result.dbFile, { readOnly: true })
+    try {
+      assert.equal(db.prepare('select count(*) n from evidence').get().n, 2)
+      const names = db.prepare('select name from evidence order by eid').all().map((row) => row.name)
+      assert.match(names[0], /TBL_APPDATA_MANAGER/)
+      assert.match(names[1], /TBL_CHAT/)
+    } finally {
+      db.close()
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}))
+
+test('myosImportBatch：缺 tables 时报 400', withEnv(async () => {
+  await assert.rejects(
+    () => myosImportBatch({ caseId: 'case-1', db: 'D:/x.mfs', outDir: tmpdir(), tables: [] }),
+    (error) => error.status === 400,
+  )
 }))

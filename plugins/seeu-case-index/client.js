@@ -1242,6 +1242,8 @@ window.__ModuleLoader__.load({
       const [result, setResult] = useState(null);
       // 追加模式：同一案件导多个检材/多张表时不要互相覆盖（取消勾选=整库重建）。
       const [appendMode, setAppendMode] = useState(true);
+      // 批量导入：勾选多张表一次入库（每张表算一个检材，eid 递增）。
+      const [pickedTables, setPickedTables] = useState([]);
 
       useEffect(() => {
         let alive = true;
@@ -1289,6 +1291,7 @@ window.__ModuleLoader__.load({
 
       const pickDb = (path) => {
         setDbPath(path);
+        setPickedTables([]);
         const hit = dbs.find((item) => item.path === path);
         if (hit?.tables?.length) {
           setTables(hit.tables);
@@ -1322,6 +1325,26 @@ window.__ModuleLoader__.load({
         setSql('select * from "' + name + '" limit 2000');
       };
 
+      const toggleTable = (name) => {
+        setPickedTables((prev) => (prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]));
+      };
+
+      const doImportBatch = async () => {
+        if (!pickedTables.length) { setError('先勾选要批量导入的表'); return; }
+        if (!outDir.trim()) { setError('先填输出案件目录（索引会写到 <目录>/.seeu-index/case-index.db）'); return; }
+        setBusy('batch');
+        setError('');
+        setResult(null);
+        try {
+          const body = await post('/myos/import-batch', {
+            caseId: caseId.trim(), db: dbPath.trim(), tables: pickedTables, outDir: outDir.trim(),
+            caseName: caseName.trim(), evidenceName: evidenceName.trim(), maxRows: 2000,
+          });
+          setResult(body);
+        } catch (e) { setError(String(e.message ?? e)); }
+        finally { setBusy(''); }
+      };
+
       const doImport = async () => {
         if (!sql.trim()) { setError('先填要执行的 SQL（选表后会自动生成 select * from … limit 2000）'); return; }
         if (!outDir.trim()) { setError('先填输出案件目录（索引会写到 <目录>/.seeu-index/case-index.db）'); return; }
@@ -1347,6 +1370,26 @@ window.__ModuleLoader__.load({
         h('option', { value: '' }, placeholder),
         ...items.map((item) => h('option', { key: item.value, value: item.value }, item.label)));
 
+      const resultNode = result
+        ? h('div', { style: S.noticeOk },
+            result.tables
+              ? `批量导入 ${result.tables.length} 张表：${result.tables.reduce((sum, item) => sum + item.records, 0)} 条记录 · ` +
+                `${result.tables.reduce((sum, item) => sum + item.entities, 0)} 个实体` +
+                (result.totals ? `（索引现有 ${result.totals.records} 条记录 / ${result.totals.evidences} 个检材）` : '')
+              : `已导入 ${result.records} 条记录 · ${result.entities} 个实体` +
+                (result.totals ? `（索引现有 ${result.totals.records} 条记录 / ${result.totals.evidences} 个检材）` : '') +
+                ` → ${result.dbFile}`,
+            result.tables
+              ? h('div', { style: { ...S.muted, fontSize: 11, marginTop: 4 } },
+                  result.tables.map((item) => `${item.table}: ${item.records} 条`).join(' · '))
+              : result.truncated ? '（查询结果被截断，可调大 SQL 的 limit 后重导）' : null,
+            result.tables && result.skipped && result.skipped.length
+              ? h('div', { style: { ...S.muted, fontSize: 11 } },
+                  '跳过：' + result.skipped.map((item) => `${item.table}（${item.reason}）`).join('；'))
+              : null,
+            h('div', { style: { ...S.row, marginTop: 6 } },
+              actionButton('完成并查看索引', () => onImported(result), { primary: true })))
+        : null;
       return h('div', {
         style: {
           position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(3, 8, 20, .62)',
@@ -1365,6 +1408,17 @@ window.__ModuleLoader__.load({
           row('结果库', h('input', { style: { ...S.input, flex: 1 }, value: dbPath, placeholder: 'D:/Programs/MYOS/Case/<案件>/dev/<检材>/data/MApps.mfs', onChange: (e) => setDbPath(e.target.value), spellCheck: false })),
           h('div', { style: { ...S.row, paddingLeft: 100 } }, actionButton(busy === 'tables' ? '读取中…' : '列出表', loadTables, { disabled: busy === 'tables' })),
           tables.length ? row('表', select(tableName, pickTable, tables.map((t) => ({ value: t, label: t })), '选择表')) : null,
+          tables.length > 1 ? row('批量', h('div', { style: { flex: 1, display: 'flex', flexDirection: 'column', gap: 4 } },
+            h('div', { style: { ...S.row, gap: 8, fontSize: 11.5 } },
+              h('span', { style: S.muted }, `勾选多张表一次导入（每张表一个检材，共 ${tables.length} 张）`),
+              actionButton('全选', () => setPickedTables([...tables]), {}),
+              actionButton('清空', () => setPickedTables([]), {})),
+            h('div', { className: 'seeu-scroll', style: { maxHeight: 120, overflow: 'auto', border: '1px solid ' + C_L2, borderRadius: 6, padding: '4px 8px' } },
+              ...tables.map((t) => h('label', { key: t, style: { ...S.row, gap: 6, fontSize: 11.5, color: C_FG2, padding: '2px 0' } },
+                h('input', { type: 'checkbox', checked: pickedTables.includes(t), onChange: () => toggleTable(t) }),
+                h('span', null, t)))),
+            h('div', { style: { ...S.row, gap: 8 } },
+              actionButton(busy === 'batch' ? '批量导入中…' : `批量导入选中 ${pickedTables.length} 张表`, doImportBatch, { disabled: busy === 'batch' || !pickedTables.length })))) : null,
           row('SQL', h('textarea', { style: { ...S.input, flex: 1, minHeight: 54, fontFamily: 'ui-monospace, monospace', fontSize: 11.5 }, value: sql, onChange: (e) => setSql(e.target.value), spellCheck: false })),
           row('输出目录', h('input', { style: { ...S.input, flex: 1 }, value: outDir, placeholder: '案件目录（索引写到 .seeu-index/case-index.db）', onChange: (e) => setOutDir(e.target.value), spellCheck: false })),
           row('案件名', h('input', { style: { ...S.input, flex: 1 }, value: caseName, onChange: (e) => setCaseName(e.target.value), spellCheck: false })),
@@ -1376,13 +1430,7 @@ window.__ModuleLoader__.load({
             actionButton(busy === 'import' ? '导入中…' : '导入为 SeeU 索引', doImport, { primary: true, disabled: busy === 'import' }),
             h('span', { style: { ...S.muted, fontSize: 11 } }, '只读 MYOS 结果库，不改 MYOS 数据；默认追加，取消勾选可整库重建。')),
           error ? h('div', { style: S.noticeErr }, error) : null,
-          result ? h('div', { style: S.noticeOk },
-            `已导入 ${result.records} 条记录 · ${result.entities} 个实体` +
-              (result.totals ? `（索引现有 ${result.totals.records} 条记录 / ${result.totals.evidences} 个检材）` : '') +
-              ` → ${result.dbFile}`,
-            result.truncated ? '（查询结果被截断，可调大 SQL 的 limit 后重导）' : '',
-            h('div', { style: { ...S.row, marginTop: 6 } },
-              actionButton('完成并查看索引', () => onImported(result), { primary: true }))) : null));
+          resultNode));
     }
 
     function Panel() {

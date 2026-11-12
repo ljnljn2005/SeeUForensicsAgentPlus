@@ -104,3 +104,64 @@ export async function myosImport({ caseId, db, sql, outDir, caseName, evidenceNa
   })
   return result
 }
+
+/**
+ * 批量导入：一次把结果库里选中的多张表写入同一个 SeeU 索引（追加模式）。
+ * 每张表各算一个检材（eid 递增），面板显示每张表的记录数。
+ */
+export async function myosImportBatch({ caseId, db, tables, outDir, caseName, evidenceName, app = '', maxRows = 2000 } = {}) {
+  const caseDir = resolve(String(outDir ?? ''))
+  if (!outDir) throw fail('缺少 outDir（案件目录）')
+  const dbPath = String(db ?? '').trim()
+  if (!dbPath) throw fail('缺少 db（结果库 .mfs 路径）')
+  const list = (Array.isArray(tables) ? tables : []).map((item) => String(item ?? '').trim()).filter(Boolean)
+  if (list.length === 0) throw fail('缺少 tables（要导入的表）')
+  const limit = Math.min(Math.max(Number(maxRows) || 2000, 1), 20000)
+  const id = String(caseId ?? '').trim()
+  const baseName = String(evidenceName ?? '').trim() || 'MYOS 检材'
+
+  return call(async (client) => {
+    if (id) {
+      try {
+        await client.call('myos-forensics.open_case', { caseId: id, timeoutMs: 120000 })
+      } catch {
+        // 忽略：结果库能读就行。
+      }
+    }
+    const items = []
+    const skipped = []
+    let dbFile = ''
+    let totals = null
+    for (const table of list) {
+      const statement = `select * from ${JSON.stringify(table)} limit ${limit}`
+      let payload
+      try {
+        payload = await readMyosRows(client, { dbPath, sql: statement, maxRows: limit })
+      } catch (error) {
+        skipped.push({ table, reason: error instanceof Error ? error.message : String(error) })
+        continue
+      }
+      if (!payload.rows.length) {
+        skipped.push({ table, reason: '没有数据' })
+        continue
+      }
+      const imported = importMyosRows({
+        dbPath: caseDir,
+        caseName: String(caseName ?? '').trim() || `MYOS 案件 ${id || 'unknown'}`,
+        caseNumber: id ? `myos-${id}` : `myos-${Date.now()}`,
+        evidenceName: `${baseName} · ${table}`,
+        columns: payload.columns,
+        rows: payload.rows,
+        sourceDb: dbPath,
+        sql: statement,
+        app: String(app ?? '') || table,
+        mode: 'append',
+      })
+      dbFile = imported.dbFile
+      totals = imported.totals
+      items.push({ table, records: imported.records, entities: imported.entities, eid: imported.eid, truncated: payload.truncated })
+    }
+    if (items.length === 0) throw fail('选中的表都没有数据（可换表或调大 SQL）', 422)
+    return { ok: true, dbFile, caseDir, caseName, evidenceName: baseName, mode: 'append', tables: items, skipped, totals }
+  })
+}
