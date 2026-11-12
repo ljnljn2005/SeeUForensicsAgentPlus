@@ -79,6 +79,10 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
+### v0.3.11 待发布（未打包）
+
+- **设置页「运行环境体检」（第 32 轮）**：一键汇总七项——随包 dsh 插件（6 bundle 是否都能解析）、取证技能（随包 6 个 + 技能组 4 组 + 已安装数）、外部工具路径（13 项 ready/total）、本机模型配置（是否启用 / 模型 id / 窗口）、镜像挂载 CLI（LovelyCarve 版本 / 活动挂载数）、MYOS MCP 服务端、案件索引目录；每项给 `ok/warn/fail` + 一句可操作提示，只读检查不启动会话。实现：`tools/env-report.mjs`（纯判定 + 文案，单测 4 例）+ `src/env-report.ts`（宿主收集事实，`collectEnvReport()`）+ IPC `seeu:env:report` + `window.seeu.env.report()`；设置页「运行环境体检」卡片，`tests/env-report.test.mjs` 4 例、`npm test` **187/187**；`settings-check` 实测 `envItemCount:7`、`envSummary:"体检结果：6 项正常 · 1 项注意 · 0 项不可用"`、`envReportOk:true`。
+
 ### v0.3.10 改了什么
 
 - **打包与打包态回归（第 31 轮）**：v0.3.10 已出 NSIS `281,889,094 B`（blockmap `293,258 B`）、portable `236,564,870 B`、`app.asar` `426,537,645 B`（34,224 entries）、目录版总计 `1,110,888,873 B`；`.probe/asar-0310-check.mjs` 全部检查通过（新增 `tools/ges-index/activity.mjs`、`activityModule`/`activityRoutes`/`activityBuild`/`activityPanel`/`version0310`）；打包态 `m2-ui-check`（`m2ok:true`、`activityOk:true`）、`settings-check --exe`（13 行外部工具、五项自检、思考流保存）、`plugins-check --exe`（175 包、`activationFailures:[]`）、`skills-check --exe`（6 个随包技能 + Qiko 43 个）、`hero-check --exe`（本机工具 13/13）、`mount-check --exe`（inspect 267 ms / mount 332 ms）、真实 MYOS 导入（`test:e2e:myos`：`skipped:false`）全绿；目录版冷启动 **5123 ms**、portable 首次 58.5 s。

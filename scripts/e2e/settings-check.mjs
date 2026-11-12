@@ -495,6 +495,33 @@ try {
   if (!report.toolPathsFileOk) throw new Error('外部工具路径配置内容不符：' + JSON.stringify(toolPathsWritten))
   log('外部工具路径', '13 行默认值，保存后 ' + TOOL_PATHS_CONFIG)
 
+  // 运行环境体检：点按钮 → 插件/技能/工具/模型/挂载/MYOS/索引 七项清单 + 汇总
+  await evaluate(client, `document.getElementById('btn-env-check').click(), true`)
+  const envReport = await evaluate(client, `(async () => {
+    const t0 = Date.now()
+    while (Date.now() - t0 < 8000) {
+      const rows = document.querySelectorAll('[data-env-key]')
+      if (rows.length >= 7) {
+        return {
+          count: rows.length,
+          statuses: [...rows].map((el) => el.dataset.envStatus),
+          keys: [...rows].map((el) => el.dataset.envKey),
+          summary: document.getElementById('env-summary').textContent,
+          text: document.getElementById('env-items').textContent,
+        }
+      }
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    return null
+  })()`)
+  report.envItemCount = envReport?.count ?? 0
+  report.envKeys = envReport?.keys ?? []
+  report.envStatuses = envReport?.statuses ?? []
+  report.envSummary = envReport?.summary ?? ''
+  report.envReportOk = report.envItemCount >= 7 && /体检结果/.test(report.envSummary) && (envReport?.statuses ?? []).includes('ok') && /插件|技能|工具/.test(envReport?.text ?? '')
+  if (!report.envReportOk) throw new Error('环境体检没渲染出完整清单：' + JSON.stringify(envReport))
+  log('环境体检', report.envSummary)
+
   // 真实点「从网关拉取模型列表」按钮：应把 /v1/models 的 id 填进 textarea（保留已有显示名）
   await evaluate(client, `document.getElementById('btn-models').click(), true`)
   const pulled = await evaluate(client, `(async () => {

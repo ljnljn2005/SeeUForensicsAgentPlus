@@ -40,6 +40,7 @@ import {
 import { LOVELY_TOOL_SPECS, lovelyToolsView, saveLovelyToolPaths } from './lovely-tools.js'
 import { mountHostEnv, mountManager, setMountLogger } from './mounts.js'
 import { TOOL_PATH_SPECS, saveToolPaths, toolPathsEnv, toolPathsView } from './tool-paths.js'
+import { collectEnvReport } from './env-report.js'
 import { ensureBundledPluginPackages, installBundledPluginBundles } from './dsh-plugins.js'
 import { bundledSkillsDir, installBundledSkills, userSkillsDir } from './skills.js'
 import {
@@ -1014,6 +1015,17 @@ function registerIpc(): void {
     const res = saveToolPaths(input as Record<string, unknown>, process.env)
     if (res.ok) logShell(`tool paths: 已保存外部工具路径（${(res.saved ?? []).join(', ') || '无'}）`)
     return res
+  })
+
+  // ── 运行环境体检：把插件/技能/工具/网关/挂载/索引目录汇总成一张清单 ──
+  ipcMain.handle('seeu:env:report', async () => {
+    try {
+      const report = await collectEnvReport()
+      logShell(`env report: ${report.summary.ok} 正常 / ${report.summary.warn} 注意 / ${report.summary.fail} 不可用`)
+      return { ok: true, report }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
   })
 
   // ── 镜像挂载（LovelyCarve CLI 常驻进程；挂载点只在进程存活期间有效）──

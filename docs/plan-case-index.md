@@ -2445,3 +2445,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `.probe/asar-0310-check.mjs`：在 039 的基础上加 `tools/ges-index/activity.mjs` 与 `activityModule`/`activityRoutes`/`activityBuild`/`activityPanel`/`version0310`，全部 true、`missing: []`。
 - 打包态：`m2-ui-check`（`activityOk:true`）、`settings-check`、`plugins-check`、`skills-check`、`hero-check`、`mount-check`、`myos-real-import` 全绿；目录版冷启动 5123 ms、portable 58.5 s。
 - 坑：打包等待期间只应轮询 `release-0310/` 是否出现 `-portable.exe`，不要在 `win-unpacked.tmp` 阶段读 asar（会读不到文件）；portable 首次启动仍需 50–60 s 解包，属预期。
+
+### 20.111 设置页「运行环境体检」（第 32 轮）
+
+- 背景：多轮加功能后，用户排障时很难判断「到底缺什么」——插件没加载、工具路径没配、MYOS 没起、模型没配，表现都像「AI 变笨」。本轮把七项能力状态汇总成一张只读清单。
+- 新增 `tools/env-report.mjs`（纯函数模块，不碰文件系统）：
+  - `buildEnvReport(facts, now)` → `{ok, version:1, checkedAt, summary:{total,ok,warn,fail,worst}, items}`；
+  - 七项判定：`plugins`（bundles 数 + 缺包→fail，带「重装 SeeU」提示）、`skills`（随包 6 个 + 技能组 4 组 + 已安装数，未安装→warn）、`tools`（ready/total，少量缺→warn、多数缺→fail）、`localModel`（未配置/禁用/无模型 id→warn，配置读坏→fail）、`mounts`（LovelyCarve CLI 未配置→warn + 去设置选 exe）、`myos`（MCP 服务端文件缺失→warn + `SEEU_MYOS_MCP`）、`indexDirs`（登记目录可访问比例，缺目录→warn）；
+  - `worstStatus()`（有 fail 即 fail）、`formatEnvReport()`（纯文本版，含 `[OK]/[!]/[X]` 与提示）。
+- 新增 `src/env-report.ts`：`collectEnvReport()` 收集事实（`toolPathsView`、profile bundle 解析（profile node_modules → appRoot → `require.resolve`）、`countSkillDirs`/`skillSetIds`、`mountManager.status()`、`resolveMyosMcp`、`describeLocalModelConfig`、`index-state.json` 目录）；`appRoot()`/`dshHome()` 来自 `src/paths.ts`。
+- 接线：`src/main.ts` import + IPC `seeu:env:report`（日志 `env report: X 正常 / Y 注意 / Z 不可用`）；`src/preload.ts` 新增 `EnvReport/EnvReportItem/EnvStatus` 类型与 `window.seeu.env.report()`。
+- 设置页：`renderer/local-model.html` 在「外部取证工具路径」下加「运行环境体检」卡片（`#btn-env-check`、`#env-summary`、`#env-items`），逐项渲染 `data-env-key`/`data-env-status`（✓/!/× 着色）+ 详情与提示；`runEnvCheck()` 处理缺桥/异常。
+- 测试：`tests/env-report.test.mjs` 4 例（齐全全 ok；工具缺一半 fail、少量缺 warn；插件缺包 fail + 提示、挂载/模型未配置 warn；空事实不抛异常 + worstStatus/formatEnvReport）→ 4/4；`npm test` **187/187**、`check:overlay` OK、build OK。
+- `scripts/e2e/settings-check.mjs` 加环境体检断言（点按钮 → 等 `[data-env-key]` ≥7 → 读 summary/statuses）→ `envItemCount:7`、`envKeys` 七项、`envStatuses` 6 ok + 1 warn（隔离 home 未登记索引目录）、`envSummary:"体检结果：6 项正常 · 1 项注意 · 0 项不可用"`、`envReportOk:true`、`ok:true`。
+- 坑：设置页脚本由内联 `<script>` 直接跑，改完必须用 `esbuild transformSync(loader:'js')` 校验（本轮一次通过）；`env-check` 按钮在 `window.seeu.env` 缺失时要走失败提示而不是静默。

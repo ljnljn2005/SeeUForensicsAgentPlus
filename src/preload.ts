@@ -93,6 +93,24 @@ export interface ToolPathsView {
   readonly error?: string
 }
 
+export type EnvStatus = 'ok' | 'warn' | 'fail'
+
+export interface EnvReportItem {
+  key: string
+  label: string
+  status: EnvStatus
+  detail: string
+  hint?: string
+}
+
+export interface EnvReport {
+  ok: boolean
+  version: number
+  checkedAt: string
+  summary: { total: number; ok: number; warn: number; fail: number; worst: EnvStatus }
+  items: EnvReportItem[]
+}
+
 export interface ToolPathsSaveResult {
   readonly ok: boolean
   readonly error?: string
@@ -325,6 +343,11 @@ const api = {
       ipcRenderer.invoke('seeu:tool-paths:pick', tool) as Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>,
     save: (paths: Record<string, string>): Promise<ToolPathsSaveResult> =>
       ipcRenderer.invoke('seeu:tool-paths:save', paths) as Promise<ToolPathsSaveResult>,
+  },
+  // 运行环境体检：插件/技能/工具路径/本机模型/挂载/MYOS/索引目录。
+  env: {
+    report: (): Promise<{ ok: boolean; report?: EnvReport; error?: string }> =>
+      ipcRenderer.invoke('seeu:env:report') as Promise<{ ok: boolean; report?: EnvReport; error?: string }>,
   },
   // 镜像挂载：取证镜像 → 只读盘符（LovelyCarve CLI 常驻进程，关闭外壳释放）。
   mounts: {

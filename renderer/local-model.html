@@ -327,6 +327,16 @@
     <div id="tool-paths-config" class="hint"></div>
   </div>
 
+  <div class="field">
+    <label>运行环境体检</label>
+    <div class="hint">一次性检查：随包 dsh 插件、取证技能、外部工具路径、本机模型配置、镜像挂载（LovelyCarve）、MYOS MCP、案件索引目录。只读检查，不会启动会话或改动配置。</div>
+    <div class="actions" style="margin:10px 0 6px">
+      <button id="btn-env-check">开始体检</button>
+      <span id="env-summary" class="hint" style="margin-left:8px"></span>
+    </div>
+    <div id="env-items"></div>
+  </div>
+
   <div class="actions">
     <button class="primary" id="btn-save">保存</button>
     <button id="btn-models">从网关拉取模型列表</button>
@@ -731,6 +741,55 @@
     if (cfg) cfg.textContent = view && view.configFile ? '配置文件：' + view.configFile : ''
   }
 
+  // ── 运行环境体检 ──
+  const envApi = window.seeu && window.seeu.env ? window.seeu.env : null
+  const ENV_MARK = { ok: '✓', warn: '!', fail: '×' }
+  const ENV_COLOR = { ok: 'var(--ok, #34D399)', warn: 'var(--warn, #F5A524)', fail: 'var(--err, #F87171)' }
+
+  function renderEnvReport(report) {
+    const box = $('env-items')
+    box.textContent = ''
+    for (const item of report.items || []) {
+      const row = document.createElement('div')
+      row.className = 'env-item'
+      row.dataset.envKey = item.key
+      row.dataset.envStatus = item.status
+      row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;padding:5px 2px;border-top:1px solid var(--line, rgba(148,163,184,.18));font-size:12px'
+      const mark = document.createElement('span')
+      mark.textContent = ENV_MARK[item.status] || '?'
+      mark.style.cssText = 'color:' + (ENV_COLOR[item.status] || 'var(--muted)') + ';font-weight:700;width:12px;flex:none'
+      const label = document.createElement('span')
+      label.textContent = item.label
+      label.style.cssText = 'flex:none;min-width:132px;color:var(--text)'
+      const detail = document.createElement('span')
+      detail.textContent = item.detail + (item.hint ? '（' + item.hint + '）' : '')
+      detail.style.cssText = 'color:var(--muted);flex:1'
+      row.append(mark, label, detail)
+      box.append(row)
+    }
+    const sum = report.summary || {}
+    const summary = $('env-summary')
+    summary.textContent = '体检结果：' + (sum.ok || 0) + ' 项正常 · ' + (sum.warn || 0) + ' 项注意 · ' + (sum.fail || 0) + ' 项不可用'
+    summary.style.color = (sum.fail || 0) > 0 ? ENV_COLOR.fail : (sum.warn || 0) > 0 ? ENV_COLOR.warn : ENV_COLOR.ok
+  }
+
+  async function runEnvCheck() {
+    const button = $('btn-env-check')
+    button.disabled = true
+    $('env-summary').textContent = '体检中…'
+    try {
+      if (!envApi) throw new Error('预加载桥不可用（window.seeu.env 缺失）')
+      const res = await envApi.report()
+      if (!res || !res.ok || !res.report) throw new Error((res && res.error) || '体检失败')
+      renderEnvReport(res.report)
+    } catch (error) {
+      $('env-summary').textContent = '体检失败：' + (error && error.message ? error.message : error)
+      $('env-summary').style.color = 'var(--err)'
+    } finally {
+      button.disabled = false
+    }
+  }
+
   async function loadToolPaths() {
     if (!toolPathsApi) {
       $('tool-paths-status').textContent = '预加载桥不可用（window.seeu.toolPaths 缺失），无法在这里修改外部工具路径。'
@@ -1035,6 +1094,8 @@
   }
 
   void loadTools()
+  const envButton = $('btn-env-check')
+  if (envButton) envButton.addEventListener('click', () => { void runEnvCheck() })
   void loadToolPaths()
   void load()
 </script>
