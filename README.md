@@ -77,6 +77,13 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
+### v0.3.7 待发布（未打包）
+
+- **建库进度可读化（第 8 轮）**：新增 `tools/ges-index/progress.mjs`（`buildPhaseLabel` / `formatDuration` / `describeBuildProgress` 纯函数），服务端 `GET /seeu-index/build` 在原有 job 上附加 `progress` 字段：阶段中文名（探测案件 / 枚举检材 / 读取检材数据 / 校验与替换 / 完成 / 失败）、**实时已用时间**（运行中按 `startedAt` 现算，不再只在结束时才有 `elapsedMs`）、`已完成/总数 条 · 百分比`、按吞吐估算的**剩余时间**；运行超过 90 秒时给「可以先切到其他视图，任务会在后台继续」提示；完成后给出「建库完成：N 条记录 · M 个实体 · 用时 X · 索引 Y MiB」摘要，失败时给出错误码与原因。
+- 面板进度卡（`plugins/seeu-case-index/client.js`）改为渲染上述中文进度：如「读取检材数据 · 79 / 360 条 · 21.9% · 已用 1 分 20 秒 · 剩余约 4 分 50 秒」，不再只有一行 `fetch 21.9%`。
+- 单测 `tests/progress.test.mjs` 5 例（阶段名回退、时长格式、运行中实时 elapsed、超 90 秒提示与 ETA、完成/失败摘要）。
+- 实测（dev 预览直连插件 API，真实案件 `W盘_2919…`，360 个叶子/22,777 条记录）：各阶段中文名、秒级已用时间、`已完成/总数` 与 `剩余约` 连续可见（运行中样例「读取检材数据 · 81 / 360 条 · 22.5% · 已用 1 分 15 秒 · 剩余约 4 分 16 秒」）；一次全量重建 **4 分 9 秒**，完成摘要「建库完成：22,776 条记录 · 8,191 个实体 · 用时 4 分 9 秒 · 索引 63.0 MiB」。
+
 ### v0.3.6 改了什么
 
 - **打包与打包态回归（v0.3.6）**：NSIS `281,864,757 B`（blockmap 293,917 B）、portable `236,497,369 B`、`app.asar` `426,435,518 B`（34,213 entries）、目录版总计 `1,110,786,746 B`；`.probe/asar-036-check.mjs` **82 项全 true**（新增 `thinkingFormat`/`diagnoseStream`/`diagnoseItems`/`mountTiming`/`heroToolsChip`/`version036`，并修正流式检查对 esbuild 双引号字符串的匹配）；打包态 `m2-ui-check`（`m2ok:true`）、`settings-check --exe`（`ok:true`：五项自检 `diagItems` 全 ✓、`thinkingSaved:true`、外部工具路径 13 行）、`plugins-check --exe`（`ok:true`：175 插件包、`activationFailures:[]`）、`skills-check --exe`（`ok:true`、`leaked:[]`）、`hero-check --exe`（`ok:true`：本机工具 13/13）、`mount-check --exe`（`ok:true`：解析 164 ms、卸载正常）；目录版冷启动 **5088 ms**、portable **52,954 ms**；`npm test` **125/125**、`npm run check:overlay` OK。

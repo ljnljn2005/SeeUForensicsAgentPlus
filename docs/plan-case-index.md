@@ -2133,3 +2133,23 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - asar 自检 `.probe/asar-036-check.mjs`（由 035 复制）：新增 `thinkingFormat`/`diagnoseStream`/`diagnoseItems`/`mountTiming`/`heroToolsChip`/`version036`，最终 **82 项全 true**。两处误报修复：`key: 'stream'` 在 esbuild 产物里是双引号；`mountErrorHint` 编译进 `dist/main.cjs` 而非 `mounts.html`。
 - 打包态验证：目录版冷启动 5088 ms、portable 52,954 ms；`m2-ui-check`/`settings-check`（五项自检全 ✓、thinkingSaved）/`plugins-check`（175 包、0 激活失败）/`skills-check`/`hero-check`（工具 chip 13/13）/`mount-check`（解析 164 ms）全绿。
 - 沟通口径：本轮为「打包 + 回归」，无新功能；待用户验收安装包，并继续等待真实网关与完整内存镜像做真机基准。
+
+### 20.86 建库进度可读化（第 8 轮）
+
+**需求**：面板建库时只有 `fetch 21.9%` 这种原始字段，看不出阶段含义、已用时间、还要多久。
+
+**实现**
+- 新增 `tools/ges-index/progress.mjs`：`BUILD_PHASE_LABELS`（probe/enumerate/fetch/finalize/done/failed）、`buildPhaseLabel`、`formatDuration`、`describeBuildProgress(job, now)` → `{status,running,phaseLabel,elapsedMs,elapsedText,detail,etaText,percent,hint,summary}`。
+- `plugins/seeu-case-index/index.js`：`GET /build` 返回 `{...job, progress: describeBuildProgress(job)}`；`onProgress` 透传 `etaMs`（否则面板拿不到剩余时间）。
+- `plugins/seeu-case-index/client.js`：进度卡渲染 `phaseLabel`、`detail`、`已用 …`、`剩余约 …`、`hint`（>90 秒）、`summary`（完成/失败）。
+- 单测 `tests/progress.test.mjs` 5 例。
+
+**坑**
+1. 实际 phase 是 `probe/enumerate/fetch/finalize`，不是最初以为的 `evidences/records/entities`；标签表必须按 `build.mjs` 里的 `progress({ phase })` 实际值写。
+2. 同一案件**并发两次 build 会互相踩 `building` 库**（实测 17 个叶子失败 → `E_VALIDATION`）；面板/接口要避免重复提交，e2e 也要串行。
+3. 运行中 job 的 `elapsedMs` 只在结束时写入，必须由 `describeBuildProgress` 用 `startedAt` 现算，否则面板「用时」一直是 0。
+4. `formatDuration(34_500)` 走四舍五入 → 35 秒，单测断言要按同样规则写。
+
+**验证**：dev 预览直连 `POST /seeu-index/build` + 轮询 `GET /build`：阶段中文名/实时已用/百分比/ETA 连续可见；真实案件全量重建约 4–5 分钟；单测 5/5、`npm test` 全绿、build OK。
+
+**遗留**：完成后摘要仅在面板进度卡显示，未写入案件概览；`rebuild` 期间的取消能力尚未提供。

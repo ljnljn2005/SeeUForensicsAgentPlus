@@ -1718,12 +1718,22 @@ window.__ModuleLoader__.load({
             }),
             actionButton('扫描已有索引', () => scan(dir.trim() || undefined), { disabled: busy === 'build' }),
             actionButton(busy === 'build' ? '建库中…' : '建库 / 更新', startBuild, { primary: true, disabled: busy === 'build' })),
-          progress ? h('div', { style: { ...S.card, gap: 6 } },
-            h('div', { style: S.row },
-              h('span', { style: { ...S.tag, flex: 'none', color: C_ACC } }, progress.phase ?? 'build'),
-              h('span', { style: S.muted }, `${progress.total ? `${progress.completed}/${progress.total}` : ''} ${progress.percent ?? 0}%${progress.message ? ` · ${progress.message}` : ''}`)),
-            h('div', { style: { height: 6, borderRadius: 3, background: C_L2, overflow: 'hidden' } },
-              h('div', { style: { height: '100%', width: `${progress.percent ?? 0}%`, borderRadius: 3, background: C_ACC, transition: 'width .3s' } }))) : null,
+          progress ? (() => {
+            const bp = progress.progress ?? null;
+            const tag = bp?.phaseLabel ?? progress.phase ?? '建库';
+            const percent = bp?.percent ?? progress.percent ?? 0;
+            const detail = bp
+              ? `${bp.detail}${bp.running ? ` · 已用 ${bp.elapsedText}${bp.etaText ? ` · 剩余约 ${bp.etaText}` : ''}` : ''}`
+              : `${progress.total ? `${progress.completed}/${progress.total}` : ''} ${progress.percent ?? 0}%${progress.message ? ` · ${progress.message}` : ''}`;
+            return h('div', { style: { ...S.card, gap: 6 } },
+              h('div', { style: S.row },
+                h('span', { style: { ...S.tag, flex: 'none', color: C_ACC } }, tag),
+                h('span', { style: S.muted }, detail)),
+              h('div', { style: { height: 6, borderRadius: 3, background: C_L2, overflow: 'hidden' } },
+                h('div', { style: { height: '100%', width: `${percent}%`, borderRadius: 3, background: C_ACC, transition: 'width .3s' } })),
+              bp?.hint ? h('div', { style: { ...S.muted, fontSize: 11 } }, bp.hint) : null,
+              bp?.summary ? h('div', { style: { ...S.muted, fontSize: 11, color: C_ACC } }, bp.summary) : null);
+          })() : null,
           indexes.length
             ? h('div', { style: { ...S.card, gap: 4 } },
               h('div', { style: S.row },

@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { basename, dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
+import { describeBuildProgress } from '../../tools/ges-index/progress.mjs';
 import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records, evidences, facets } from '../../tools/ges-index/query.mjs';
 import { genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
 import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.mjs';
@@ -121,6 +122,7 @@ function startBuild(args) {
       if (typeof p.completed === 'number') job.completed = p.completed;
       if (typeof p.total === 'number') job.total = p.total;
       if (typeof p.percent === 'number') job.percent = p.percent;
+      if (typeof p.etaMs === 'number') job.etaMs = p.etaMs;
       if (p.message) job.message = p.message;
     },
     log: () => {},
@@ -151,7 +153,8 @@ async function handle(req, res) {
     if (req.method === 'GET' && path === '/build') {
       const job = jobs.get(url.searchParams.get('job') ?? '');
       if (!job) return send(res, 404, { error: 'job 不存在' });
-      return send(res, 200, job);
+      // 运行中的任务没有落盘的 elapsedMs，这里补实时值；同时附带可直接渲染的中文进度。
+      return send(res, 200, { ...job, progress: describeBuildProgress(job) });
     }
     if (req.method === 'GET' && path === '/list') {
       const dirs = [
