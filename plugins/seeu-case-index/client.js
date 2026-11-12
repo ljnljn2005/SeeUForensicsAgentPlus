@@ -1230,6 +1230,7 @@ window.__ModuleLoader__.load({
       const [materials, setMaterials] = useState([]);
       const [materialId, setMaterialId] = useState('');
       const [dbPath, setDbPath] = useState('');
+      const [dbs, setDbs] = useState([]);
       const [tables, setTables] = useState([]);
       const [tableName, setTableName] = useState('');
       const [sql, setSql] = useState('');
@@ -1270,12 +1271,35 @@ window.__ModuleLoader__.load({
           setMaterials(body.materials ?? []);
         } catch (e) { setError(String(e.message ?? e)); }
         finally { setBusy(''); }
+        void loadDbs(id, '');
+      };
+
+      const loadDbs = async (cid, mid) => {
+        setDbs([]);
+        if (!cid && !mid) return;
+        try {
+          const body = await api('/myos/dbs', { caseId: cid || '', materialId: mid || '' });
+          setDbs(body.dbs ?? []);
+        } catch {
+          // 结果概览拿不到就算了，用户仍可手填路径。
+        }
+      };
+
+      const pickDb = (path) => {
+        setDbPath(path);
+        const hit = dbs.find((item) => item.path === path);
+        if (hit?.tables?.length) {
+          setTables(hit.tables);
+          setTableName(hit.tables[0]);
+          setSql('select * from "' + hit.tables[0] + '" limit 2000');
+        }
       };
 
       const pickMaterial = (id) => {
         setMaterialId(id);
         const hit = materials.find((m) => m.materialId === id);
         if (hit && !evidenceName) setEvidenceName(hit.name || '');
+        void loadDbs(caseId, id);
       };
 
       const loadTables = async () => {
@@ -1334,6 +1358,7 @@ window.__ModuleLoader__.load({
           h('div', { style: { ...S.muted, fontSize: 11.5 } }, '先启动「超级取证大师」。导入会把 MYOS 结果库里一张表的数据写进 SeeU 索引（record + 全文索引 + 实体），之后面板与 AI 都只查这份索引。'),
           row('案件', select(caseId, (id) => pickCase(id), cases.map((c) => ({ value: c.caseId, label: (c.caseName || c.displayName || c.caseId) + (c.casePath ? ' · ' + c.casePath : '') })), busy === 'cases' ? '读取案件…' : '选择 MYOS 案件')),
           materials.length ? row('检材', select(materialId, pickMaterial, materials.map((m) => ({ value: m.materialId, label: (m.name || m.materialId) + (m.status ? ' · ' + m.status : '') })), '选择检材（可选）')) : null,
+          dbs.length ? row('结果库', select(dbPath, pickDb, dbs.map((item) => ({ value: item.path, label: item.path.split(/[\/]/).pop() + (item.tables?.length ? ' · ' + item.tables.length + ' 张表' : '') + ' · ' + item.path })), '选择 MYOS 发现的结果库')) : null,
           row('结果库', h('input', { style: { ...S.input, flex: 1 }, value: dbPath, placeholder: 'D:/Programs/MYOS/Case/<案件>/dev/<检材>/data/MApps.mfs', onChange: (e) => setDbPath(e.target.value), spellCheck: false })),
           h('div', { style: { ...S.row, paddingLeft: 100 } }, actionButton(busy === 'tables' ? '读取中…' : '列出表', loadTables, { disabled: busy === 'tables' })),
           tables.length ? row('表', select(tableName, pickTable, tables.map((t) => ({ value: t, label: t })), '选择表')) : null,

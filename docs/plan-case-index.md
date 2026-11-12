@@ -2285,3 +2285,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 **坑**：① `MyosDialog` 用了不存在的颜色常量 `C_BG`，导致 slot entry crash（`ReferenceError: C_BG is not defined`），改用 `C_BG1`；② 对话框在 `useEffect` 里调用后声明的 `pickCase`，靠 React 副作用执行时机（渲染后）避免 TDZ，后续若改成同步调用要提前声明；③ MYOS 未启动时弹窗仍可打开，只是案件列表显示 503 提示（不要把「打不开」当成 UI bug）。
 
 **遗留**：真实 MYOS 端到端导入（需用户启动软件并选结果库）；结果库路径仍要手工粘贴，可在 `query_phone_forensics_results_overview` 返回里自动取 `mfs` 路径。
+
+### 20.93 补：自动发现 MYOS 结果库（第 15 轮）
+
+- `tools/myos-index/import.mjs` 新增 `collectMfsPaths(payload)`（深度遍历结果概览 JSON，收集 `.mfs` 路径 + `sqliteQueryHints` 的表名提示）与 `listMyosResultDbs(client,{caseId,materialId})`（手机走 `query_phone_forensics_results_overview`，计算机走 `query_computer_forensics_results_overview`，单个失败忽略）。
+- 宿主 `myosResultDbs` + 路由 `GET /seeu-index/myos/dbs`；面板弹窗选案件/检材后自动加载下拉（`结果库 · N 张表 · 路径`），选中即填 `dbPath`/表清单/SQL，仍保留手填。
+- 测试：`tests/myos-index.test.mjs` 增 2 例、`tests/plugin-myos.test.mjs` 增 2 例 → `npm test` **160/160**；`m2-ui-check` `m2ok:true, myosImportOk:true, errors:[]`。
+- 坑：`collectMfsPaths` 起初只递归对象/数组，漏掉「数组里的字符串路径」（概览里 `dbs: ['…FSData.mfs']`），补了「字符串节点直接判 `.mfs`」分支。

@@ -13,6 +13,8 @@ const TOOLS = [
   'myos-forensics.query_materials',
   'myos-forensics.query_device_info',
   'myos-forensics.sqlite_query',
+  'myos-forensics.query_phone_forensics_results_overview',
+  'myos-forensics.query_computer_forensics_results_overview',
 ].map((name) => ({ name, description: name, inputSchema: { type: 'object', properties: {} } }))
 
 function reply(id, result) {
@@ -57,6 +59,23 @@ function handle(call) {
         { materialId: 'm1', name: '手机-data.D01', frscStatusName: '取证完成', typeCode: 1, fileSize: 123 },
         { materialId: 'm2', name: '手机-sdcard.D01', frscStatusName: '解析中', typeCode: 1, fileSize: 456 },
       ] }))
+      return
+    }
+    if (name === 'myos-forensics.query_phone_forensics_results_overview') {
+      reply(id, textResult({
+        material: {
+          materialId: args.caseMaterialId,
+          resultDbs: [{ path: 'D:/MYOS/Case/案件甲/dev/手机-data.D01/data/MApps.mfs' }],
+        },
+        sqliteQueryHints: { 'MApps.mfs': ['TBL_APPDATA_MANAGER'] },
+      }))
+      return
+    }
+    if (name === 'myos-forensics.query_computer_forensics_results_overview') {
+      reply(id, textResult({
+        caseId: args.caseId,
+        results: { windows: { dbs: ['D:/MYOS/Case/案件甲/dev/PC-E01/FSData.mfs'] } },
+      }))
       return
     }
     if (name === 'myos-forensics.sqlite_query') {

@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from '../tools/myos-index/cli.mjs'
 import { findIndexes } from '../tools/ges-index/query.mjs'
 import { indexSummary } from '../tools/ges-index/index-meta.mjs'
-import { guessTableName, importMyosRows, listMyosCases, listMyosMaterials, mapMyosRow, normalizeMyosCases, readMyosRows } from '../tools/myos-index/import.mjs'
+import { collectMfsPaths, guessTableName, importMyosRows, listMyosCases, listMyosMaterials, listMyosResultDbs, mapMyosRow, normalizeMyosCases, readMyosRows } from '../tools/myos-index/import.mjs'
 import { MyosMcpClient } from '../tools/myos-index/mcp.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -162,4 +162,27 @@ test('导入后的索引能被面板发现（findIndexes + manifest）', withCli
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+}))
+
+test('collectMfsPaths：深度收集 .mfs 路径与 sqliteQueryHints', () => {
+  const payload = {
+    material: { resultDbs: [{ path: 'D:/MYOS/Case/A/dev/m/data/MApps.mfs' }] },
+    nested: { deeper: ['D:/MYOS/Case/A/dev/pc/FSData.mfs'] },
+    sqliteQueryHints: { 'MApps.mfs': ['TBL_APPDATA_MANAGER', 'TBL_CHAT'] },
+  }
+  const dbs = collectMfsPaths(payload)
+  const byPath = Object.fromEntries(dbs.map((item) => [item.path, item.tables]))
+  assert.deepEqual(byPath['D:/MYOS/Case/A/dev/m/data/MApps.mfs'], ['TBL_APPDATA_MANAGER', 'TBL_CHAT'])
+  assert.deepEqual(byPath['D:/MYOS/Case/A/dev/pc/FSData.mfs'], [])
+})
+
+test('listMyosResultDbs：合并手机与计算机结果库', withClient(async (client) => {
+  const dbs = await listMyosResultDbs(client, { caseId: 'case-1', materialId: 'm1' })
+  const paths = dbs.map((item) => item.path).sort()
+  assert.deepEqual(paths, [
+    'D:/MYOS/Case/案件甲/dev/PC-E01/FSData.mfs',
+    'D:/MYOS/Case/案件甲/dev/手机-data.D01/data/MApps.mfs',
+  ])
+  const phone = dbs.find((item) => item.path.endsWith('MApps.mfs'))
+  assert.deepEqual(phone.tables, ['TBL_APPDATA_MANAGER'])
 }))

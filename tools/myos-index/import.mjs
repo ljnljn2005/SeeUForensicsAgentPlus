@@ -276,3 +276,84 @@ export async function readMyosRows(client, { dbPath, sql, maxRows = 2000 }) {
   const columns = Array.isArray(payload?.columns) && payload.columns.length > 0 ? payload.columns.map(String) : Object.keys(rows[0] ?? {})
   return { columns, rows, truncated: Boolean(payload?.truncated), rowCount: payload?.rowCount ?? rows.length }
 }
+
+/**
+ * 从 MYOS 结果概览的任意 JSON 里收集结果库路径（`*.mfs`）与表名提示。
+ *
+ * MYOS 的 `query_phone_forensics_results_overview` / `query_computer_forensics_results_overview`
+ * 返回结构随版本变化（有时嵌在 `material` 下，有时是 `results` 数组，有时是
+ * `sqliteQueryHints` 里「文件名 → 表名数组」），所以这里做深度遍历：
+ *   - 任何以 `.mfs` 结尾的字符串都当成结果库路径；
+ *   - `{"xxx.mfs": ["TBL_A", ...]}` 形式记录成该文件的表名提示。
+ */
+export function collectMfsPaths(payload) {
+  const paths = new Set()
+  const hints = new Map()
+  const walk = (node) => {
+    if (typeof node === 'string') {
+      const text = node.trim()
+      if (/\.mfs$/i.test(text) && text.length > 4) paths.add(text)
+      return
+    }
+    if (node === null || typeof node !== 'object') return
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item)
+      return
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (typeof value === 'string') {
+        const text = value.trim()
+        if (/\.mfs$/i.test(text) && text.length > 4) paths.add(text)
+        continue
+      }
+      if (Array.isArray(value) && /\.mfs$/i.test(key)) {
+        const tables = value.filter((item) => typeof item === 'string' && item.trim())
+        if (tables.length) hints.set(normalizeBase(key), tables.map((item) => item.trim()))
+        continue
+      }
+      walk(value)
+    }
+  }
+  walk(payload)
+  const byBase = new Map([...hints.entries()])
+  return [...paths].map((path) => ({
+    path,
+    tables: byBase.get(normalizeBase(path)) ?? [],
+  }))
+}
+
+function normalizeBase(path) {
+  return String(path).split(/[\/]/).pop()?.toLowerCase() ?? ''
+}
+
+/**
+ * 列出某案件/检材的结果库（.mfs）。
+ * 手机检材走 `query_phone_forensics_results_overview`（需要 materialId），
+ * 计算机案件走 `query_computer_forensics_results_overview`（需要 caseId）；
+ * 任一调用失败都忽略，返回能拿到的部分。
+ */
+export async function listMyosResultDbs(client, { caseId = '', materialId = '' } = {}) {
+  const found = new Map()
+  const merge = (payload) => {
+    for (const item of collectMfsPaths(payload)) {
+      const hit = found.get(item.path)
+      if (!hit) found.set(item.path, item)
+      else if (!hit.tables.length && item.tables.length) hit.tables = item.tables
+    }
+  }
+  if (materialId) {
+    try {
+      merge(await client.call('myos-forensics.query_phone_forensics_results_overview', { caseMaterialId: materialId }))
+    } catch {
+      // 忽略：可能不是手机检材。
+    }
+  }
+  if (caseId) {
+    try {
+      merge(await client.call('myos-forensics.query_computer_forensics_results_overview', { caseId }))
+    } catch {
+      // 忽略：可能没有计算机检材。
+    }
+  }
+  return [...found.values()]
+}

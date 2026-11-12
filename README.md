@@ -79,7 +79,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 ### v0.3.8 待发布（未打包）
 
-- **面板「从 MYOS 导入」入口（第 14 轮）**：面板工具栏新增「从 MYOS 导入…」按钮，弹窗里列 MYOS 案件 → 检材 → 粘贴结果库（`.mfs`）→「列出表」→ 选表自动生成 SQL → 填输出案件目录/案件名/检材名 → 导入为 SeeU 索引；导入成功后可一键「完成并查看索引」刷新列表。宿主端新增 `plugins/seeu-case-index/myos.mjs` 与 `/seeu-index/myos/{cases,materials,tables,import}` 四个路由（MYOS 未启动时返回 503 与「先启动超级取证大师」提示），`tests/plugin-myos.test.mjs` 6 例、`npm test` 156/156；`m2-ui-check` 增加「MYOS 导入按钮存在且弹窗能打开」断言。
+- **面板「从 MYOS 导入」入口（第 14 轮）**：面板工具栏新增「从 MYOS 导入…」按钮，弹窗里列 MYOS 案件 → 检材 → 粘贴结果库（`.mfs`）→「列出表」→ 选表自动生成 SQL → 填输出案件目录/案件名/检材名 → 导入为 SeeU 索引；导入成功后可一键「完成并查看索引」刷新列表。宿主端新增 `plugins/seeu-case-index/myos.mjs` 与 `/seeu-index/myos/{cases,materials,tables,import}` 四个路由（MYOS 未启动时返回 503 与「先启动超级取证大师」提示），`tests/plugin-myos.test.mjs` 6 例、`npm test` 156/156；`m2-ui-check` 增加「MYOS 导入按钮存在且弹窗能打开」断言。选案件/检材后会调 `query_phone_forensics_results_overview` / `query_computer_forensics_results_overview` **自动发现结果库（`.mfs`）**并给出下拉（带「N 张表」提示），选中即填好表清单与 SQL；概览拿不到时仍可手填路径。
 - **MYOS 取证结果导入 SeeU 索引（第 13 轮）**：新增 `tools/myos-index/`（MCP 客户端 `mcp.mjs`、导入器 `import.mjs`、命令行 `cli.mjs`）与 `npm run myos:import`。经 MYOS MCP 的 `query_cases` / `query_materials` / `sqlite_query` 读取加密 `.mfs` 结果库，按 SeeU 表结构写入 `<案件目录>/.seeu-index/case-index.db`（record + `record_fts` + entity 抽取 + `manifest.json`），导入后面板与 `ges-case-index` 技能可直接检索；假 MCP 服务端 + `tests/myos-index.test.mjs` 9 例，`npm test` 150/150。用法见 §11「把 MYOS 取证结果导入 SeeU 索引」。
 
 ### v0.3.7 改了什么

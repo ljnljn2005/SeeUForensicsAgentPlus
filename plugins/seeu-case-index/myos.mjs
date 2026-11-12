@@ -5,7 +5,7 @@
 // 依赖 MYOS 正在运行（MCP 服务端由 MYOS 提供），未启动时给出可读的错误。
 import { resolve } from 'node:path'
 import { withMyosClient } from '../../tools/myos-index/mcp.mjs'
-import { importMyosRows, listMyosCases, listMyosMaterials, readMyosRows } from '../../tools/myos-index/import.mjs'
+import { importMyosRows, listMyosCases, listMyosMaterials, listMyosResultDbs, readMyosRows } from '../../tools/myos-index/import.mjs'
 
 const MCP_HINT = '请先启动「超级取证大师」（MYOS），连上后重试。'
 
@@ -50,6 +50,17 @@ export async function myosTables(db) {
     readMyosRows(client, { dbPath, sql: "select name from sqlite_master where type='table' order by name", maxRows: 500 }),
   )
   return rows.map((row) => String(Object.values(row)[0] ?? '')).filter(Boolean)
+}
+
+/**
+ * 列出某案件/检材在 MYOS 里的结果库（.mfs），面板用来做下拉选择。
+ * 手机检材需要 materialId，计算机案件需要 caseId；拿不到的调用会被忽略。
+ */
+export async function myosResultDbs({ caseId = '', materialId = '' } = {}) {
+  const id = String(caseId ?? '').trim()
+  const mid = String(materialId ?? '').trim()
+  if (!id && !mid) throw fail('缺少 caseId 或 materialId')
+  return call((client) => listMyosResultDbs(client, { caseId: id, materialId: mid }))
 }
 
 /**

@@ -10,7 +10,7 @@ import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTable
 import { genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
 import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.mjs';
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
-import { myosCases, myosImport, myosMaterials, myosTables } from './myos.mjs';
+import { myosCases, myosImport, myosMaterials, myosResultDbs, myosTables } from './myos.mjs';
 
 const ROUTE = '/seeu-index';
 const jobs = new Map();
@@ -216,6 +216,13 @@ async function handle(req, res) {
       if (req.method === 'GET' && path === '/myos/materials') {
         const materials = await myosMaterials(url.searchParams.get('caseId') ?? '');
         return send(res, 200, { materials });
+      }
+      if (req.method === 'GET' && path === '/myos/dbs') {
+        const dbs = await myosResultDbs({
+          caseId: url.searchParams.get('caseId') ?? '',
+          materialId: url.searchParams.get('materialId') ?? '',
+        });
+        return send(res, 200, { dbs });
       }
       if (req.method === 'GET' && path === '/myos/tables') {
         const tables = await myosTables(url.searchParams.get('db') ?? '');

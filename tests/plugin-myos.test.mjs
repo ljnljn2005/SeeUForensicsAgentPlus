@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { myosCases, myosImport, myosMaterials, myosTables } from '../plugins/seeu-case-index/myos.mjs'
+import { myosCases, myosImport, myosMaterials, myosResultDbs, myosTables } from '../plugins/seeu-case-index/myos.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const FAKE = join(HERE, 'fixtures', 'fake-myos-mcp.mjs')
@@ -90,3 +90,13 @@ test('MYOS 未启动/找不到服务端时给出 503 与提示', async () => {
     else process.env.SEEU_MYOS_MCP = saved
   }
 })
+
+test('myosResultDbs：从结果概览自动发现 .mfs 路径', withEnv(async () => {
+  const dbs = await myosResultDbs({ caseId: 'case-1', materialId: 'm1' })
+  assert.equal(dbs.length, 2)
+  assert.ok(dbs.some((item) => item.path.endsWith('MApps.mfs') && item.tables.length === 1))
+}))
+
+test('myosResultDbs：缺 caseId/materialId 时 400', withEnv(async () => {
+  await assert.rejects(() => myosResultDbs({}), (error) => error.status === 400)
+}))
