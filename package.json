@@ -59,7 +59,8 @@
     "test:e2e:export": "node scripts/e2e/export-check.mjs",
     "test:e2e:cross": "node scripts/e2e/cross-case-check.mjs",
     "test:e2e:shots": "node scripts/e2e/acceptance-shots.mjs",
-    "test:e2e:real-gateway": "node scripts/e2e/real-gateway-headless.mjs"
+    "test:e2e:real-gateway": "node scripts/e2e/real-gateway-headless.mjs",
+    "test:e2e:real-gateway-ui": "node scripts/e2e/real-gateway-ui.mjs"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.1.0",

@@ -1,7 +1,7 @@
 # 验收清单（v0.2.7 包 / 当前 dev 预览）
 
 > 目标：用 10 分钟确认「前端界面 + 本地模型适配」这轮改造成果符合预期。
-> 三种方式任选：① 双击 `release/SeeUForensicsAgentPlus-0.2.7-x64-portable.exe`；② 打开 dev 预览（需向我要当前 token）；③ 先看下面的截图，再决定要不要装。
+> 三种方式任选：① 双击 `release/SeeUForensicsAgentPlus-0.2.8-x64-portable.exe`；② 打开 dev 预览（需向我要当前 token）；③ 先看下面的截图，再决定要不要装。
 
 ## 一、看截图（最快）
 
@@ -15,6 +15,7 @@
 | 索引面板 · 浅色 | ![浅色面板](screenshots/06-panel-light.png) | 系统切浅色后，面板配色跟随（底色 `rgb(245,247,250)`、文字深色），无硬编码暗色残留 |
 | 本地模型设置 | ![设置页](screenshots/07-settings.png) | 网关/模型/窗口/输出、档位按钮、【从网关拉取模型列表】【测试连接】【预热模型】、固定开销估算、健康度提示、高级区、复制诊断、保存并重启 |
 | 会话区（暗 / 浅） | ![会话暗](screenshots/08-chat-dark.png) ![会话浅](screenshots/09-chat-light.png) | 用户气泡、正文行高、代码块、输入框聚焦光晕在两套主题下都正常 |
+| 真机会话（`deepseek-flash`） | ![真机](screenshots/10-real-gateway-chat.png) | 真实网关：思考块 10.1 s 出现、12.2 s 出正文，5/5 检材名全部答对并注明来源是案件概览 |
 
 截图由 `node scripts/e2e/acceptance-shots.mjs`（前 6 张，真实案件库）和 `settings-check.mjs --out`（设置页）自动生成，可随时重跑。
 

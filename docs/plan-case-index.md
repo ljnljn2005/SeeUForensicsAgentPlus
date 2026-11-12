@@ -1794,3 +1794,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 打包态 e2e：`m2-ui-check` `m2ok:true / errors:[]`（检索/记录/实体/时间线/会话概览/树过滤/KPI 全绿）；`settings-check` `ok:true`（`probeNoContextWindow:false`、`warmupOk`、`titleGenDefault/usagePreview/lightShell` 全 true）；`export-check` `ok:true`（概览 713 字符含时间范围、记录 CSV 20,000 行、表 CSV 745 行、时间线 3,235 字符）；`cross-case-check` `ok:true`（双案同步、30 条重合实体清单 2,675 字符）。
 - 文档：README §2 产物表换 v0.2.8 + 「### v0.2.8 改了什么」；`docs/packaging.md` 追加「### v0.2.8 回归验证」；本节。
 - 遗留：真机仍只有 `deepseek-flash` 一个模型跑过（`qwen3.8-flash-next` 未测）；推理模型首字约 21–24 s 属模型侧思考；Lovely 未做真实镜像分析会话（只验证到 `version`/发现）；等用户视觉验收。
+
+---
+
+## 20.60 真机网关桌面 UI 联调（CDP 驱动 + 截图）
+
+- 目标：v0.2.8 只做了 headless 真机验证；补一条「真 Electron 窗口 + 真网关」的端到端，证明思考块/正文在桌面 UI 里正常渲染，而不是只在 JSON 事件里。
+- 新增 `scripts/e2e/real-gateway-ui.mjs`（`npm run test:e2e:real-gateway-ui`，凭据 `GW_BASE/GW_KEY/GW_MODEL` 只走环境变量）：
+  - 写 `<SEEU_DSH_HOME>/index-state.json` = `{"dirs":[CASE_DIR]}`，让案件概览注入 `AGENTS.md`；
+  - `SEEU_LOCAL_MODEL_JSON` 注入真实配置（`contextWindow` 默认 131072、`maxTokens` 8192、`litePreset`、`usageInStreaming`、`titleGeneration:false`、`timeoutSec` 300、`streamIdleSec` 120）；
+  - 沿用 `theme-conv-check` 的 composer 驱动：关「继续」提示卡 → `[contenteditable]` 聚焦 + `Input.insertText` + Enter；问题为「不要调用任何工具，直接根据系统提示里已有的「案件概览」回答…」；
+  - 轮询 body 文本：记录思考块出现时间、首段正文时间、5 个检材名是否齐全；`Page.captureScreenshot` 写 `docs/screenshots/10-real-gateway-chat.png`。
+- 实测 `REPORT {"ok":true,"thinkingSeen":true,"firstSignalMs":10123,"firstTextMs":12168,"totalMs":13173,"names":[5 个检材名],"namesOk":true}`：思考块 10.1 s、正文 12.2 s、13.2 s 全部收齐；界面出现「思考」折叠块与「深度求索中，用时 12 秒」。
+- 踩坑：第一版把 `GW_BASE`（`…/v1`）再拼一次 `/v1` → 网关 `404 page not found`，UI 显示「处理失败 · PI_AI_ERROR」；已在脚本里 `replace(/\/v1$/i,'').replace(/\/+$/,'') + '/v1'` 归一化。另：类型断言用 `innerText.slice(0,40)` 会截掉关键字导致误判失败，已放宽到 120 字符。
+- 遗留：桌面 UI 这条只测「问答」不测工具轮（工具链路由 headless e2e 覆盖）；仍只有一个模型（`deepseek-flash`）跑过真机。

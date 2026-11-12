@@ -595,6 +595,15 @@ GW_BASE=http://10.10.250.120:8080/v1 GW_KEY=sk-... GW_MODEL=deepseek-flash \
 
 它用与外壳完全相同的 overlay（取证 preset + 本地模型 patch）起 headless dsh，先注入案件概览、再问「本机有哪些检材」，然后让模型用 `pwsh` 执行 `node -v`；成功输出形如 `REPORT {"ok":true,"question":{"elapsedMs":24004,"firstTextMs":23803,"firstStepInputTokens":9145,"briefUsed":[…5 个检材名…]},"tool":{"called":true,"resultStatus":"completed","answer":"v24.18.0"}}`。凭据只走环境变量，不写进仓库。
 
+桌面 UI 版（真 Electron 窗口 + 真网关，截图为证）：
+
+```bash
+GW_BASE=http://10.10.250.120:8080/v1 GW_KEY=sk-... GW_MODEL=deepseek-flash \
+  npm run test:e2e:real-gateway-ui
+```
+
+它用 `SEEU_LOCAL_MODEL_JSON` 注入真实配置、把 `index-state.json` 指向真实案件目录（让案件概览注入 AGENTS.md），然后 CDP 点击 composer 输入问题并回车，轮询「思考块出现 / 首段正文 / 5 个检材名齐全」。实测 `REPORT {"ok":true,"thinkingSeen":true,"firstSignalMs":10123,"firstTextMs":12168,"totalMs":13173,"names":[5 个检材名],"namesOk":true}`，截图写 `docs/screenshots/10-real-gateway-chat.png`。凭据只走环境变量。
+
 脚本都会用 `taskkill` 清理 Electron，结束后不留进程。
 
 ### 9.4 注意
@@ -621,6 +630,8 @@ GW_BASE=http://10.10.250.120:8080/v1 GW_KEY=sk-... GW_MODEL=deepseek-flash \
 | 干扰项 | 工作区在仓库内时 `pwsh` 报 `SetNamedSecurityInfoW failed (Win32 5): grantWrite(D:\Coding\...)` | 是沙箱对工作区目录的 ACL 限制，不是网关/产品缺陷；headless 测试用临时目录当 cwd 即可（外壳真实工作区是 `C:\Users\<用户>\Documents\SeeUForensicsWorkspace`，不受影响） |
 
 真机会话（headless，与外壳同一 overlay）：案件概览注入 `<DSH_HOME>/AGENTS.md` 后，模型**直接答出 5 个检材**（CHAN_MH_mobile.zip / IQ_Coin_Type_Transactions.zip / LEUNG_YL_mobile.zip / AP3_LEUNG_YL_USB.E01 / FUNG_CC_mobile.zip），并主动声明「取自概览表格，未推断」；第二轮 `pwsh node -v` → `v24.18.0`。指标：首字 **23.8 s**、首步输入 **9,145 tokens**、单轮总计 9,607 tokens（精简预设 12 工具 + 概览注入）；工具轮 30.8 s。这个首字延迟主要是模型侧推理耗时，不是外壳开销 —— 网络 RTT 与 TTFB 都在 100 ms 级。
+
+桌面 UI 实测（真 Electron + 真网关，`npm run test:e2e:real-gateway-ui`）：思考块 **10.1 s** 出现、首段正文 **12.2 s**、**13.2 s** 收齐 5/5 检材名；界面同时显示「思考」折叠块与「深度求索中，用时 12 秒」，说明推理模型的思考内容在本地链路上能及时给出，用户不会面对纯白屏。截图见 `docs/screenshots/10-real-gateway-chat.png`。踩坑：脚本把 `GW_BASE`（已含 `/v1`）再拼一次 `/v1` → 网关回 `404 page not found`，界面显示「处理失败 · PI_AI_ERROR」；已归一化 baseURL，同时确认错误在界面上是可读的。
 
 联调还发现一处数据口径 bug 并已修：会话概览「规模：记录 22777 条」与检材表各行相加不一致（`evidences()` 原来取火眼 `evidence.record_count`）。现在按索引内 `record` 行数统计（本案 1/1/8,443/1/14,331，合计 22,777），火眼原值保留在 `reportedRecordCount` 字段，概览表格下方也加了口径说明。
 
