@@ -2292,3 +2292,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 宿主 `myosResultDbs` + 路由 `GET /seeu-index/myos/dbs`；面板弹窗选案件/检材后自动加载下拉（`结果库 · N 张表 · 路径`），选中即填 `dbPath`/表清单/SQL，仍保留手填。
 - 测试：`tests/myos-index.test.mjs` 增 2 例、`tests/plugin-myos.test.mjs` 增 2 例 → `npm test` **160/160**；`m2-ui-check` `m2ok:true, myosImportOk:true, errors:[]`。
 - 坑：`collectMfsPaths` 起初只递归对象/数组，漏掉「数组里的字符串路径」（概览里 `dbs: ['…FSData.mfs']`），补了「字符串节点直接判 `.mfs`」分支。
+
+### 20.94 v0.3.8 打包与打包态回归（第 16 轮）
+
+- 版本 0.3.8（含 Qiko 融合、StarMem、检材优先级、431 cookie 修复、MYOS 导入器与面板入口、外部工具路径设置等）。
+- 产物：NSIS 281,879,944 B、portable 236,575,720 B、app.asar 426,495,680 B（34,220 entries）、目录版 1,110,846,908 B；asar-038 自检 `missing:[]` 全 true；目录版冷启动 6180 ms、portable 48,782 ms。
+- 打包态 e2e：m2（`myosImportOk:true`）、settings（13 行工具路径、五项自检、思考流）、plugins（175 包、无激活失败）、skills（Qiko 43）、hero（13/13 工具）、mount（154 ms）全绿。
+- 待用户验收；真实 MYOS 端到端与真实网关 Spark 单机/双机联调仍需用户环境。

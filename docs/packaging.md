@@ -955,3 +955,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版 `verify-launch --port 5391` → `ok:true, elapsedMs:5092`；portable `--port 5392 --timeout 240000` → `ok:true, elapsedMs:46641`。
 - 打包态 e2e（`SEEU_UI_EXE` 指 `release/win-unpacked/SeeUForensicsAgentPlus.exe`，用 Windows 路径）：`m2-ui-check` `m2ok:true/errors:[]`；`settings-check --exe` `ok:true`（`diagItems` 五项全 ✓、`thinkingSaved:true`、`toolPathsRows:13`）；`plugins-check --exe` `ok:true`（175 个插件包、`activationFailures:[]`、`activationOk:true`）；`skills-check --exe` `ok:true`（`qikoSet.count:43`、`leaked:[]`）；`hero-check --exe` `ok:true`（`actions` 五项、本机工具 13/13、最近案件 chip 正常，证明 431 修复后首页可渲染）；`mount-check --exe` `ok:true`（inspect 185 ms、mount 361 ms、unmount 2 ms、`timingWired:true`）；dev `auth-cookie-check` `{"ok":true,"seeded":80,"pruned":81,"rendered":true}`。
 - 坑：dsh 页面加载完成后 URL 会从 `/?token=…` 变成 `/`（前端 `replaceState`），`hero-check` 旧正则只认带 token 的 URL 会误报「主页面没出现」；已改为同时接受两种 URL。
+
+### v0.3.8 回归验证
+
+- 打包：`npx electron-builder --win --x64 -c.directories.output=release-038`（exit 0，无证书跳过签名）；产物：NSIS `281,879,944 B`（blockmap `294,694 B`）、portable `236,575,720 B`、`app.asar` `426,495,680 B`（34,220 entries）、目录版 1,110,846,908 B。
+- asar 自检 `.probe/asar-038-check.mjs`：`missing:[]`，全部检查 true（新增 `myosImporter` / `myosHostRoutes` / `myosPanelUi` / `myosE2e` / `version038`）。
+- 启动：`verify-launch` 目录版 `ok:true, elapsedMs:6180`、portable `ok:true, elapsedMs:48782`。
+- 打包态 e2e（`SEEU_UI_EXE` 传 Windows 正斜杠路径、隔离 home/userData）：`m2-ui-check`（`m2ok:true`、`myosImportOk:true`、`errors:[]`）、`settings-check --exe`（`ok:true`、`toolPathsRows:13`、`diagOk:true`、`thinkingSaved:true`）、`plugins-check --exe`（`ok:true`、175 包、`activationFailures:[]`）、`skills-check --exe`（`ok:true`、Qiko 43 个、`leaked:[]`）、`hero-check --exe`（`ok:true`、本机工具 13/13）、`mount-check --exe`（`ok:true`、inspect 154 ms）。
+
