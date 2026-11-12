@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -47,11 +47,30 @@ test('installSkillSet 复制整组技能并幂等', () => {
   }
 })
 
+test('installSkillSet 随包删除技能后重新安装会 prune 旧技能', () => {
+  const { dir, src, home } = fixture()
+  try {
+    installSkillSet({ sourceDir: src, homeDir: home, id: 'traffic', version: '0.3.5' })
+    const removedSkill = join(src, 'lovelyspark-cli')
+    rmSync(removedSkill, { recursive: true, force: true })
+    mkdirSync(join(src, 'lovelyspark-v2'), { recursive: true })
+    writeFileSync(join(src, 'lovelyspark-v2', 'SKILL.md'), "# v2\n")
+    const second = installSkillSet({ sourceDir: src, homeDir: home, id: 'traffic', version: '0.3.5' })
+    assert.equal(second.changed, true)
+    assert.deepEqual(second.skills, ['lovelyspark-v2'])
+    assert.ok(second.pruned >= 2, `应清掉旧技能文件，实际 pruned=${second.pruned}`)
+    assert.equal(existsSync(join(second.dir, 'lovelyspark-cli')), false)
+    assert.equal(readFileSync(join(second.dir, 'lovelyspark-v2', 'SKILL.md'), 'utf8'), "# v2\n")
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('installSkillSet 源目录不存在时返回空结果，不抛错', () => {
   const { dir, home } = fixture()
   try {
     const result = installSkillSet({ sourceDir: join(dir, 'nope'), homeDir: home, id: 'memory', version: '0.3.2' })
-    assert.deepEqual(result, { id: 'memory', dir: skillSetHomeDir(home, 'memory'), skills: [], files: 0, changed: false })
+    assert.deepEqual(result, { id: 'memory', dir: skillSetHomeDir(home, 'memory'), skills: [], files: 0, changed: false, pruned: 0 })
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

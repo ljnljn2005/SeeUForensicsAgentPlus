@@ -85,7 +85,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
   - `preset-traffic` ← + **Qiko 流量包专家**（预检分流、流量画像、协议分流与三级还原、帧号级定位）；
   - `preset-data` 改名 **数据分析与研判** ← 网钜资金 + **Qiko 案件研判/网络犯罪情报专家**（资金链、人物关系、涉赌诈骗账号、图片鉴伪/水印/隐写、URL 溯源）；
   - 日志/内存/EXE/数据库/精简预设保持领域不变，统一补「比武比赛模式」与「本机实测」段；
-  - 技能：精选 49 个 Qiko 技能到 `resources/forensics/skill-sets/qiko/`（含 SeeU 适配头），新增技能组 `SEEU_SKILL_SET_QIKO` 并注入 8 个预设（`customSkillDirs`）；
+  - 技能：精选 43 个 Qiko 技能到 `resources/forensics/skill-sets/qiko/`（含 SeeU 适配头；从 49 个候选中裁掉报告模板、依赖 macOS/ForensicLite/数据库客户端及路由重复的 6 个），新增技能组 `SEEU_SKILL_SET_QIKO` 并注入 9 个预设（`customSkillDirs`）；技能组安装带 prune（随包删除/改名后，旧文件与空目录会在下次启动自动清掉）；
   - 校验：`check:overlay` 校验预设名称/技能根/只读工具面；`tests/presets-config.test.mjs` 断言 Qiko 注入、改名、比武措辞与 persona 关键词；`npm test` 122/122。
 - **新增「数据库取证（Database）」预设**（来源：`E:\取证桌面\数据库取证专家.txt`，39.9 KB → 精简到约 7.6 KB）：顺序 9，按「受理与完整性 → 定位数据库文件（先火眼索引 `/tables` → 火眼只读挂载目录 → 无挂载才 LovelyCarve 镜像挂载 → 原始文件）→ 只读导出（SQLite 连 `-wal/-shm/-journal` 一起）→ 结构与表核验 → 只读 SQL 分页检索 → 删除恢复/备份解析（受限）→ 交叉验证 → 报告分层」作业；红线为原件只读、只读 SQL、不建服务、不猜密钥/口令、命中不等于事实；工具现状写明 python 3.13 + `sqlite3` 3.50.4、`sqlite3.exe` 与 7z 的绝对路径（`$SEEU_TOOL_*`），并保留 bash 优先、禁止全盘递归。
 
@@ -808,7 +808,7 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 - **额外解包**：`node_modules/@dsh-ops/fastctx-win32-x64/**` 进 `app.asar.unpacked`，因为 `bin/fastctx.exe` 需要真实文件路径才能 spawn。
 - **验收**：`npm run test:e2e:plugins`（dev 或 `--exe <安装包 exe>` 都可）断言四件事：profile bundles、`<profile>/node_modules` 下四个插件包、页面插件 UI（「上下文洞察」「插件」）、以及 dsh 子进程日志不得出现 `did not activate` / `failed to import` / `ERR_MODULE_NOT_FOUND`。
 
-## 13. 分析预设（取证 / 流量 / 日志 / 内存 / 数据 / APK / EXE / 数据库）
+## 13. 分析预设（取证 / 流量 / 日志 / 内存 / 数据 / APK / 手机 / EXE / 数据库）
 
 新建会话时选预设即可切换「工具面 + 技能组」；预设互不影响，取证镜像类分析仍留在默认取证预设。
 
@@ -825,11 +825,11 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 | EXE 逆向分析 | 8 | Qiko 比武技能组 | Windows PE 结构、导入导出、查壳、静态行为研判 |
 | 数据库取证（Database） | 9 | Qiko 比武技能组 | SQLite/MySQL 等数据库原件、备份与日志的只读核验、结构查看、检索与受限恢复 |
 
-- **persona**：取证/流量/内存/数据/APK/EXE 六个预设都带精简版专家 persona（来源见「v0.3.4 改了什么」），日志预设沿用原有 persona。
+- **persona**：取证/流量/内存/数据/APK/手机/EXE/数据库八个专家预设都带精简版专家 persona（来源见「v0.3.4 改了什么」与「v0.3.5」），日志预设沿用原有 persona。
 - **外部工具（开发机实测 2026-11-12）**：`python 3.13.14`（`D:/Programming/Python31314/python.exe`）已装 pandas/openpyxl/pefile/capstone/lief/pyelftools/yara/scapy/dpkt/pyshark；Wireshark 3.4.0 的 `tshark`/`capinfos`/`editcap`/`mergecap` 已装但**不在 PATH**（`E:/CTFTools/Forensics/4-其他工具/【15】网络分析/Wireshark/`）；`7z`、`sqlite3.exe`、`jadx 1.1.0`、`apktool.jar`、`adb` 在 `E:/CTFTools/…` 下；`frida 17.17.0` 在 PATH；IDA Professional 9.4（`idat.exe`）在 `D:/Programs/IDA Professional 9.4/`；`nfdump`/`zeek`/`suricata`/`snort`/`androguard` 未装；Ghidra 12.1.4 已装（默认 `C:/Users/ASUS/.dsh/plugins/dsh-infinite-gen-5/third_party/sources/ghidra-12.1.4`，源码树，批处理入口 `Ghidra/RuntimeScripts/Windows/support/analyzeHeadless.bat`）。**流量/日志分析一律先 lovelyspark-cli**，tshark 等只在技能覆盖不到时用绝对路径补充或做交叉复核。
 - **外部工具路径可改**：设置页新增「外部取证工具路径」区（12 项：Ghidra 目录、IDA、tshark/capinfos/editcap、python、jadx、apktool.jar、adb、7-Zip、sqlite3、Volatility 目录），默认值就是上面这些本机实测路径；改完写 `<DSH_HOME>/tool-paths.json`，外壳启动 dsh 时以 `SEEU_TOOL_<ID>` 环境变量注入会话（如 `SEEU_TOOL_GHIDRA`、`SEEU_TOOL_TSHARK`、`SEEU_TOOL_PYTHON`），路径不存在的项不注入。**解析顺序：设置里显式指定 → `PATH` 环境变量里能找到的命令（优先）→ 本机默认实测路径**；所以工具装进 PATH 后会优先用 PATH 里的，改机器/改 PATH 不必逐项改设置。
 - **命令执行工具**：全部预设统一优先用随包 `dsh-gitbash-shell` 提供的 `bash` 工具（Git Bash / POSIX 语法，环境变量写 `$SEEU_CLI_NODE`、`$SEEU_LOVELY_CLI`）；只有 `bash` 不可用（插件禁用或执行报错）时才降级 `pwsh`，并切换成 PowerShell 语法（`$env:…`、反斜杠路径）。persona 与技能文档都已按这条写。
-- **Qiko 比武技能组**：从 QikoAgent 技能库精选 49 个取证技能（`resources/forensics/skill-sets/qiko/`，约 1.2 MB：iOS/Android 取证、微信/资金/人物关系、流量/PCAP、内存、服务器/入侵、SQLite 恢复、逆向、图片鉴伪/隐写、URL 溯源等），每个 `SKILL.md` 末尾追加「SeeU 环境适配」段（`ssh-mcp`→`bash`、`ida-mcp`/`jadx-mcp`→`$SEEU_TOOL_IDA`/`$SEEU_TOOL_JADX`、Python→`$SEEU_TOOL_PYTHON`、检材定位四步、比武输出极简）。除「本地模型精简」外的预设都通过 `customSkillDirs` 注入该组（`SEEU_SKILL_SET_QIKO`），流量/日志/内存预设为「专用组 + Qiko 组」并集。
+- **Qiko 比武技能组**：从 QikoAgent 技能库精选 43 个取证技能（`resources/forensics/skill-sets/qiko/`，约 1.2 MB：iOS/Android 取证、微信/资金/人物关系、流量/PCAP、内存、服务器/入侵、SQLite 恢复、逆向、图片鉴伪/隐写、URL 溯源等），每个 `SKILL.md` 末尾追加「SeeU 环境适配」段（`ssh-mcp`→`bash`、`ida-mcp`/`jadx-mcp`→`$SEEU_TOOL_IDA`/`$SEEU_TOOL_JADX`、Python→`$SEEU_TOOL_PYTHON`、检材定位四步、比武输出极简）。除「本地模型精简」外的预设都通过 `customSkillDirs` 注入该组（`SEEU_SKILL_SET_QIKO`），流量/日志/内存预设为「专用组 + Qiko 组」并集。
 - **比武比赛风格**：所有专家 persona 默认按比赛作答——逐题 `Q<n>｜答案｜思路`、思路只列关键命令/字段/路径/行号、不写长报告；缺检材/权限/工具或工具连续报错两次就只输出 `⏭️ Q<n>：跳过：缺 XXX`；检材 `JC-`、样本 `YB-` 前缀；数量/比例/金额一律脚本计算；未检出写「未检出」，事实与推断分开。
 - **技能目录布局**：通用技能在 `resources/forensics/skills/`；分组技能在 `resources/forensics/skill-sets/<traffic|log|memory>/`。外壳启动时把分组复制到 `<DSH_HOME>/skill-sets/<id>`，并把旧的 `lovelymem-cli` / `lovelyspark-cli` 从 `<DSH_HOME>/skills` 移走（升级迁移，不会重复出现）。
 - **按预设隔离**：三个分析预设各有一个 `skill-filesystem` 实例（`includeDefaultRoots: false`），`customSkillDirs` 指向 `SEEU_SKILL_SET_TRAFFIC` / `SEEU_SKILL_SET_LOG` / `SEEU_SKILL_SET_MEMORY`，所以流量/日志预设看不到 `lovelymem-cli`，内存预设也看不到 `lovelyspark-cli`。

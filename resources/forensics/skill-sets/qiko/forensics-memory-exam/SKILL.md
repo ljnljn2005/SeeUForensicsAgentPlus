@@ -27,7 +27,7 @@ Do not treat memory skill as whole-disk triage. Tool/import shapes → hub tool-
 ## Navigation
 
 ```text
-qiko-forensic-lite-investigate (only if dump is nested inside a larger exhibit and not yet exported)
+myos-forensics-workflow (only if dump is nested inside a larger exhibit and not yet exported)
   → THIS SKILL (Volatility / MYOS MemoryAnalysis tool paths)
   → forensic-network-pcap-exam if a capture is carved out and traffic is the remaining question
 ```

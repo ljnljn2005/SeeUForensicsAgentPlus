@@ -25,9 +25,9 @@ Do not shotgun unrelated stores / blind FS walks. Tool shapes → hub tool-call-
 ## Navigation
 
 ```text
-qiko-forensic-lite-investigate (hub / first structured pass)
+myos-forensics-workflow (hub / first structured pass)
   → THIS SKILL (MYOS computer exam chain)
-  → forensic-sqlite-exam (single DB deep dive)
+  → performing-sqlite-database-forensics (single DB deep dive)
   → intrusion-case-forensics (Prefetch / remote-access lab report)
   → forensics-exam-server (server/CTF role, not desktop image)
 ```
@@ -42,7 +42,7 @@ qiko-forensic-lite-investigate (hub / first structured pass)
 
 This skill answers **computer image** contest/exam questions. **You must invoke tools**; do not read this file alone and skip database queries.
 
-Shared call recipes: `../qiko-forensic-lite-investigate/references/tool-call-recipes.md` — follow **Solve rhythm**. Do not re-copy full Chain JSON here.
+Shared call recipes: `../myos-forensics-workflow/references/tool-call-recipes.md` — follow **Solve rhythm**. Do not re-copy full Chain JSON here.
 
 ## Dual entry (match the live tool surface this turn)
 
@@ -52,10 +52,10 @@ Follow the **Standard workflow** below: `health_check_dbus` → create case / lo
 
 ### Entry Q — No MYOS, Qiko tools available (required path)
 
-1. Whole exhibit not yet structured: `Read` and execute `qiko-forensic-lite-investigate` (`forensic_task_manage` open case / mount).
+1. Whole exhibit not yet structured: `Read` and execute `myos-forensics-workflow` (`forensic_task_manage` open case / mount).
 2. Locate DBs via CASE STATUS / known cards / focused `search_forensic_result_map` (recipes) — **not** recursive bash under `os/`.
 3. Lock the stem’s primary `.mfs` / table family → targeted `sqlite_query_cli` (Solve rhythm). Prefer parsed system / network / browser / recycle nodes over opening every leaf.
-4. Single DB deep dive → `forensic-sqlite-exam`; do **not** unpack the disk image with `7z`.
+4. Single DB deep dive → `performing-sqlite-database-forensics`; do **not** unpack the disk image with `7z`.
 
 ## Applicable scenarios
 

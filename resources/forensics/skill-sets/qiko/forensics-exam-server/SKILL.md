@@ -20,8 +20,8 @@ metadata:
       - logs
       - reverse-engineering
     related_skills:
-      - qiko-forensic-lite-investigate
-      - forensic-sqlite-exam
+      - myos-forensics-workflow
+      - performing-sqlite-database-forensics
       - forensic-network-pcap-exam
 name_en: Server Forensics Exam
 name_ru: Экспертиза серверов (экзамен)
@@ -47,16 +47,16 @@ Do not aimless full-disk walks. Whole-disk import/parse shapes → hub tool-call
 ## Navigation
 
 ```text
-qiko-forensic-lite-investigate (optional hub if exhibit not mounted/triaged)
+myos-forensics-workflow (optional hub if exhibit not mounted/triaged)
   → THIS SKILL (server/CTF filesystem playbook)
-  → forensic-sqlite-exam / forensic-network-pcap-exam when scope shrinks to one DB or pcap
+  → performing-sqlite-database-forensics / forensic-network-pcap-exam when scope shrinks to one DB or pcap
 ```
 
 ## Overview
 
 Reusable playbook for **authorized server forensics / CTF range** answer extraction from read-only mounted images, exported VMs, offline Docker/K8s directories, NAS evidence, or live hosts. Prefer read-only mount and filesystem-level analysis when evidence is already local. **When the user gives live SSH credentials (IP + user + password), use MCP `qiko-forensics-server-mcp` (`register-server` → `execute-command`) first** — do not default to askpass/paramiko/ssh scripts; only fall back after MCP failure or user opt-out. Goal: identify server role → locate high-value artifacts → extract credentials/config → query DBs and logs → static-analyze suspicious binaries when needed → every answer backed by reproducible evidence.
 
-Do **not** restate full cowork `ensure_workspace` / `import_evidence` / `submit_job` chains here — use hub + `../qiko-forensic-lite-investigate/references/tool-call-recipes.md` (**Solve rhythm**) when the exhibit still needs product ingest.
+Do **not** restate full cowork `ensure_workspace` / `import_evidence` / `submit_job` chains here — use hub + `../myos-forensics-workflow/references/tool-call-recipes.md` (**Solve rhythm**) when the exhibit still needs product ingest.
 
 Default posture: **read-only first, evidence-driven, answer-oriented**.
 

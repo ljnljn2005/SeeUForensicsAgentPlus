@@ -27,7 +27,7 @@ Stay on the capture; do not unpack whole-disk images. Recipes SSOT → hub tool-
 
 **Use when** evidence is a capture file or the question is traffic-scoped.
 
-**Do NOT use first** on a whole disk with no capture path → `qiko-forensic-lite-investigate` (then `fl_list_files` / `glob_find` / `forensic_task_manage` to locate/export the pcap).
+**Do NOT use first** on a whole disk with no capture path → `myos-forensics-workflow` (then `fl_list_files` / `glob_find` / `forensic_task_manage` to locate/export the pcap).
 
 ## Navigation
 

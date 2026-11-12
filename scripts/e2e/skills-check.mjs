@@ -159,7 +159,7 @@ try {
   }
   log('分组技能', JSON.stringify(report.skillSets))
 
-  // Qiko 比武技能组（随包 49 个取证技能）
+  // Qiko 比武技能组（随包 43 个取证技能，裁剪后）
   const qikoDir = join(home, 'skill-sets', 'qiko')
   const qikoNames = existsSync(qikoDir) ? readdirSync(qikoDir).filter((x) => !x.startsWith('.')) : []
   const qikoExpect = ['server-forensics-playbook', 'ios-mobile-forensics', 'wechat-people-relationship-explosion-map', 'reverse-engineering']

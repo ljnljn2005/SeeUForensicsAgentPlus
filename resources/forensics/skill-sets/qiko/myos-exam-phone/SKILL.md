@@ -26,9 +26,9 @@ Do not shotgun unrelated App stores. Tool shapes → hub tool-call-recipes.md (S
 ## Navigation
 
 ```text
-qiko-forensic-lite-investigate (hub, if exhibit not yet structured)
+myos-forensics-workflow (hub, if exhibit not yet structured)
   → THIS SKILL (phone exam chain)
-  → forensic-sqlite-exam (single DB / WAL deep dive)
+  → performing-sqlite-database-forensics (single DB / WAL deep dive)
   → ios-mobile-forensics (iOS path map / templates)
   → apk-dynamic-forensics (runtime APK only)
 ```
@@ -42,7 +42,7 @@ Parse questions & build index → platform/Qiko structured hit on PRIMARY domain
   → Gates → source-verify if needed → answer in required format → pre-submit review
 ```
 
-Shared call recipes (JSON shapes, Chain A/B/C): `../qiko-forensic-lite-investigate/references/tool-call-recipes.md` — follow **Solve rhythm** there. **Do not** re-embed full recipe JSON in this skill.
+Shared call recipes (JSON shapes, Chain A/B/C): `../myos-forensics-workflow/references/tool-call-recipes.md` — follow **Solve rhythm** there. **Do not** re-embed full recipe JSON in this skill.
 
 ## Tool Call Entry Points (per exposed tools this turn)
 
@@ -58,8 +58,8 @@ Prefer: `load_case` / phone forensics task / `sqlite_query` (match actual MCP sc
 2. Path unclear → `search_forensic_result_map` with a **focused** query (one app / leaf family); do not quote the full map to the user.
 3. Stem mentions enum codes → `search_forensic_field_enum` then filter.
 4. `fl_search` available → **one hard token per question**, then `fl_query_rows` on hits.
-5. **Platform / MApps miss for an app the stem names:** do **not** invent that app’s tables on `Platform.mfs`. Locate the app’s own `.mfs` or native DB from the exhibit, then CLI / `forensic-sqlite-exam`.
-6. Single-DB deep dive → `forensic-sqlite-exam`; iOS path templates → `ios-mobile-forensics`.
+5. **Platform / MApps miss for an app the stem names:** do **not** invent that app’s tables on `Platform.mfs`. Locate the app’s own `.mfs` or native DB from the exhibit, then CLI / `performing-sqlite-database-forensics`.
+6. Single-DB deep dive → `performing-sqlite-database-forensics`; iOS path templates → `ios-mobile-forensics`.
 
 Do not treat this skill as an answer bank. Old exam write-ups are reference only for approach—not evidence for the current questions.
 
@@ -67,7 +67,7 @@ Do not treat this skill as an answer bank. Old exam write-ups are reference only
 
 | Reference | Read when | Purpose | Skip when |
 | --- | --- | --- | --- |
-| `../qiko-forensic-lite-investigate/references/tool-call-recipes.md` | Need concrete Qiko/FL/CLI parameters | Executable tool calls | This turn has only MYOS and already closed |
+| `../myos-forensics-workflow/references/tool-call-recipes.md` | Need concrete Qiko/FL/CLI parameters | Executable tool calls | This turn has only MYOS and already closed |
 | `references/question-routing.md` | Platform has no answer, unfamiliar question type, specialty item | Choose high-probability evidence paths | Low-risk platform hit and gates pass |
 | `references/app-artifacts.md` | Specific app, system structure, raw sandbox involved | Locate DB, table, field, file | Platform answer alone is enough |
 | `references/pitfalls.md` | Time, statistics, multi-select, deletion, conflict, close options | Error-prevention review | Ordinary low-risk item |

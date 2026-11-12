@@ -184,7 +184,7 @@
 
             技能路由
 
-            按题型加载，不凭记忆背参数：server-forensics-playbook（多节点/宝塔/Docker/加解密/SQL 聚合）、forensics-exam-server、linux-admin-finder、intrusion-case-forensics（入侵六类痕迹+时间线）、windows-content-forensics、windows-loader（注册表/EVTX 链）、myos-exam-computer、forensic-sqlite-exam、performing-sqlite-database-forensics、analyzing-memory-dumps-with-volatility、forensic-network-pcap-exam、forensic-report（成稿）、forensics-wiki-ref（口径）。技能开头「SeeU 环境适配」优先于正文旧工具链，冲突以本预设为准。
+            按题型加载，不凭记忆背参数：server-forensics-playbook（多节点/宝塔/Docker/加解密/SQL 聚合）、forensics-exam-server、linux-admin-finder、intrusion-case-forensics（入侵六类痕迹+时间线）、windows-content-forensics、windows-loader（注册表/EVTX 链）、myos-exam-computer、performing-sqlite-database-forensics、analyzing-memory-dumps-with-volatility、forensic-network-pcap-exam、evidence-chain-report（成稿）、forensics-wiki-ref（口径）。技能开头「SeeU 环境适配」优先于正文旧工具链，冲突以本预设为准。
             本机实测（2026-11-12）：python 3.13.14、node 24、java 26.0.1；IDA Pro 9.4（`D:/Programs/IDA Professional 9.4/idat.exe`）、Ghidra 12.1.4（`.../ghidra-12.1.4/Ghidra/RuntimeScripts/Windows/support/analyzeHeadless.bat`）、7z、sqlite3、Wireshark 3.4.0（不在 PATH）、jadx 1.1.0、apktool、adb、StarMem 0.2.2、LovelyCarve 1.3.0 均已装；nfdump、zeek、suricata、snort 未装。工具路径以「设置 → 本地模型与工具路径」的外部工具为准，未设置时按 PATH → 默认实测路径。
             比武比赛模式（默认）：逐题极简作答，格式「Q<n>｜答案｜思路」，思路只给关键命令/字段/路径/行号，不写长报告；缺检材/权限/工具、工具连续报错 2 次、同题 2 条路径无命中、加密加壳无密钥、需专用硬件时只输出「⏭️ Q<n>：跳过：缺 XXX」，不臆测；检材用 JC 前缀、样本用 YB 前缀；数量/比例/金额一律脚本计算；未检出就写「未检出」，事实与推断分开。
 
@@ -830,7 +830,7 @@
 
                 技能（按需 `skill` 加载，目录里没有的不提）
 
-                gambling-sales-account-forensics、wechat-relation-fund-chain、wechat-people-relationship-explosion-map、mobile-people-relationship-explosion-map、image-forgery-detector、watermark-detector、image-steganography、phishing-url-tracing、forensics-wiki-ref、forensic-report。未挂载按缺口说明，不假装执行。
+                gambling-sales-account-forensics、wechat-relation-fund-chain、wechat-people-relationship-explosion-map、mobile-people-relationship-explosion-map、image-forgery-detector、watermark-detector、image-steganography、phishing-url-tracing、forensics-wiki-ref、evidence-chain-report。未挂载按缺口说明，不假装执行。
 
                 比武作答
 
@@ -1342,7 +1342,7 @@
                 - 命令统一 `bash`（Git Bash / POSIX）；bash 不可用或报错才降级 `pwsh` 并整体换语法，两者不混用。
                 - 路径解析：设置显式指定 → `PATH`（先 `command -v`）→ 默认实测。注入变量：`$SEEU_TOOL_JADX`（jadx 1.1.0）、`$SEEU_TOOL_APKTOOL`（apktool.jar，`java -jar`）、`$SEEU_TOOL_ADB`、`$SEEU_TOOL_PYTHON`（3.13：frida 17、pefile、capstone、lief、pyelftools、yara、pandas、sqlite3）、`$SEEU_TOOL_SEVENZIP`、`$SEEU_TOOL_SQLITE3`；java 26。变量为空先按 PATH 找。
                 - MYOS MCP：`mcp__myos-forensics__*`（`query_phone_forensics_results_overview`、`sqlite_query`、`query_materials`、`query_device_info`）。仅当取证员说「检材在 MYOS」时调用；连不上就报未启动 / MCP 未连，不得静默降级。出处写「MYOS 案件… 检材… 取证项… 记录…」。
-                - 技能点名：iOS `ios-mobile-forensics`、`itunes-backup-password-recover`；Android `apk-reverse`、`android-malware-analysis`、`android-sqlcipher-db-analysis`、`registration-mobile`；整包 `myos-exam-phone`、`qiko-forensic-lite-investigate`；微信 `wechat-people-relationship-explosion-map`、`wechat-relation-fund-chain`；删库 `performing-sqlite-database-forensics`。
+                - 技能点名：iOS `ios-mobile-forensics`、`itunes-backup-password-recover`；Android `apk-reverse`、`android-malware-analysis`、`android-sqlcipher-db-analysis`、`registration-mobile`；整包 `myos-exam-phone`、`myos-forensics-workflow`；微信 `wechat-people-relationship-explosion-map`、`wechat-relation-fund-chain`；删库 `performing-sqlite-database-forensics`。
 
                 比武作答
 

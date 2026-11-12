@@ -34,16 +34,16 @@ hub prepare / myos-exam-phone structured hit first when available
   → lock the stem’s primary module path → read that artifact only
   → format close-out.
 Path map below is layer-2 (when platform miss). Do not script-run every module at open.
-Tool shapes → ../qiko-forensic-lite-investigate/references/tool-call-recipes.md (Solve rhythm).
+Tool shapes → ../myos-forensics-workflow/references/tool-call-recipes.md (Solve rhythm).
 ```
 
 ## Navigation
 
 ```text
-qiko-forensic-lite-investigate (hub if needed)
+myos-forensics-workflow (hub if needed)
   → myos-exam-phone (platform-first exam chain)
   → THIS SKILL (iOS path map / templates)
-  → forensic-sqlite-exam (single DB deep dive)
+  → performing-sqlite-database-forensics (single DB deep dive)
 ```
 
 Structured analysis for iPhone forensic images (filesystem-level extracts). Covers common electronic data forensics phone questions: device identity, wireless, IM, file transfer, photo media, browser, and AI chat records. Paths below are validated on real iOS extract packages (e.g. `CHAN_MH_mobile.zip` / `FUNG_CC_mobile.zip`).

@@ -15,7 +15,7 @@
  *   开发态/安装态/便携态三种形态的资源路径不同，静态 overlay 写不出来；
  *   而 <DSH_HOME> 永远是 dsh 的默认技能根，装过去即可，不依赖安装位置。
  */
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 /** 独立技能组的目录名（与 resources/forensics/skill-sets/<id> 对应）。 */
@@ -59,11 +59,13 @@ function listFiles(dir, prefix = '') {
 
 /**
  * 把一组技能从随包目录复制到 `<DSH_HOME>/skill-sets/<id>`（幂等，体积小）。
- * @returns {{id: string, dir: string, skills: string[], files: number, changed: boolean}}
+ * 随包技能被删除/改名时，会清掉目标目录里已不在源清单中的旧文件与空目录（prune），
+ * 避免升级后旧技能残留、继续被预设看到。
+ * @returns {{id: string, dir: string, skills: string[], files: number, changed: boolean, pruned: number}}
  */
 export function installSkillSet({ sourceDir, homeDir, id, version = '' }) {
   const dest = skillSetHomeDir(homeDir, id)
-  const result = { id, dir: dest, skills: [], files: 0, changed: false }
+  const result = { id, dir: dest, skills: [], files: 0, changed: false, pruned: 0 }
   if (!existsSync(sourceDir)) return result
 
   const markerPath = join(dest, '.seeu-skill-set.json')
@@ -89,6 +91,8 @@ export function installSkillSet({ sourceDir, homeDir, id, version = '' }) {
       return result
     }
   }
+  const wanted = new Set(files.map((f) => f.rel))
+  result.pruned = prunedList(dest, wanted)
   try {
     mkdirSync(dest, { recursive: true })
     writeFileSync(markerPath, JSON.stringify({ version, id, fingerprint, skills: result.skills, installedAt: new Date().toISOString() }, null, 2) + '\n', 'utf8')
@@ -97,6 +101,49 @@ export function installSkillSet({ sourceDir, homeDir, id, version = '' }) {
   }
   result.changed = true
   return result
+}
+
+/** 删除目标目录里不在 source 清单中的旧文件，并清理空目录；返回删除文件数。 */
+function prunedList(dest, wanted) {
+  let pruned = 0
+  const removeEmptyDirs = (dir) => {
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return false
+    }
+    let empty = true
+    for (const entry of entries) {
+      const abs = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        if (!removeEmptyDirs(abs)) empty = false
+      } else if (entry.name !== '.seeu-skill-set.json') {
+        empty = false
+      }
+    }
+    if (empty && dir !== dest) {
+      try {
+        rmdirSync(dir)
+      } catch {
+        return false
+      }
+      return true
+    }
+    return empty && dir === dest
+  }
+  for (const file of listFiles(dest)) {
+    if (file.rel === '.seeu-skill-set.json') continue
+    if (wanted.has(file.rel)) continue
+    try {
+      rmSync(file.abs, { force: true })
+      pruned += 1
+    } catch {
+      // 被占用下次再试
+    }
+  }
+  removeEmptyDirs(dest)
+  return pruned
 }
 
 /** 从 `<DSH_HOME>/skills` 删除已改成分组安装的旧技能目录。 */
