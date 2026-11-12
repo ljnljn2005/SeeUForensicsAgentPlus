@@ -6,8 +6,12 @@ import { join } from 'node:path'
 
 import {
   BUNDLED_DSH_PLUGINS,
+  PLUGIN_PACKAGES_MARKER,
+  collectPluginClosure,
+  ensurePluginPackages,
   mergePluginBundles,
   installBundledPluginBundles,
+  resolveDependencyDir,
 } from '../tools/dsh-plugins.mjs'
 
 const tempdirs = []
@@ -150,6 +154,72 @@ test('随包插件清单包含四个约定插件', () => {
     'dsh-gitbash-shell',
   ])
 })
+
+test('ensurePluginPackages：复制插件与非 @deepseek-ai 依赖闭包到 profile/node_modules', () => {
+  const root = tempRoot()
+  const pkg = (name, deps = {}) => {
+    const dir = join(root, 'node_modules', name)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version: '1.0.0', dependencies: deps }))
+  }
+  pkg('p1', { 'dep-b': '1.0.0', '@deepseek-ai/dsh-session': '0.2.2-rc.1' })
+  pkg('dep-b', { 'dep-c': '1.0.0' })
+  pkg('dep-c', {})
+  const home = tempRoot()
+
+  const first = ensurePluginPackages({ homeDir: home, pluginsDir: root, pluginNames: ['p1'], version: '0.3.3' })
+  assert.equal(first.error, undefined)
+  assert.equal(first.changed, true)
+  assert.deepEqual([...first.packages].sort(), ['dep-b', 'dep-c', 'p1'])
+  const profileNodeModules = join(home, 'profiles', 'web', 'node_modules')
+  for (const name of ['p1', 'dep-b', 'dep-c']) {
+    assert.ok(readFileSync(join(profileNodeModules, name, 'package.json'), 'utf8').includes(name))
+  }
+  // 安装目录已经提供的 @deepseek-ai/* 不复制
+  assert.equal(requireExists(join(profileNodeModules, '@deepseek-ai', 'dsh-session')), false)
+  const marker = JSON.parse(readFileSync(join(home, 'profiles', 'web', PLUGIN_PACKAGES_MARKER), 'utf8'))
+  assert.equal(marker.version, '0.3.3')
+  assert.equal(marker.packages.length, 3)
+
+  const second = ensurePluginPackages({ homeDir: home, pluginsDir: root, pluginNames: ['p1'], version: '0.3.3' })
+  assert.equal(second.changed, false)
+  assert.equal(second.copied, 0)
+
+  const third = ensurePluginPackages({ homeDir: home, pluginsDir: root, pluginNames: ['p1'], version: '0.3.4' })
+  assert.equal(third.changed, true)
+  assert.equal(third.copied, 3)
+})
+
+test('collectPluginClosure：硬依赖缺失进 missing，软依赖缺失进 optionalMissing', () => {
+  const root = tempRoot()
+  mkdirSync(join(root, 'node_modules', 'ok'), { recursive: true })
+  writeFileSync(
+    join(root, 'node_modules', 'ok', 'package.json'),
+    JSON.stringify({ name: 'ok', dependencies: { gone: '1.0.0' }, peerDependencies: { 'peer-x': '1.0.0' } }),
+  )
+  const { packages, missing, optionalMissing } = collectPluginClosure(['ok', 'absent'], root)
+  assert.deepEqual([...packages.keys()], ['ok'])
+  assert.deepEqual([...missing].sort(), ['absent', 'gone'])
+  assert.deepEqual(optionalMissing, ['peer-x'])
+})
+
+test('resolveDependencyDir：向上查找 hoisted 依赖', () => {
+  const root = tempRoot()
+  mkdirSync(join(root, 'node_modules', 'hoisted'), { recursive: true })
+  writeFileSync(join(root, 'node_modules', 'hoisted', 'package.json'), JSON.stringify({ name: 'hoisted' }))
+  mkdirSync(join(root, 'node_modules', 'a', 'b'), { recursive: true })
+  assert.equal(resolveDependencyDir('hoisted', join(root, 'node_modules', 'a', 'b')), join(root, 'node_modules', 'hoisted'))
+  assert.equal(resolveDependencyDir('nope', join(root, 'node_modules', 'a')), undefined)
+})
+
+function requireExists(path) {
+  try {
+    readFileSync(path)
+    return true
+  } catch {
+    return false
+  }
+}
 
 test.after(() => {
   for (const dir of tempdirs) rmSync(dir, { recursive: true, force: true })

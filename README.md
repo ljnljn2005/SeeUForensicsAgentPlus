@@ -62,14 +62,14 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.2**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.3.3**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,109,515,767 B ≈ 1.03 GiB，含随包 dsh 插件） |
-| `release/win-unpacked/resources/app.asar` | 425,164,539 B（34,094 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的三预设 + MYOS MCP 行） |
-| `release/SeeUForensicsAgentPlus-0.3.2-x64.exe`（NSIS 安装包） | 281,504,620 B（blockmap 292,860 B） |
-| `release/SeeUForensicsAgentPlus-0.3.2-x64-portable.exe` | 236,213,254 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,109,408,111 B ≈ 1.03 GiB，含随包 dsh 插件） |
+| `release/win-unpacked/resources/app.asar` | 425,056,883 B（34,072 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的三预设 + MYOS MCP 行） |
+| `release/SeeUForensicsAgentPlus-0.3.3-x64.exe`（NSIS 安装包） | 281,470,879 B（blockmap 293,467 B） |
+| `release/SeeUForensicsAgentPlus-0.3.3-x64-portable.exe` | 236,209,035 B |
 
 实测冷启动到 dsh UI：目录版 **6130 ms**；portable 首次 49.6s（先要把 ~1.0GB 解包到 `%TEMP%`，属于预期）。
 
@@ -77,7 +77,17 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-> 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.3.1-x64-portable.exe`，因为打包时它正在运行、文件被占用无法删除；不影响 0.3.2 的产物。
+> 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.3.1-x64-portable.exe`，因为打包时它正在运行、文件被占用无法删除；不影响 0.3.3 的产物。
+
+### v0.3.3 改了什么
+
+- **修复：随包 dsh 插件实际没加载**（v0.3.2 的严重缺陷）。v0.3.2 只在 profile 清单里写了 bundle 名字，没把插件包放进 `<profile>/node_modules`，dsh 导入时 `ERR_MODULE_NOT_FOUND`，启动日志是 `dsh: warning: 9 entries did not activate`，界面上看不到插件效果。现在 `tools/dsh-plugins.mjs` 新增 `ensurePluginPackages()`：启动时把 4 个插件及依赖闭包复制进 profile（硬依赖/软依赖分开统计，实测 175 个包；同版本靠 `.seeu-dsh-plugins.json` 指纹跳过，升级自动重抄），复制方式改为逐文件 read/write 以兼容 `app.asar` 源目录。
+- `scripts/e2e/plugins-check.mjs` 增加三条真实断言（插件包存在、外壳日志「插件包 N 个」、dsh 子进程日志无导入失败）；v0.3.2 的旧断言只看页面文案，属误判。
+- **案件概览新增「原始检材只读挂载」映射**：火眼（GES）会为检材挂出原始只读文件系统（`ges status --json` 的 `evidence_mounts[]`：虚拟路径 `/evidence_mounts/eid-N/` + 本机目录 `C:\hlnet\<eid>-<hash>`）。现在 `plugins/seeu-case-index` 的概览把「检材名 → 虚拟路径/本机目录」写进 `<DSH_HOME>/AGENTS.md`，`/evidences` 也返回 `mountRoute`/`mountPoint`/`mountEid`；`ges-case-index` 技能与取证定位规则同步改成「**先翻火眼已挂载目录，不要用 LovelyCarve 重复挂载**；只有火眼没给挂载时才自己挂镜像」。设备/系统类问题仍优先看检材备注。
+- 新增 `tools/ges-index/mounts.mjs`（`parseEvidenceMounts` / `attachMounts` / `loadEvidenceMounts`，5 秒缓存、失败降级为空表）与 `tests/ges-mounts.test.mjs` 4 例。
+- `npm test` 106/106（新增依赖闭包、包复制、挂载映射用例）、`check:overlay` OK。
+
+- **打包与打包态回归（v0.3.3）**：NSIS `281,470,879 B`（blockmap 293,467 B）、portable `236,209,035 B`、`app.asar` `425,056,883 B`（34,072 entries —— 比 0.3.2 少 22 条是删掉了旧技能目录）；`.probe/asar-033-check.mjs` 全项 true（新增 `pluginPackagesCopy` / `pluginsActivationAssert` / `version033`）；**打包态 `plugins-check --exe` 首次拿到 `ok:true`**：profile 下 175 个插件包、外壳日志「插件包 175 个（已复制 175 个…）」、dsh 子进程日志 `activationFailures:[]`（从 asar 逐文件复制可行）；打包态 `m2-ui-check`（`m2ok:true, errors:[]`）；目录版冷启动 **7128 ms**、portable **49.8 s**；`npm test` **106/106**、`npm run check:overlay` OK。
 
 ### v0.3.2 改了什么
 
@@ -763,9 +773,9 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 | `dsh-gitbash-shell` | Windows 上的 `bash` / `gitbash_native` / `gitbash_to_native_path` 工具 | 0.54.0 |
 
 - **写入位置**：`<DSH_HOME>/profiles/web/package.json` 的 `dsh.profile.bundles`（默认 `<userData>/dsh-home`）。外壳每次 `startHost()` 前都会补齐缺失项，保留用户自己加的 bundle 与 `dependencies`；清单损坏时只报错、不覆盖。设置 `SEEU_DISABLE_DSH_PLUGINS=1` 可跳过。
-- **解析方式**：dsh 先在自己安装目录（打包后是 `app.asar/node_modules/@deepseek-ai/dsh`）的 `node_modules` 里找 bundle，找不到才看 profile 目录，所以插件跟着安装包走、不需要 profile 级安装。
+- **插件包复制**：`dsh` 只把 `dsh.profile.bundles` 当作「去哪里找插件 patch」，真正的插件行是**用 profile 目录作 baseUrl 的 ESM 导入**；因此插件包还必须真在 `<profile>/node_modules` 里，否则会 `ERR_MODULE_NOT_FOUND`、整批插件不激活。外壳在 `startHost()` 前调用 `ensurePluginPackages()`，把 4 个插件及其非 `@deepseek-ai/*` 依赖闭包复制到 `<DSH_HOME>/profiles/web/node_modules`（实测 175 个包、约 120MB、耗时数秒），指纹文件 `<profile>/.seeu-dsh-plugins.json` 记录版本与包名：同版本不重复复制、升级自动重抄并清理旧包。复制是逐文件 read/write（打包态源在 `app.asar` 里，`fs.cpSync` 的 `copyFile` 读不了 asar）。
 - **额外解包**：`node_modules/@dsh-ops/fastctx-win32-x64/**` 进 `app.asar.unpacked`，因为 `bin/fastctx.exe` 需要真实文件路径才能 spawn。
-- **验收**：`npm run test:e2e:plugins`（dev 或 `--exe <安装包 exe>` 都可）断言 profile bundles、页面插件 UI、外壳日志三项。
+- **验收**：`npm run test:e2e:plugins`（dev 或 `--exe <安装包 exe>` 都可）断言四件事：profile bundles、`<profile>/node_modules` 下四个插件包、页面插件 UI（「上下文洞察」「插件」）、以及 dsh 子进程日志不得出现 `did not activate` / `failed to import` / `ERR_MODULE_NOT_FOUND`。
 
 ## 13. 分析预设（流量 / 日志 / 内存）
 

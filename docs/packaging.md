@@ -861,3 +861,29 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - `.probe/asar-032-check.mjs` 的 `briefCountNote` 检查原先匹配旧文案，实际 bundle 文案是「（「入库记录」是本索引实际解析入库的行数…）」，改为匹配「本索引实际解析入库的行数」。
   - 打包态读 asar 仍在 NSIS/portable 阶段失败（`was not found`），等 job 结束再验。
 - 遗留：`release/` 里 0.3.1 portable 因正在运行无法删除（`Device or resource busy`）；三预设的技能注入目前只有配置层校验（`dump-config` 打印 `!!js` 表达式字符串），运行时求值依赖 dsh loader 的 `with (ctx) eval`（已读源码确认 `process` 可达），但没有 UI 级断言 —— headless profile 无 `agentPresets` 服务。
+
+### v0.3.3 回归验证（2026-11-12）
+
+背景：v0.3.2 的随包 dsh 插件实际没加载（profile 只有 bundle 清单、没有 `<profile>/node_modules` 里的包，dsh 导入报 `ERR_MODULE_NOT_FOUND`）。v0.3.3 加入插件包复制，并顺带把火眼已挂载的检材目录写进案件概览。
+
+产物（`release/`）：
+
+| 文件 | 大小 |
+| --- | --- |
+| `win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,109,408,111 B） |
+| `win-unpacked/resources/app.asar` | 425,056,883 B（34,072 entries） |
+| `SeeUForensicsAgentPlus-0.3.3-x64.exe` | 281,470,879 B（blockmap 293,467 B） |
+| `SeeUForensicsAgentPlus-0.3.3-x64-portable.exe` | 236,209,035 B |
+
+验证：
+
+- `.probe/asar-033-check.mjs`：全项 `true`、`missing: []`（含 `pluginPackagesCopy`、`pluginsActivationAssert`、`version033`）。
+- `node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9503` → `ok:true, elapsedMs:7128`；portable `--port 9502` → `ok:true, elapsedMs:49787`。
+- **打包态插件验证（本轮关键）**：`node scripts/e2e/plugins-check.mjs --exe "…release/win-unpacked/SeeUForensicsAgentPlus.exe"` → `ok:true`；`packagesOk:true`、`pluginLine`「插件包 175 个（已复制 175 个…）」、`activationFailures:[]`、`activationOk:true`。说明从 `app.asar` 逐文件复制插件包到 `%APPDATA%\SeeUForensicsAgentPlus\dsh-home\profiles\web\node_modules` 可行，dsh 子进程不再报 `9 entries did not activate`。
+- 打包态 `m2-ui-check` → `m2ok:true, errors:[]`。
+- 真实安装目录核对：`logs/shell.log` 08:20:56 / 08:21:58 有「插件包 175 个」与「已就绪」；`profiles/web/node_modules` 175 个包 + `.seeu-dsh-plugins.json`（version 0.3.3）；`logs/dsh-host-2026-11-12.log` 08:21/08:22 的启动不再出现 `did not activate`（只剩 `[gitbash-shell] … writer lock` / `terminalShell is not volatile` 这类无害告警）。
+
+注意：
+
+- 老版本（≤0.3.2）的实例不会自己补插件包；升级后必须**完全退出**（含托盘）再启动新版本，插件才会出现。
+- 若用户目录里已有旧 profile，升级时按 `.seeu-dsh-plugins.json` 的 version 重新复制；`SEEU_DISABLE_DSH_PLUGINS=1` 可整体关闭随包插件。

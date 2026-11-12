@@ -1950,3 +1950,37 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 打包态 e2e：`m2-ui-check` `m2ok:true`；`settings-check` `ok:true`（toolsRows 3）；`plugins-check` `ok:true`（bundles 6、上下文洞察/插件 UI、日志 `dsh plugins:`）；`skills-check` `ok:true`（5 通用技能 + 三组技能 + `leaked:[]`）。
 - `npm test` 100/100、`check:overlay` OK。
 - 遗留：三预设技能注入只有配置层校验（`dump-config` 不展开 `!!js`；headless 无 `agentPresets`），运行时求值依赖 dsh loader 的 `with (ctx) eval`；真实 LovelyCarve/LovelySpark/LovelyMem 未跑真机分析；0.3.1 portable 被占用暂留 `release/`。
+
+## §20.71 v0.3.3：修复随包插件未实际加载
+
+- 现象（用户实测 0.3.2）：安装后界面没有插件效果；`logs/dsh-host-*.log` 每次启动都有
+  `dsh: warning: 9 entries did not activate` 与
+  `bili-native (billion-context): failed to import: Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'billion-context' imported from <DSH_HOME>/profiles/web/`。
+- 根因：`@deepseek-ai/dsh-app-boot` 的 `resolveBundleDir()` 只用 bundles 清单定位插件 patch；插件行本身由 loader 以 **profile 目录为 baseUrl** 做 ESM 导入。v0.3.2 只写了 `<DSH_HOME>/profiles/web/package.json` 的 `dsh.profile.bundles`，没有把包放进 `<profile>/node_modules`，于是全部导入失败。
+- 修复：`tools/dsh-plugins.mjs` 新增
+  - `resolveDependencyDir(name, fromDir)`：从包目录向上找 hoisted 依赖；
+  - `collectPluginClosure(pluginNames, pluginsDir)`：两轮 BFS，`dependencies` 缺失记 `missing`（硬），`peerDependencies`/`optionalDependencies` 缺失记 `optionalMissing`（软，运行时由宿主提供）；
+  - `ensurePluginPackages({ homeDir, pluginsDir, pluginNames, version })`：把闭包复制到 `<home>/profiles/web/node_modules`，写 `.seeu-dsh-plugins.json` 指纹（version + packages），同版本且包齐全直接返回；升级时删除指纹里已不再需要的旧包；
+  - `copyDirectoryTree()`：逐文件 read/write（`fs.cpSync` 的底层 `copyFile` 读不了 `app.asar`）。
+- 接线：`src/dsh-plugins.ts` 加 `ensureBundledPluginPackages(version)`；`src/main.ts` 的 `startHost()` 在补 bundles 之后调用并写日志
+  `dsh plugins: 插件包 N 个（已复制 M 个；可选缺包 K 个（运行时由宿主提供））→ <profile>/node_modules`；`SEEU_DISABLE_DSH_PLUGINS=1` 一并跳过。
+- e2e：`scripts/e2e/plugins-check.mjs` 新增 `REQUIRED_PACKAGES` 断言（四个插件包存在于 profile node_modules）、`packagesLine`（外壳日志）、`activationFailures`/`activationOk`（dsh-host 日志不得含 `did not activate` / `failed to import` / `ERR_MODULE_NOT_FOUND`）。
+- 验证：`node --test tests/dsh-plugins.test.mjs` 10/10；`npm test` 102/102；`check:overlay` OK；dev `plugins-check` → `packagesOk:true`、`logOk:true`、`activationFailures:[]`、`activationOk:true`、页面仍显示「上下文洞察」「插件」。
+- 坑：① v0.3.2 的 `plugins-check` 只看页面文案（「上下文洞察」「插件」在 web app 基础 UI 里本来就有），所以假绿；② `fs.cpSync` 从 asar 源复制会失败，必须逐文件；③ 依赖闭包里 `react`/`react-dom`/`@huanlin/dsh-plugin-better-locale`/`bufferutil`/`utf-8-validate` 是 peer/optional，不能当硬缺包。
+- 遗留：真实安装包仍需再验一轮（打包态 `plugins-check --exe`）；插件升级（dsh 本体版本变化）时指纹只按外壳版本判断，足够用但如果插件包内容变化而版本号不变不会重抄。
+
+## §20.72 把火眼已挂载的原始检材目录写进案件概览
+
+- 用户需求：火眼（GES）已有检材的「模拟映射目录」，直接把映射目录告诉 AI 让它翻，就不用 LovelyCarve 每次挂载镜像。
+- 调研（`ges status --json` / `ges context --json`）：返回 `evidence_mounts[]`
+  `{eid, name, route:"/evidence_mounts/eid-N/", access_mode:"local", mount_point:"C:\hlnet\<eid>-<hash>", root_env, real_root_env}`；
+  `/evidence_mounts/` 是原始只读文件系统入口，`ges ls/glob/grep/copy` 都支持；`/case/` 才是解析后的结构化虚拟视图。
+  本机实测：eid1 → `C:\hlnet\1-1794226157`、eid3 → `C:\hlnet\3-1794227527`、eid4 → `C:\hlnet\4-1794227733`、eid5 → `C:\hlnet\5-1794227771`；eid2（IQ_Coin zip）没有挂载记录（`ges evidence ls` 也只列 4 个检材）。
+- 实现：
+  - 新增 `tools/ges-index/mounts.mjs`：`evidenceMountRoute(eid)`、`parseEvidenceMounts(context)`（容错归一 + 收集 `skipped_evidence_mounts`）、`attachMounts(list, mounts)`（**先按检材名匹配，再退回 eid**——索引 eid 与火眼 eid 不一定一致）、`loadEvidenceMounts()`（`ges status --json`，20s 超时、5s 缓存、失败返回空表）。
+  - `plugins/seeu-case-index/index.js`：`/evidences` 返回每行 `mountRoute/mountPoint/mountEid`；`briefText(indexes, mounts)` 在检材表后新增「原始检材只读挂载（火眼已挂好，直接翻，不要再用 LovelyCarve 重复挂载）」段（按名称匹配每案检材）；`writeCaseBrief` 改 async 并在生成前取挂载表（`/list`、`/brief` POST、建库完成回调均 await，`apply()` 用 `void ... .catch()`）。
+  - `resources/forensics/skills/ges-case-index/SKILL.md`：`/evidences` 字段说明加 `mountRoute/mountPoint`；「索引里没有数据时」第 2 步改为「先翻 `/evidence_mounts/eid-N/` 或本机目录」，第 3 步才用镜像挂载；工作方式建议补充「别一上来就挂镜像」。
+  - 规则文案：取证定位规则第 2 条改为「① 火眼已挂载目录 → ② 没有挂载才自己挂镜像 → ③ 才考虑拷原始文件」。
+- 验证：`node --test tests/ges-mounts.test.mjs` 4/4；`npm test` 106/106；真实案件重生成概览 → 2400 字符（原 1740），含四行挂载映射（eid2 无映射、不出现）；`check:overlay` OK。
+- 坑：① 索引 eid 与火眼 eid 可能错位（索引残留已删检材），匹配必须以**名称**为主；② `ges status --json` 不含案件目录，无法强校验「当前案件=索引案件」，只能按名称匹配，匹配不上就不写；③ `briefText` 原本同步、`writeCaseBrief` 被 4 处同步调用，改 async 时注意 `apply()` 不能 await。
+- 遗留：真实 LovelyCarve 挂载仍未验证（本机未装）；火眼挂载目录生命周期由 GES 管理（关闭火眼案件即失效），概览里的路径可能过期，用户重开案件后刷新概览即可。

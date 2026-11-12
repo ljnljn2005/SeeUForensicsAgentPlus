@@ -34,8 +34,11 @@ curl -s "$SEEU_INDEX_API/list" | head -c 500
 
 ```bash
 curl -s -G "$API/evidences" --data-urlencode "db=$DB"
-# → evidences[]: {eid, name, holder, platform, type, remark, evidenceNumber, recordCount, sizeBytes, label}
+# → evidences[]: {eid, name, holder, platform, type, remark, evidenceNumber, recordCount, sizeBytes, label,
+#                 mountRoute, mountPoint, mountEid}
 #   例：{eid:3, name:"LEUNG_YL_mobile.zip", platform:"ios", label:"LEUNG_YL_mobile.zip · ios"}
+#   mountRoute 形如 "/evidence_mounts/eid-3/"，mountPoint 是火眼挂载出的本机只读目录（如 C:/hlnet/3-…）；
+#   为 null 表示火眼没有为该检材提供挂载入口（格式不支持或未解析）。
 ```
 
 `/tree root` 的 `children[]` 里也直接带 `eid/name/holder/platform/remark`，与 `/evidences` 等价。
@@ -106,8 +109,11 @@ curl -s -G "$SEEU_INDEX_API/cross/files" --data-urlencode "sha256=<64位十六�
 `/evidences` 里每行有 `recordCount`（本索引实际入库行数）与 `reportedRecordCount`（火眼统计）。**`recordCount` 远小于 `reportedRecordCount`（例如 1 / 3065）说明索引里几乎只有元数据**——这类检材通常是 `type='pf'`（手机全量提取）或 `type='image'`（磁盘镜像），火眼没有导出 `data.csv` / `chat.txt` 叶子，索引必然查不到内容。这时：
 
 1. **先看元数据**：`remark` 常直接写着机型/系统版本/解析方式（例：`iPhone D331pAP/iOS17.1.1 全量提取`），设备信息类问题（系统版本、机型、IMEI）先看 `evidences[].remark` 与 `table name=device_info` 一类的结构化表，**不要为了找设备信息去翻文件系统**；
-2. **看原始文件路径**：`/evidences` 返回的 `sourcePath` 是检材盘上的原始文件（如 `W:\CHAN_MH_mobile.zip`），`storagePath` 是火眼内部路径；只允许列这些已知目录；
-3. **镜像/全量提取内容要挂载后再分析**：让用户打开外壳「工具 → 镜像挂载…」（`Ctrl+Shift+M`）把镜像挂载成只读盘符，挂载清单在 `$SEEU_MOUNTS_FILE`；也可以请用户把原始检材拷进工作目录；
+2. **先翻火眼已经挂好的原始只读目录（优先，不用再挂载）**：火眼会为检材挂出原始只读文件系统，映射在 `/evidences` 的 `mountRoute` / `mountPoint`（也可用 `ges status --json` 的 `evidence_mounts[]` 查）：
+   - 虚拟路径 `/evidence_mounts/eid-<n>/`：`ges ls /evidence_mounts/eid-<n>/`、`ges glob -p "**/*.db" --path /evidence_mounts/eid-<n>/`、`ges grep "关键词" --path /evidence_mounts/eid-<n>/`；
+   - 本机目录（`mountPoint`，如 `C:/hlnet/1-1794226157`）：可以直接 `ls` / 读文件；需要本地工具处理时先 `ges copy <路径> --dest <目录>`；
+   - `sourcePath` 是检材盘上的原始文件（如 `W:\CHAN_MH_mobile.zip`），只在挂载不可用时才考虑；
+3. **只有火眼没给挂载时才自己挂镜像**：`mountRoute`/`mountPoint` 为 null 且检材是镜像（`.E01/.dd/.raw`）时，才让用户打开外壳「设置 → 镜像挂载…」（`Ctrl+Shift+M`）挂成只读盘符，挂载清单在 `$SEEU_MOUNTS_FILE`；**不要对已挂载的检材重复挂载**；
 4. **禁止全盘递归搜索**：不要执行 `Get-ChildItem -Recurse C:\`、`dir /s E:\`、`find / -name …` —— 会卡死、污染现场，也违反取证规范。找不到就明确告诉用户"索引里没有该检材内容，需要挂载镜像/提供原始文件"，并给出下一步操作建议。
 
 ## 工作方式建议
@@ -115,6 +121,7 @@ curl -s -G "$SEEU_INDEX_API/cross/files" --data-urlencode "sha256=<64位十六�
 1. 先跑 `/evidences`（或 `/tree root`）把**检材名称 ↔ eid** 对上；用户问"某检材"时按名称子串定位，再展开 `ev:<eid>` 看应用与记录。回答里提到检材时写名称（可附 eid），不要只写"检材 3"；
 2. 找线索用 `/search` 或 `/records`，找到候选后再 `/cite` 拿句柄，最后用 `ges read`（火眼 `/case/` 路径）核对原文；
 3. 跨检材关联（同一手机号/邮箱/网址出现在多个检材）优先用 `/entity`：`crossEvidence>1` 说明跨检材命中；
+   需要原始文件时按 `/evidences` 的 `mountRoute` / `mountPoint` 直接翻，别一上来就挂镜像（火眼已挂好）；
 4. 行为节奏/时间集中性用 `/timeline`，再用 `/records` 带 `from`/`to` 看具体内容；
 5. 回答里引用时给双层方括号 + `Goldeneyes://` 句柄，并对 `citable=1` 的记录注明检材与时间；typed 表（contact/call_log/…）只是投影视图，引用一律回 `record.id` → `/cite`；
 6. **不要**编造库里没有的记录；库里查不到就明确说"索引中未发现"，并说明索引的覆盖范围（哪些检材、哪些应用）；

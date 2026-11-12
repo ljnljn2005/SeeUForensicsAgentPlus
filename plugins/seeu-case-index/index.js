@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
 import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records, evidences, facets } from '../../tools/ges-index/query.mjs';
 import { genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
+import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.mjs';
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
 
 const ROUTE = '/seeu-index';
@@ -99,13 +100,13 @@ function startBuild(args) {
       if (p.message) job.message = p.message;
     },
     log: () => {},
-  }).then((result) => {
+  }).then(async (result) => {
     job.status = 'done';
     job.phase = 'done';
     job.percent = 100;
     job.result = result;
     job.cross = syncOneCase(result.db);
-    job.brief = refreshBrief();
+    job.brief = await refreshBrief();
     job.elapsedMs = Date.now() - job.startedAt;
   }).catch((error) => {
     job.status = 'failed';
@@ -135,13 +136,13 @@ async function handle(req, res) {
       ];
       const indexes = findIndexes([...new Set(dirs)]);
       rememberDirs(indexes.map((i) => i.caseDir));
-      refreshBrief(indexes);
+      await refreshBrief(indexes);
       return send(res, 200, { indexes });
     }
     // ---------- 会话上下文里的案件概览（AGENTS.md 注入状态） ----------
     if (path === '/brief') {
       if (req.method === 'POST') {
-        const result = refreshBrief();
+        const result = await refreshBrief();
         return send(res, 200, { result, state: briefState });
       }
       const dbParam = url.searchParams.get('db') ?? '';
@@ -205,7 +206,11 @@ async function handle(req, res) {
       }
       if (path === '/cite') return send(res, 200, cite(db, url.searchParams.get('id')));
       if (path === '/stats') return send(res, 200, statsOf(db));
-      if (path === '/evidences') return send(res, 200, { evidences: evidences(db) });
+      if (path === '/evidences') {
+        const list = evidences(db);
+        const mounts = await loadEvidenceMounts();
+        return send(res, 200, { evidences: attachMounts(list, mounts.mounts) });
+      }
       if (path === '/facets') {
         const opts = {};
         if (url.searchParams.get('eid')) opts.eid = url.searchParams.get('eid');
@@ -326,8 +331,8 @@ function briefDirs() {
   return [...new Set(dirs.map((d) => String(d ?? '').trim()).filter(Boolean))];
 }
 
-/** 生成带标记的 Markdown 区块：案件 → 检材表（eid/名称/平台/记录数）+ 查询提示。 */
-function briefText(indexes) {
+/** 生成带标记的 Markdown 区块：案件 → 检材表 + 火眼已挂载的原始只读目录 + 查询/定位规则。 */
+function briefText(indexes, mounts = []) {
   const lines = [
     BRIEF_MARKER + '：由 SeeU 取证智能体自动生成，重建索引后自动刷新，请勿手工编辑 -->',
     '',
@@ -383,6 +388,19 @@ function briefText(indexes) {
       if (thinEvs.length) {
         lines.push('⚠ 索引覆盖不足：' + thinEvs.map((ev) => String(ev.name ?? ('检材 ' + ev.eid)) + '（入库 ' + (ev.recordCount ?? 0) + ' / 火眼 ' + (ev.reportedRecordCount ?? '?') + '）').join('、') + '。这些检材（手机全量提取 `pf`、磁盘镜像 `image` 等）的内容不在索引里，需按下面「取证定位规则」第 2 条处理。');
       }
+      const evNames = new Set(evs.map((ev) => String(ev.name ?? '').trim().toLowerCase()));
+      const matchedMounts = mounts.filter((mount) => evNames.has(String(mount.name ?? '').trim().toLowerCase()));
+      if (matchedMounts.length) {
+        lines.push('', '原始检材只读挂载（火眼已挂好，**直接翻这里，不要再用 LovelyCarve 重复挂载**）：');
+        for (const mount of matchedMounts) {
+          const owner = evs.find((ev) => String(ev.name ?? '').trim().toLowerCase() === String(mount.name ?? '').trim().toLowerCase());
+          lines.push(
+            '- ' + String(mount.name ?? '') + '（挂载 eid ' + mount.eid + (owner ? '，索引 eid ' + owner.eid : '') + '）→ `' + mount.route + '`' +
+              (mount.mountPoint ? '，本机目录 `' + mount.mountPoint + '`' : ''),
+          );
+        }
+        lines.push('（`/evidence_mounts/` 是火眼已挂载检材的原始只读文件系统：用 `ges ls /evidence_mounts/eid-N/`、`ges glob -p "**/*.db" --path /evidence_mounts/eid-N/` 浏览；需要本地处理时 `ges copy <路径> --dest <目录>`。直接读上面「本机目录」也可以。）');
+      }
     }
     lines.push('');
   }
@@ -390,7 +408,7 @@ function briefText(indexes) {
     '## 取证定位规则（必须遵守）',
     '',
     '1. **设备信息类问题**（操作系统版本、机型、IMEI/序列号）：先看上面每行「备注」列和火眼设备信息表，备注里常直接写着机型/系统版本——有就直接回答，不要去找原始文件。',
-    '2. **索引没有数据时**（「入库记录」很小、带 ⚠）：说明该检材是手机全量提取（`pf`）或磁盘镜像（`image`），索引用不上。按顺序：① 先看这行「原始文件」路径（检材盘）和火眼解析结果（`ges` 命令，见 ges-case-index 技能）；② 需要镜像内容时，用外壳「工具 → 镜像挂载…」（快捷键 Ctrl+Shift+M）把镜像挂载成只读盘符后再分析，挂载清单在环境变量 `$SEEU_MOUNTS_FILE`；③ 让用户把原始检材文件拷到工作目录。',
+    '2. **索引没有数据时**（「入库记录」很小、带 ⚠）：说明该检材是手机全量提取（`pf`）或磁盘镜像（`image`），索引用不上。按顺序：① 先看这行「备注」「原始文件」，以及上面的「原始检材只读挂载」表——**火眼已经把检材挂成只读目录了**，直接 `ges ls` / 读本机目录即可，不要再挂载一遍；② 火眼没给挂载（表里没有该检材）时，才用外壳「设置 → 镜像挂载…」（快捷键 Ctrl+Shift+M）把镜像挂载成只读盘符，挂载清单在环境变量 `$SEEU_MOUNTS_FILE`；③ 最后才考虑让用户把原始检材文件拷到工作目录。',
     '3. **禁止全盘递归搜索**：不要执行 `Get-ChildItem -Recurse C:\\`、`dir /s E:\\`、`find / -name ...` 这类命令——会卡死、污染现场，也违反取证规范。只允许列检材表里「原始文件」所在目录、挂载出来的盘符，或用户明确指出的目录。',
     '4. **只在必要时读原始文件**：检材文件可能几 GB，不要整份复制/解压到工作目录；优先只读挂载，或按需读取单个文件。',
     '',
@@ -427,7 +445,7 @@ function writeBriefFile(target, block) {
 /** 写/刷新概览（内容没变就跳过）。写到 dsh 用户级 AGENTS.md，任何会话都会读到；
  *  没有 DSH_HOME 时退回到工作区文件。
  */
-export function writeCaseBrief(indexes) {
+export async function writeCaseBrief(indexes) {
   try {
     const list = indexes ?? findIndexes(briefDirs());
     const sig = list.map((i) => i.caseDir + "|" + i.builtAt).join(";");
@@ -435,7 +453,13 @@ export function writeCaseBrief(indexes) {
     const target = globalPath ?? (process.env.SEEU_WORKSPACE ? join(process.env.SEEU_WORKSPACE, BRIEF_NAME) : null);
     if (target === null) return { ok: false, error: "未设置 DSH_HOME / SEEU_WORKSPACE" };
     if (sig === briefSig && existsSync(target)) return { ok: true, skipped: true, cases: list.length };
-    const block = briefText(list);
+    let mounts = [];
+    try {
+      mounts = (await loadEvidenceMounts()).mounts;
+    } catch {
+      mounts = [];
+    }
+    const block = briefText(list, mounts);
     const bytes = writeBriefFile(target, block);
     briefSig = sig;
     Object.assign(briefState, { at: new Date().toISOString(), ok: true, path: target, cases: list.length, chars: block.length, error: null });
@@ -446,8 +470,8 @@ export function writeCaseBrief(indexes) {
   }
 }
 /** /list 与建库完成后顺手刷新；失败只记日志。 */
-function refreshBrief(indexes) {
-  const r = writeCaseBrief(indexes);
+async function refreshBrief(indexes) {
+  const r = await writeCaseBrief(indexes);
   if (!r.ok && !r.skipped) console.warn('[seeu-case-index] 案件概览写入失败：' + r.error);
   return r;
 }
@@ -472,7 +496,7 @@ function rememberDirs(dirs) {
 }
 
 export function apply(ctx) {
-  try { refreshBrief(); } catch { /* 启动期失败不影响查库 */ }
+  void refreshBrief().catch(() => { /* 启动期失败不影响查库 */ });
   ctx.inject(['webServer'], (webCtx) => {
     webCtx.effect(() => webCtx.webServer.register({ kind: 'prefix', path: ROUTE, handler: handle }), 'seeu-case-index: /seeu-index 路由');
   });

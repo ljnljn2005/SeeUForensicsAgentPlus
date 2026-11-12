@@ -14,7 +14,7 @@
  */
 import { spawn } from 'node:child_process'
 import http from 'node:http'
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
@@ -35,6 +35,8 @@ const REQUIRED = [
   'dsh-better-sidebar',
   'dsh-gitbash-shell',
 ]
+/** 必须复制进 profile/node_modules 的插件包（@deepseek-ai/* 由安装目录提供，不复制）。 */
+const REQUIRED_PACKAGES = ['billion-context', 'dsh-context', 'dsh-better-sidebar', 'dsh-gitbash-shell']
 
 const report = { ok: false, errors: [] }
 
@@ -159,6 +161,19 @@ try {
   report.bundles = bundles
   report.bundlesOk = REQUIRED.every((name) => bundles.includes(name))
 
+  // 1b. 插件包必须真复制进 <profile>/node_modules：只写 bundles 不够，
+  //     dsh 用 profile 目录作 baseUrl import 插件行，缺包会 ERR_MODULE_NOT_FOUND、插件不激活。
+  const profileNodeModules = join(HOME, 'profiles', 'web', 'node_modules')
+  let packagesOk = false
+  const pkgDeadline = Date.now() + 120000
+  while (Date.now() < pkgDeadline) {
+    packagesOk = REQUIRED_PACKAGES.every((name) => existsSync(join(profileNodeModules, name, 'package.json')))
+    if (packagesOk) break
+    await sleep(500)
+  }
+  report.profileNodeModules = profileNodeModules
+  report.packagesOk = packagesOk
+
   // 2. client 侧插件真的加载了：插件导航/上下文面板文案
   const client = cdp(page.webSocketDebuggerUrl)
   await client.ready
@@ -193,7 +208,32 @@ try {
     await sleep(300)
   }
   report.pluginLine = pluginLine
-  report.logOk = pluginLine !== '' && !pluginLine.includes('缺少') && !pluginLine.includes('错误')
+  report.logOk = pluginLine !== '' && !pluginLine.includes('缺少（必需）') && !pluginLine.includes('错误')
+  report.packagesLine = readFileSync(shellLog, 'utf8')
+    .split(/\r?\n/)
+    .filter((line) => line.includes('插件包'))
+    .pop() ?? ''
+
+  // 3b. dsh 子进程日志里不能有「插件导入失败 / 未激活」——这是 v0.3.2 的真实故障形态。
+  const hostLogDir = join(UD, 'logs')
+  let hostLog = ''
+  const hostDeadline = Date.now() + 30000
+  while (Date.now() < hostDeadline) {
+    try {
+      const files = readdirSync(hostLogDir).filter((file) => /^dsh-host-.*\.log$/.test(file))
+      hostLog = files.map((file) => readFileSync(join(hostLogDir, file), 'utf8')).join('\n')
+      if (/did not activate|failed to import|ERR_MODULE_NOT_FOUND/.test(hostLog)) break
+      if (hostLog.includes('host ready')) break
+    } catch {
+      // 还没写
+    }
+    await sleep(500)
+  }
+  report.activationFailures = hostLog
+    .split(/\r?\n/)
+    .filter((line) => /did not activate|failed to import|ERR_MODULE_NOT_FOUND/.test(line))
+    .slice(0, 5)
+  report.activationOk = report.activationFailures.length === 0
 
   try {
     const shot = await client.send('Page.captureScreenshot', { format: 'png' })
@@ -205,8 +245,9 @@ try {
   }
 
   client.close()
-  report.ok = report.bundlesOk === true && report.clientOk === true && report.logOk === true
-  if (!report.ok) throw new Error('插件验收未通过（见 bundles/client/log）')
+  report.ok = report.bundlesOk === true && report.packagesOk === true && report.clientOk === true
+    && report.logOk === true && report.activationOk === true
+  if (!report.ok) throw new Error('插件验收未通过（见 bundles/packages/client/log/activation）')
 } catch (error) {
   report.failure = error instanceof Error ? error.message : String(error)
   report.ok = false

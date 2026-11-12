@@ -36,7 +36,7 @@ import {
 } from './local-model.js'
 import { LOVELY_TOOL_SPECS, lovelyToolsView, saveLovelyToolPaths } from './lovely-tools.js'
 import { mountHostEnv, mountManager, setMountLogger } from './mounts.js'
-import { installBundledPluginBundles } from './dsh-plugins.js'
+import { ensureBundledPluginPackages, installBundledPluginBundles } from './dsh-plugins.js'
 import { bundledSkillsDir, installBundledSkills, userSkillsDir } from './skills.js'
 import {
   bundledSkillNames,
@@ -313,6 +313,19 @@ async function startHost(): Promise<void> {
       `${dshPlugins.missing.length > 0 ? `；缺少 ${dshPlugins.missing.join(', ')}` : ''}` +
       `${dshPlugins.error !== undefined ? `；错误 ${dshPlugins.error}` : ''} → ${dshPlugins.manifestPath}`,
   )
+  // dsh 从 profile 目录导入插件行，插件包必须真在 <profile>/node_modules 里（只写 bundles 不够）。
+  if (process.env.SEEU_DISABLE_DSH_PLUGINS === '1') {
+    logShell('dsh plugins: 插件包复制已禁用（SEEU_DISABLE_DSH_PLUGINS=1）')
+  } else {
+    const dshPackages = ensureBundledPluginPackages(app.getVersion())
+    logShell(
+      `dsh plugins: 插件包 ${dshPackages.packages.length} 个${dshPackages.changed ? `（已复制 ${dshPackages.copied} 个` : '（已就绪'}` +
+        `${dshPackages.removed.length > 0 ? `，清理 ${dshPackages.removed.length} 个旧包` : ''}` +
+        `${dshPackages.missing.length > 0 ? `；缺少（必需） ${dshPackages.missing.join(', ')}` : ''}` +
+        `${dshPackages.optionalMissing.length > 0 ? `；可选缺包 ${dshPackages.optionalMissing.length} 个（运行时由宿主提供）` : ''}` +
+        `${dshPackages.error !== undefined ? `；错误 ${dshPackages.error}` : ''} → ${dshPackages.targetRoot}`,
+    )
+  }
   void probeLocalModelGateway()
 
   const next = new DshHost({ env: mountHostEnv() })
