@@ -32,6 +32,8 @@ import {
   warmupLocalGateway,
   contextWindowMismatch,
   gatewayContextReported,
+  detectLocalDeploy,
+  LOCAL_DEPLOY_LABELS,
   writeLocalModelConfig,
 } from './local-model.js'
 import { LOVELY_TOOL_SPECS, lovelyToolsView, saveLovelyToolPaths } from './lovely-tools.js'
@@ -173,6 +175,10 @@ interface LocalModelProbeState {
   readonly mismatch?: { configured: number; gateway: number }
   /** 网关 /v1/models 没有自报任何上下文窗口（Ollama 等）时为 true：窗口只能按模型文档手填。 */
   readonly noContextWindow?: boolean
+  /** 网关 /v1/models 的往返毫秒数（启动探测一次，用于判断本机部署是否在线）。 */
+  readonly latencyMs?: number
+  /** 由模型 id 推断出的本机部署类型。 */
+  readonly deploy?: 'spark-single' | 'spark-dual'
   readonly error?: string
   readonly at: string
 }
@@ -209,8 +215,11 @@ async function probeLocalModelGateway(reason: 'startup' | 'manual' = 'startup'):
   }
   const { baseURL, apiKey } = target
   try {
+    const probeStartedAt = Date.now()
     const probe = await testLocalGateway({ baseURL, apiKey, timeoutMs: 4000 })
+    const latencyMs = Math.max(0, Date.now() - probeStartedAt)
     const ids = (probe.models ?? []).map((item) => item.id ?? item.name ?? '').filter(Boolean)
+    const deploy = detectLocalDeploy(probe.models)
     const missing = target.models.filter((id) => !ids.includes(id))
     const mismatch = contextWindowMismatch(target.contextWindow, target.models, probe.models)
     const noContextWindow = probe.ok && ids.length > 0 && !gatewayContextReported(probe.models)
@@ -222,13 +231,15 @@ async function probeLocalModelGateway(reason: 'startup' | 'manual' = 'startup'):
           ...(missing.length === 0 ? {} : { missing }),
           ...(mismatch === null ? {} : { mismatch }),
           ...(noContextWindow ? { noContextWindow: true } : {}),
+          latencyMs,
+          ...(deploy === undefined ? {} : { deploy }),
           at: new Date().toISOString(),
         }
       : { ok: false, baseURL, models: [], ...(probe.error === undefined ? {} : { error: probe.error }), at: new Date().toISOString() }
     refreshModelIndicators()
     broadcastLocalModelProbe()
     if (probe.ok) {
-      logShell(`local model probe: ${baseURL} 可用（${ids.join(', ') || '网关未返回模型列表'}）`)
+      logShell(`local model probe: ${baseURL} 可用（${ids.join(', ') || '网关未返回模型列表'}）· ${latencyMs} ms${deploy === undefined ? '' : ' · ' + LOCAL_DEPLOY_LABELS[deploy]}`)
       if (missing.length > 0) {
         logShell(`local model probe: 配置的模型 ${missing.join(', ')} 不在网关列表里（网关有：${ids.join(', ')}）`)
       }

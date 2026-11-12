@@ -160,6 +160,10 @@ export interface LocalModelProbeState {
   readonly mismatch?: { configured: number; gateway: number }
   /** 网关没有自报上下文窗口（Ollama 等）：窗口只能按模型文档手填。 */
   readonly noContextWindow?: boolean
+  /** 网关 /v1/models 往返毫秒数。 */
+  readonly latencyMs?: number
+  /** 由模型 id 推断的本机部署类型。 */
+  readonly deploy?: 'spark-single' | 'spark-dual'
 }
 
 export interface LocalModelView {

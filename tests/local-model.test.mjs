@@ -9,6 +9,8 @@ import {
   localModelPatch,
   localModelEnv,
   LOCAL_MODEL_DEFAULTS,
+  detectLocalDeploy,
+  LOCAL_DEPLOY_LABELS,
   LocalModelConfigError,
   CONTEXT_PRESETS,
   localModelWarnings,
@@ -305,4 +307,16 @@ test('titleGeneration 默认给 session-title-llm 配小输出；关掉时整行
   assert.equal(normalizeLocalModel(base).titleGeneration, true)
   assert.equal(normalizeLocalModel({ ...base, titleGeneration: false }).titleGeneration, false)
   assert.equal(normalizeLocalModel({ ...base, titleGeneration: 'false' }).titleGeneration, false)
+})
+
+test('detectLocalDeploy：按网关模型 id 识别 Spark 单机/双机部署', () => {
+  assert.equal(detectLocalDeploy(['qwen3.8-flash-next']), 'spark-single')
+  assert.equal(detectLocalDeploy([{ id: 'qwen3.8-flash-next' }, { id: 'other' }]), 'spark-single')
+  assert.equal(detectLocalDeploy(['dsv4.1-flash']), 'spark-dual')
+  assert.equal(detectLocalDeploy([{ id: 'deepseek-flash' }]), 'spark-dual')
+  assert.equal(detectLocalDeploy(['qwen2.5-32b-instruct', 'mock-14b']), undefined)
+  assert.equal(detectLocalDeploy([]), undefined)
+  assert.equal(detectLocalDeploy(undefined), undefined)
+  assert.equal(LOCAL_DEPLOY_LABELS['spark-single'], 'Spark 单机')
+  assert.equal(LOCAL_DEPLOY_LABELS['spark-dual'], 'Spark 双机')
 })

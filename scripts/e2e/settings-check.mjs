@@ -583,6 +583,11 @@ try {
   }
   log('本机部署预设', `单机 ${deploySingle.context} / 双机 ${deployDual.context}`)
 
+  const lmView = await evaluate(client, 'window.seeu.localModel.get()')
+  report.probeLatencyMs = lmView?.probe?.latencyMs ?? null
+  if (!(Number(report.probeLatencyMs) > 0)) throw new Error('启动探测缺少 latencyMs：' + JSON.stringify(lmView?.probe ?? null))
+  log('探测延迟', `${report.probeLatencyMs} ms`)
+
   client.close()
   report.ok = true
 } catch (error) {

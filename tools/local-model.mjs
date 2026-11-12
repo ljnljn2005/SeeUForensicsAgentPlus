@@ -39,6 +39,19 @@ const DEFAULTS = {
   titleGeneration: true,
 }
 
+/** 本机部署类型：Spark 单机跑 qwen3.8-flash-next，Spark 双机跑 dsv4.1-flash。 */
+export const LOCAL_DEPLOY_LABELS = { 'spark-single': 'Spark 单机', 'spark-dual': 'Spark 双机' }
+
+/** 由网关模型 id 推断部署类型；识别不了返回 undefined。 */
+export function detectLocalDeploy(models) {
+  const ids = (Array.isArray(models) ? models : [])
+    .map((item) => (typeof item === 'string' ? item : item?.id ?? item?.name ?? ''))
+    .filter(Boolean)
+  if (ids.some((id) => /qwen3\.8-flash-next/i.test(String(id)))) return 'spark-single'
+  if (ids.some((id) => /dsv4\.1-flash|deepseek-flash/i.test(String(id)))) return 'spark-dual'
+  return undefined
+}
+
 export class LocalModelConfigError extends Error {
   constructor(message, code = 'E_LOCAL_MODEL_CONFIG') {
     super(message)

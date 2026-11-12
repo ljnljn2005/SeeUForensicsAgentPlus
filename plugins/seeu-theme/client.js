@@ -203,7 +203,14 @@ window.__ModuleLoader__.load({
             const list = Array.isArray(cfg.models) ? cfg.models : []
             const first = list[0] || {}
             const name = String(cfg.model || first.name || first.id || '未命名模型')
-            setLm({ name, contextWindow: Number(cfg.contextWindow) || 0, probe: view.probe || null })
+            const probe = view.probe || null
+            setLm({
+              name,
+              contextWindow: Number(cfg.contextWindow) || 0,
+              probe,
+              deploy: probe && probe.deploy ? probe.deploy : '',
+              latencyMs: probe && Number(probe.latencyMs) > 0 ? Math.round(Number(probe.latencyMs)) : 0,
+            })
           } catch {
             // 读不到配置就隐藏，不影响欢迎页其余内容
           }
@@ -316,6 +323,7 @@ window.__ModuleLoader__.load({
             {
               key: 'lm',
               'data-seeu-local-model': lm.name,
+              'data-seeu-local-model-deploy': lm.deploy || '',
               title: '默认本地模型：' + lm.name + (lm.probe && lm.probe.baseURL ? ' · ' + lm.probe.baseURL : '') + '（点击打开设置）',
               onClick: openLocalModel,
               style: {
@@ -346,8 +354,10 @@ window.__ModuleLoader__.load({
               'span',
               { style: { color: 'var(--dsw-alias-label-tertiary, #8397B0)' } },
               [
+                lm.deploy === 'spark-single' ? 'Spark 单机' : lm.deploy === 'spark-dual' ? 'Spark 双机' : '',
                 lm.contextWindow ? Math.round(lm.contextWindow / 1024) + 'k' : '',
                 lm.probe ? (lm.probe.ok ? '网关可用' : '网关不可用') : '未探测',
+                lm.latencyMs > 0 ? lm.latencyMs + ' ms' : '',
               ].filter(Boolean).join(' · '),
             ),
           )

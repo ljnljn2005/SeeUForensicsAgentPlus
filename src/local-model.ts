@@ -24,9 +24,11 @@ import {
   normalizeLocalModel,
   contextWindowMismatch,
   gatewayContextReported,
+  detectLocalDeploy,
+  LOCAL_DEPLOY_LABELS,
 } from '../tools/local-model.mjs'
 
-export { contextWindowMismatch, gatewayContextReported }
+export { contextWindowMismatch, gatewayContextReported, detectLocalDeploy, LOCAL_DEPLOY_LABELS }
 
 export interface LocalModelPrepared {
   /** 生成出来的补丁文件；未启用时为 undefined（不要传给 dsh）。 */
