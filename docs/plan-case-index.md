@@ -2492,3 +2492,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `plugins/seeu-case-index/client.js`：新增 `activityBuckets` state（加载 `/activity` 时读 `body.summary.buckets`，清空活动时清空）；标题行右侧渲染 `[data-activity-bars]`，7 根 5px 宽小条形，高度按当天总数归一（峰值 16px），建库/导入/两者分别用 `C_ACC`/`C_WARN`/`C_OK`，空桶 35% 透明度；每根 `title` 为「日期：建库 N 次 · MYOS 导入 M 次」。
 - 测试：`tests/activity.test.mjs` +1 例（7 桶、最后一天是今天、昨天/前天对齐、窗口外排除、总数 3、builds 2）→ `npm test` **191/191**；`m2-ui-check` 加 `report.activityBars`（`[data-activity-bars] > div` 数量必须 7）并纳入 `activityOk` → `m2ok:true`。
 - 坑：颜色常量实际叫 `C_ACC`/`C_OK`/`C_WARN`/`C_L2`，不是 `C_ACCENT`/`C_BLUE`/`C_BORDER`（写错不报错，只是 `undefined` 颜色条不可见）；`esbuild transformSync(loader:'jsx')` 只能校验语法，颜色这类运行期错误要靠 e2e 兜。
+
+### 20.116 活动条形点选当天（第 37 轮）
+
+- 动机：条形只表示分布，用户想「只看周五那几次」。
+- `plugins/seeu-case-index/client.js`：新增 `activityDay` state；每根条形加 `data-activity-day`、`role=button`、`onClick` 切换（再点同一根取消）、选中态描边 `C_ACC`；标题行计数 span 加 `data-activity-count`，筛选时显示「当天 N 条 · 共 M 条」；出现「只看 YYYY-MM-DD · 点条形取消」提示；列表按本地日期过滤（`Date.parse(at)` → 年-月-日 与 `activityDay` 比较），最多仍显示 6 条。
+- e2e：`m2-ui-check` 现在预置活动（paho home 的 `index-activity.json` 写今天 1 条 + 昨天 1 条）→ `activityBars:7`、点最后一根 → `activityFilterText:"只看 2026-11-13 · 点条形取消"`、`activityHeaderText:"当天 1 条 · 共 2 条"`、`activityFilterCleared:true`、`activityDayFilterOk:true`；纳入 `activityOk`。
+- 坑：`SEEU_DSH_HOME` 传**相对路径**时插件侧 `activityFile()` 会按 dsh 进程 cwd 解析、读不到 e2e 预置文件（表现为「还没有活动记录」）；e2e 必须传绝对路径（`D:/.../.dev/ui-home37`）。

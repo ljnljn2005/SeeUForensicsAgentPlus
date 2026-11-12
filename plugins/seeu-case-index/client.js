@@ -1512,6 +1512,7 @@ window.__ModuleLoader__.load({
       const [activity, setActivity] = useState([]);
       const [activitySummary, setActivitySummary] = useState('');
       const [activityBuckets, setActivityBuckets] = useState([]);
+      const [activityDay, setActivityDay] = useState('');
       useEffect(() => {
         let alive = true;
         if (!db) { setEvList([]); return undefined; }
@@ -2102,8 +2103,12 @@ window.__ModuleLoader__.load({
         h('div', { style: { ...S.card, gap: 6 } },
           h('div', { style: { ...S.row, gap: 8 } },
             h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, '最近活动'),
-            h('span', { style: S.muted }, activity.length ? `共 ${activity.length} 条 · 点一行打开对应索引` : '还没有活动记录'),
+            h('span', { 'data-activity-count': '1', style: S.muted }, activity.length ? (activityDay ? `当天 ${activity.filter((item) => { const t = Date.parse(String(item.at ?? '')); if (!Number.isFinite(t)) return false; const dt = new Date(t); const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; return key === activityDay; }).length} 条 · 共 ${activity.length} 条` : `共 ${activity.length} 条 · 点一行打开对应索引`) : '还没有活动记录'),
             h('span', { 'data-activity-summary': '1', title: activitySummary || '', style: { ...S.muted, marginLeft: 6 } }, activitySummary),
+            activityDay ? h('span', {
+              'data-activity-filter': '1',
+              style: { fontSize: 11, color: C_ACC, marginLeft: 6 },
+            }, `只看 ${activityDay} · 点条形取消` ) : null,
             activityBuckets.length ? h('div', {
               'data-activity-bars': '1',
               title: '最近 ' + activityBuckets.length + ' 天活动分布（按天）',
@@ -2112,10 +2117,22 @@ window.__ModuleLoader__.load({
               const peak = Math.max(1, ...activityBuckets.map((item) => Number(item.total) || 0));
               const height = bucket.total ? Math.max(3, Math.round((Number(bucket.total) / peak) * 16)) : 2;
               const color = bucket.builds && bucket.imports ? C_OK : (bucket.builds ? C_ACC : (bucket.imports ? C_WARN : C_L2));
+              const active = activityDay === bucket.date;
               return h('div', {
                 key: bucket.date || index,
-                title: `${bucket.date}：建库 ${bucket.builds || 0} 次 · MYOS 导入 ${bucket.imports || 0} 次`,
-                style: { width: 5, height, borderRadius: 1, background: color, opacity: bucket.total ? 0.9 : 0.35 },
+                'data-activity-day': bucket.date || '',
+                role: 'button',
+                title: `${bucket.date}：建库 ${bucket.builds || 0} 次 · MYOS 导入 ${bucket.imports || 0} 次（点击只看当天）`,
+                onClick: () => setActivityDay(active ? '' : (bucket.date || '')),
+                style: {
+                  width: 5,
+                  height,
+                  borderRadius: 1,
+                  background: color,
+                  opacity: active ? 1 : (bucket.total ? 0.9 : 0.35),
+                  outline: active ? '1px solid ' + C_ACC : 'none',
+                  cursor: 'pointer',
+                },
               });
             })) : null,
             h('div', { style: { flex: 1 } }),
@@ -2128,7 +2145,7 @@ window.__ModuleLoader__.load({
               },
             }, '清空') : null),
           activity.length
-            ? activity.slice(0, 6).map((item) => h('div', {
+            ? (activityDay ? activity.filter((item) => { const t = Date.parse(String(item.at ?? '')); if (!Number.isFinite(t)) return false; const dt = new Date(t); const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; return key === activityDay; }) : activity).slice(0, 6).map((item) => h('div', {
               key: `${item.at ?? ''}-${item.title ?? ''}`,
               className: 'seeu-activity-row',
               'data-activity-kind': item.kind ?? '',

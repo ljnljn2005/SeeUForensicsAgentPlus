@@ -189,8 +189,22 @@ await sleep(700)
   // 第 36 轮：最近活动按天分布小条形（7 根，无历史时也可能存在空桶）。
   report.activityBars = await ev("document.querySelectorAll('[data-activity-bars] > div').length")
   report.activityBarColors = await ev("Array.from(document.querySelectorAll('[data-activity-bars] > div')).slice(0,3).map(el => el.title)")
+  // 第 37 轮：点某天条形 → 只显示当天活动，再点取消。e2e 预置了今天 1 条 / 昨天 1 条活动。
+  const bars = await ev("document.querySelectorAll('[data-activity-bars] > div').length")
+  if (bars === 7) {
+    await ev("document.querySelectorAll('[data-activity-bars] > div')[6].click(), true")
+    await sleep(350)
+    report.activityFilterText = await ev("(document.querySelector('[data-activity-filter]') || {}).textContent || ''")
+    report.activityHeaderText = await ev("(document.querySelector('[data-activity-count]') || {}).textContent || ''")
+    report.activityFilterHint = /当天 1 条/.test(String(report.activityHeaderText))
+    await ev("document.querySelectorAll('[data-activity-bars] > div')[6].click(), true")
+    await sleep(350)
+    report.activityFilterCleared = await ev("document.querySelectorAll('[data-activity-filter]').length === 0")
+    report.activityDayFilterOk = /只看/.test(String(report.activityFilterText)) && report.activityFilterHint === true && report.activityFilterCleared === true
+  }
+
   report.activitySummaryText = await ev("(() => { const el = document.querySelector('[data-activity-summary]'); return el ? el.textContent.trim() : '' })()")
-  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true) && report.activitySummaryPresent === 1 && report.activityBars === 7
+  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true) && report.activitySummaryPresent === 1 && report.activityBars === 7 && report.activityDayFilterOk === true
 }
 report.idxFilterOk = report.idxFilterChips === 4 && report.idxFilterClickMyos === true && report.idxFilterEmpty === true && report.idxFilterClickAll === true && report.idxFilterRestore === true
 report.rootText = text.slice(text.indexOf('取证案件索引'), text.indexOf('取证案件索引') + 900)
