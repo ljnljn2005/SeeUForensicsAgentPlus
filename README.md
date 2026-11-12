@@ -81,6 +81,8 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 ### v0.3.10 待发布（未打包）
 
+- **面板「最近活动」（第 30 轮）**：建库成功与 MYOS 导入（单表/批量）会写入 `<DSH_HOME>/index-activity.json`（最多 30 条），面板显示最近 6 条（建库/MYOS 标签、案件名、条数/表名/用时、时间），点一行直接扫描并切到对应索引，可一键清空；`/seeu-index/activity` 与 `/seeu-index/activity/clear` 提供同样能力，`tests/activity.test.mjs` 4 例、`npm test` 183/183。
+
 - **本机网关基准脚本（第 29 轮）**：`npm run bench:gateway`（`scripts/bench/local-gateway-bench.mjs`）直接打 Spark 单机/双机网关，测非流式延迟、流式 TTFB/tok/s/思考流、工具调用，报告落地 `.dev/bench/*.json`；假网关单测 6 例（`tests/local-gateway-bench.test.mjs`）。用法见 [benchmarks](docs/benchmarks.md)。
 
 ### v0.3.9 改了什么

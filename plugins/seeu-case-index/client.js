@@ -1508,6 +1508,8 @@ window.__ModuleLoader__.load({
       const [briefNote, setBriefNote] = useState('');
       // 树视图：本层节点的快速过滤（分类/文件多的时候按名字找）
       const [treeFilter, setTreeFilter] = useState('');
+      // 最近活动（建库 / MYOS 导入），来自插件 /activity
+      const [activity, setActivity] = useState([]);
       useEffect(() => {
         let alive = true;
         if (!db) { setEvList([]); return undefined; }
@@ -1523,6 +1525,19 @@ window.__ModuleLoader__.load({
             if (alive) setFacets(f?.apps?.length ? f : null);
           } catch {
             if (alive) setFacets(null);
+          }
+        })();
+        return () => { alive = false; };
+      }, [db]);
+
+      useEffect(() => {
+        let alive = true;
+        (async () => {
+          try {
+            const body = await api('/activity');
+            if (alive) setActivity(Array.isArray(body?.entries) ? body.entries : []);
+          } catch {
+            if (alive) setActivity([]);
           }
         })();
         return () => { alive = false; };
@@ -2078,6 +2093,37 @@ window.__ModuleLoader__.load({
               })(),
             )
             : h(EmptyState, { title: '还没有索引库', text: '在顶部填入案件目录（火眼全解析结果目录），点「建库 / 更新」；已有索引库时可点「扫描已有索引」。' })),
+        h('div', { style: { ...S.card, gap: 6 } },
+          h('div', { style: { ...S.row, gap: 8 } },
+            h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, '最近活动'),
+            h('span', { style: S.muted }, activity.length ? `共 ${activity.length} 条 · 点一行打开对应索引` : '还没有活动记录'),
+            h('div', { style: { flex: 1 } }),
+            activity.length ? h('button', {
+              type: 'button',
+              className: 'seeu-btn',
+              style: { fontSize: 11, padding: '3px 8px' },
+              onClick: async () => {
+                try { await post('/activity/clear', {}); setActivity([]); } catch { /* 忽略 */ }
+              },
+            }, '清空') : null),
+          activity.length
+            ? activity.slice(0, 6).map((item) => h('div', {
+              key: `${item.at ?? ''}-${item.title ?? ''}`,
+              className: 'seeu-activity-row',
+              'data-activity-kind': item.kind ?? '',
+              style: { ...S.row, gap: 8, padding: '4px 2px', borderTop: '1px solid rgba(148,163,184,0.18)', cursor: item.caseDir ? 'pointer' : 'default' },
+              onClick: async () => {
+                if (!item.caseDir) return;
+                await scan(item.caseDir);
+                if (item.dbFile) { setDb(item.dbFile); loadNode(item.dbFile, 'root'); }
+              },
+            },
+            h('span', { style: { fontSize: 10.5, padding: '1px 6px', borderRadius: 4, background: item.kind === 'build' ? 'rgba(34,211,238,0.14)' : 'rgba(168,85,247,0.14)', color: item.kind === 'build' ? '#67E8F9' : '#C4B5FD' } }, item.kind === 'build' ? '建库' : 'MYOS'),
+            h('span', { style: { fontSize: 12, color: C_FG } }, item.title ?? ''),
+            h('span', { style: S.muted }, item.detail ?? ''),
+            h('div', { style: { flex: 1 } }),
+            h('span', { style: S.muted }, item.at ? new Date(item.at).toLocaleTimeString('zh-CN', { hour12: false }) : '')))
+            : h('div', { style: S.muted }, '建库或从 MYOS 导入后，这里会按时间列出最近的工作，点一行可直接打开对应索引。')),
         onboarding,
         myosOpen ? h(MyosDialog, {
           initialDir: dir.trim(),

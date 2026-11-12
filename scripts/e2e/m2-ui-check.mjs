@@ -179,6 +179,14 @@ await sleep(700)
   const t = await bodyText()
   report.idxFilterRestore = /W盘/.test(t) && !/没有来源为/.test(t)
 }
+// 最近活动卡片：新 home 里没有历史活动，应显示空提示（有活动时至少有一行 data-activity-kind）
+{
+  const t = await bodyText()
+  report.activityVisible = /最近活动/.test(t)
+  report.activityRows = await ev("document.querySelectorAll('[data-activity-kind]').length")
+  report.activityEmptyHint = /还没有活动记录/.test(t) || /建库或从 MYOS 导入后/.test(t)
+  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true)
+}
 report.idxFilterOk = report.idxFilterChips === 4 && report.idxFilterClickMyos === true && report.idxFilterEmpty === true && report.idxFilterClickAll === true && report.idxFilterRestore === true
 report.rootText = text.slice(text.indexOf('取证案件索引'), text.indexOf('取证案件索引') + 900)
 report.drill3 = await clickText('检材 3', 'div')

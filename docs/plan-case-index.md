@@ -2427,3 +2427,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 遗留：真实 Spark 单机/双机数据要等用户给网关凭据后跑一次（脚本已就绪，避免凭据落盘）。
 
 - 坑：假网关极快时 `TTFB` 与总耗时可能落在同一毫秒，`tokensPerSecond(completion, ms - ttfb)` 会除以 0 得 `null`（单测在完整套件并发时暴露）→ 改成 `Math.max(1, ms - ttfb)`；另用 `.probe/mock-gw.mjs` 跑了一遍 CLI 全链路（输出结构见 `docs/benchmarks.md` 自检段）。
+
+### 20.109 面板「最近活动」（第 30 轮）
+
+- 新增 `tools/ges-index/activity.mjs`：`activityFile(env)`（`<DSH_HOME>/index-activity.json`，`SEEU_INDEX_ACTIVITY` 可覆盖）、`readActivity`（坏文件/空文件返回 `[]`）、`recordActivity`（最新在前、最多 30 条、写 `updatedAt`）、`clearActivity`。
+- 插件 `plugins/seeu-case-index/index.js`：新增 `GET /activity` 与 `POST /activity/clear`；建库成功、单表 MYOS 导入成功、批量导入成功时各记一条（`kind: build|myos-import`、`title` 案件目录名、`detail` 条数/表名/用时、`caseDir`、`dbFile`、`rows`），失败/取消不记。
+- 面板：索引库卡片下方新增「最近活动」（最近 6 条，建库/MYOS 彩色标签 + 时间；点一行 `scan(caseDir)` 并切到该索引；【清空】）。
+- 测试：`tests/activity.test.mjs` 4 例（路径解析/覆写、最多 30 条最新在前、清空与坏 JSON、不存在文件不建目录）；`m2-ui-check` 新增 `activityVisible/activityRows/activityEmptyHint/activityOk`（新 home 无历史 → 空提示，`activityOk:true`）。
+- 真机验证：对运行中的 dev 预览调 `/myos/import`（`MApps.mfs` 3 行）→ `/activity` 出现「3 条 · TBL_APPDATA_MANAGER」；再跑一次 5 张表批量 → 「8 条 · 3 张表 · 追加」（2 张空表进 `skipped`）；批量失败时不会写入活动。
+- 坑：单表 `/myos/import` 只接受 `db` 绝对路径（`dbName` 只有批量接口支持），验证脚本要用 `/myos/tables?caseId&materialId&name=` 先解析真实路径；`curl`/Git Bash 传中文目录名会 GBK 乱码，JS `fetch` 走 UTF-8 不受影响。

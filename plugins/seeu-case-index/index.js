@@ -12,6 +12,13 @@ import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.m
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
 import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTableCounts, myosTables } from './myos.mjs';
 import { forgetExtraDir, readExtraDirs, rememberExtraDir } from '../../tools/ges-index/extra-dirs.mjs';
+import { activityFile, clearActivity, readActivity, recordActivity } from '../../tools/ges-index/activity.mjs';
+
+function pathBase(value) {
+  const text = String(value ?? '').replace(/[\/]+$/, '');
+  const parts = text.split(/[\/]/);
+  return parts[parts.length - 1] || text;
+}
 
 const ROUTE = '/seeu-index';
 const jobs = new Map();
@@ -148,6 +155,21 @@ function startBuild(args) {
     job.cross = syncOneCase(result.db);
     job.brief = await refreshBrief();
     job.elapsedMs = Date.now() - job.startedAt;
+    try {
+      const counts = result.manifest?.counts ?? {};
+      recordActivity({
+        kind: 'build',
+        title: pathBase(dir),
+        detail: `${counts.records ?? 0} 条记录 · ${counts.entities ?? 0} 个实体 · 用时 ${Math.round(job.elapsedMs / 1000)} 秒`,
+        caseDir: dir,
+        dbFile: result.db,
+        records: counts.records ?? 0,
+        entities: counts.entities ?? 0,
+        durationMs: job.elapsedMs,
+      });
+    } catch {
+      // 活动记录失败不影响建库本身。
+    }
   }).catch((error) => {
     if (error?.code === 'E_CANCELLED') {
       job.status = 'cancelled';
@@ -184,6 +206,13 @@ async function handle(req, res) {
       // 运行中的任务没有落盘的 elapsedMs，这里补实时值；同时附带可直接渲染的中文进度。
       const { abort, ...rest } = job;
       return send(res, 200, { ...rest, progress: describeBuildProgress(job) });
+    }
+    if (req.method === 'GET' && path === '/activity') {
+      return send(res, 200, { file: activityFile(), entries: readActivity() });
+    }
+    if (req.method === 'POST' && path === '/activity/clear') {
+      clearActivity();
+      return send(res, 200, { ok: true, entries: [] });
     }
     if (req.method === 'GET' && path === '/list') {
       const dirs = [
@@ -258,6 +287,20 @@ async function handle(req, res) {
         const body = await readBody(req);
         const result = await myosImport(body);
         if (body.outDir) rememberExtraDir(body.outDir);
+        try {
+          const table = String(body.sql ?? '').match(/from\s+"?([A-Za-z0-9_]+)"?/i)?.[1] ?? '';
+          recordActivity({
+            kind: 'myos-import',
+            title: pathBase(result.caseDir ?? body.outDir ?? 'MYOS 导入'),
+            detail: `${result.records ?? result.rows ?? 0} 条${table ? ` · ${table}` : ''}${result.mode === 'append' ? ' · 追加' : ''}`,
+            caseDir: result.caseDir ?? body.outDir ?? '',
+            dbFile: result.dbFile ?? '',
+            rows: result.records ?? result.rows ?? 0,
+            table,
+          });
+        } catch {
+          // 忽略活动记录失败。
+        }
         return send(res, 200, result);
       }
       if (req.method === 'POST' && path === '/myos/row-counts') {
@@ -311,6 +354,18 @@ async function handle(req, res) {
             job.finishedAt = new Date().toISOString();
             // 导入成功时才记录输出目录（目录此时已存在）。
             if (body.outDir) rememberExtraDir(body.outDir);
+            try {
+              recordActivity({
+                kind: 'myos-import',
+                title: pathBase(result.caseDir ?? body.outDir ?? 'MYOS 批量导入'),
+                detail: `${result.totals?.records ?? job.records ?? 0} 条 · ${result.tables?.length ?? job.totals?.tables ?? 0} 张表 · 追加`,
+                caseDir: result.caseDir ?? body.outDir ?? '',
+                dbFile: result.dbFile ?? '',
+                rows: result.totals?.records ?? job.records ?? 0,
+              });
+            } catch {
+              // 忽略活动记录失败。
+            }
           })
           .catch((error) => {
             job.status = 'failed';
