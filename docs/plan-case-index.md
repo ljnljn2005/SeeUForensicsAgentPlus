@@ -2382,3 +2382,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试 `tests/extra-dirs.test.mjs` 4 例：路径解析（默认/覆盖/无 home）、记录-去重-最近优先、忽略相对路径与不存在目录、坏 JSON 不抛错且读时过滤。
 - 真机验证：`dbName` 批量导入到 `.dev/myos-extra2` → `index-extra-dirs.json` 出现该目录；`/list`（不带 dir）返回 `W盘` + 该 MYOS 索引；用 python 以 UTF-8 发请求，`case_name` 正确存为「额外目录验证2」（用 Git Bash `curl -d` 发中文会 GBK 乱码，属控制台问题，面板 JS 是 UTF-8 不受影响）。
 - 坑：最初在 `POST /myos/import-batch` **启动前** 调 `rememberExtraDir(outDir)`，此时输出目录还不存在 → 直接被忽略；改为任务成功后记录。
+
+### 20.103 外部索引目录可见可移除（第 25 轮）
+
+- `/list` 每个索引新增 `extra` 布尔（`caseDir` 是否在 `readExtraDirs()` 里，`resolve` 后小写比较），面板索引行显示「外部目录」标记。
+- 新增 `forgetExtraDir(dir, env)`（`tools/ges-index/extra-dirs.mjs`）+ `POST /extra-dirs/remove {dir}`：只从清单移除、不动磁盘上的索引；无效/不存在路径直接返回当前清单。
+- 面板：外部目录行多一个【移除】（`stopPropagation`，避免触发行点击切库），移除后 `scan()` 刷新。
+- 测试：`tests/extra-dirs.test.mjs` 5/5（新增 forget：大小写不敏感、只删指定项、不存在不报错）；`npm test` 173/173；`m2-ui-check` `m2ok:true`。
+- 真机：拷贝一份索引到 `.dev/myos-ui` 并加入额外目录 → `/list` 显示 `extra:true`；`POST /extra-dirs/remove` → `{ok:true,dirs:[]}`，再 `/list` 恢复单条。
+- 坑：① `POST` 路由最初插在 `path.startsWith('/myos/')` 分支内部，`/extra-dirs/remove` 根本进不去 → 报 405「method not allowed」；移到 `/brief` 之后、MYOS 分支之前。② python 里写 `'\u0000'` 转义时被解释成真实 NUL，把 `index.js` 变成二进制文件（`grep` 报 Binary file）→ 用字节替换回 `\u0000` 文本。

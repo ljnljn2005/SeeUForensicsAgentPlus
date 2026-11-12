@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { extraDirsFile, readExtraDirs, rememberExtraDir } from '../tools/ges-index/extra-dirs.mjs'
+import { extraDirsFile, forgetExtraDir, readExtraDirs, rememberExtraDir } from '../tools/ges-index/extra-dirs.mjs'
 
 function withHome(fn) {
   return () => {
@@ -53,4 +53,18 @@ test('readExtraDirs：坏 JSON 不抛错，读时过滤非绝对路径', withHom
   assert.deepEqual(readExtraDirs(env), [])
   writeFileSync(file, JSON.stringify({ dirs: [a, 'rel/path', 42] }), 'utf8')
   assert.deepEqual(readExtraDirs(env), [a])
+}))
+
+test('forgetExtraDir：只移除指定目录，大小写不敏感', withHome((env, home) => {
+  const a = join(home, 'case-a')
+  const b = join(home, 'case-b')
+  mkdirSync(a, { recursive: true })
+  mkdirSync(b, { recursive: true })
+  rememberExtraDir(a, env)
+  rememberExtraDir(b, env)
+  const left = forgetExtraDir(a.toUpperCase(), env)
+  assert.deepEqual(left.map((item) => item.toLowerCase()), [b.toLowerCase()])
+  assert.deepEqual(readExtraDirs(env).map((item) => item.toLowerCase()), [b.toLowerCase()])
+  // 移除不存在的目录不报错也不改清单
+  assert.deepEqual(forgetExtraDir(join(home, 'nope'), env).length, 1)
 }))

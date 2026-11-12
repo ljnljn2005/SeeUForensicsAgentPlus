@@ -72,3 +72,13 @@ export function rememberExtraDir(dir, env = process.env) {
   writeState(next, env)
   return next
 }
+
+/** 忘掉一个额外目录（只从清单移除，不动索引文件）。 */
+export function forgetExtraDir(dir, env = process.env) {
+  const target = String(dir ?? '').trim()
+  if (!target || !isAbsolute(target)) return readExtraDirs(env)
+  const abs = resolve(target).toLowerCase()
+  const next = readExtraDirs(env).filter((item) => item.toLowerCase() !== abs)
+  writeState(next, env)
+  return next
+}

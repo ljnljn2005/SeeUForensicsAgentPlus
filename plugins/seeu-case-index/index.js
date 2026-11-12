@@ -11,7 +11,7 @@ import { genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
 import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.mjs';
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
 import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTableCounts, myosTables } from './myos.mjs';
-import { readExtraDirs, rememberExtraDir } from '../../tools/ges-index/extra-dirs.mjs';
+import { forgetExtraDir, readExtraDirs, rememberExtraDir } from '../../tools/ges-index/extra-dirs.mjs';
 
 const ROUTE = '/seeu-index';
 const jobs = new Map();
@@ -191,8 +191,15 @@ async function handle(req, res) {
       const indexes = findIndexes([...new Set(dirs)]);
       rememberDirs(indexes.map((i) => i.caseDir));
       await refreshBrief(indexes);
+      const extraSet = new Set(readExtraDirs().map((item) => resolve(item).toLowerCase()));
       // meta 是给面板直接用的人类可读摘要（与写入会话概览的口径一致）。
-      return send(res, 200, { indexes: indexes.map((ix) => ({ ...ix, meta: indexSummary(ix) })) });
+      return send(res, 200, {
+        indexes: indexes.map((ix) => ({
+          ...ix,
+          meta: indexSummary(ix),
+          extra: extraSet.has(resolve(ix.caseDir ?? '\u0000').toLowerCase()),
+        })),
+      });
     }
     // ---------- 会话上下文里的案件概览（AGENTS.md 注入状态） ----------
     if (path === '/brief') {
@@ -211,6 +218,13 @@ async function handle(req, res) {
         current = null;
       }
       return send(res, 200, { state: briefState, current, dshHome: process.env.DSH_HOME ?? null });
+    }
+    // ---------- 额外索引目录（MYOS 导入的输出目录） ----------
+    if (req.method === 'POST' && path === '/extra-dirs/remove') {
+      const body = await readBody(req);
+      if (!body.dir) return send(res, 400, { error: '缺少 dir' });
+      const dirs = forgetExtraDir(body.dir);
+      return send(res, 200, { ok: true, dirs });
     }
     // ---------- MYOS（超级取证大师）取证结果导入 ----------
     // 面板「从 MYOS 导入」走这里：列案件/检材/结果库表，再把一张表落成 SeeU 索引。

@@ -2026,7 +2026,20 @@ window.__ModuleLoader__.load({
                     h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8 } },
                       h('span', { style: { color: C_FG, fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, ix.caseName ?? ix.caseNumber ?? basename(ix.caseDir)),
                       ix.caseNumber ? h('span', { style: { ...S.tag, flex: 'none' } }, ix.caseNumber) : null,
+                      ix.extra ? h('span', { style: { ...S.tag, flex: 'none', color: C_ACC, borderColor: C_ACC } }, '外部目录') : null,
                       h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, fmtBytes(ix.sizeBytes ?? 0)),
+                      ix.extra ? h('span', {
+                        role: 'button',
+                        title: '从面板的额外目录列表移除（不删除索引文件）',
+                        style: { flex: 'none', color: C_FG3, fontSize: 11, cursor: 'pointer', padding: '0 4px' },
+                        onClick: async (e) => {
+                          if (e && e.stopPropagation) e.stopPropagation();
+                          try {
+                            await post('/extra-dirs/remove', { dir: ix.caseDir });
+                            await scan();
+                          } catch (err) { setError(String(err.message ?? err)); }
+                        },
+                      }, '移除') : null,
                       h('span', { style: { marginLeft: 'auto', ...S.rowTime } }, ix.builtAt ? fmtTime(ix.builtAt) : '')),
                     meta?.text ? h('div', { style: { color: C_FG3, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: meta.text }, meta.text) : null,
                     meta?.warn ? h('div', { style: { color: '#F5A524', fontSize: 11 } }, '⚠ ' + meta.warn) : null);
