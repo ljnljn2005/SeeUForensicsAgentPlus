@@ -977,3 +977,19 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - `hero-check --exe` → `ok:true`（5 个快捷入口、本机工具 13/13）；
   - `mount-check --exe` → `ok:true`（inspect 165 ms / mount 310 ms / unmount 1 ms）；
   - `myos-real-import`（真实 MYOS 运行中）→ `ok:true, skipped:false`，`MApps` 导入 10 行。
+
+### v0.3.10 回归验证
+
+- 版本：`0.3.10`（`npm version 0.3.10 --no-git-tag-version`），打包命令 `npx electron-builder --win --x64 -c.directories.output=release-0310`（无签名）。
+- 产物（已搬进 `release/`）：`release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B、`app.asar` **426,537,645 B（34,224 entries）**、NSIS **281,889,094 B**（blockmap 293,258 B）、portable **236,564,870 B**、`win-unpacked` 总计 1,110,888,873 B。
+- asar 自检：`.probe/asar-0310-check.mjs`（由 039 复制，新增 `tools/ges-index/activity.mjs` 必需路径与 `activityModule`/`activityRoutes`/`activityBuild`/`activityPanel`/`version0310`）全部 true、`missing: []`、`entries: 34,224`；`client.js` 139,849 B、`index.js` 31,897 B、`query.js` 28,866 B。
+- 启动：`verify-launch` 目录版 `ok:true, elapsedMs:5123`、portable `ok:true, elapsedMs:58499`。
+- 打包态 e2e（`SEEU_UI_EXE` 用 Windows 正斜杠路径、隔离 home；先清 stale electron）：
+  - `m2-ui-check` → `m2ok:true`、`activityOk:true`、`myosImportOk:true`、`errors:[]`；
+  - `settings-check --exe` → `ok:true`（13 行外部工具路径、`diagItems` 五项 ✓、`thinkingSaved:true`、单机/双机部署预设正确）；
+  - `plugins-check --exe` → `ok:true`（`packagesOk:true`、`activationOk:true`、`activationFailures:[]`、175 包）；
+  - `skills-check --exe` → `ok:true`（6 个随包技能含 `myos-import`、Qiko 43 个、`leaked:[]`）；
+  - `hero-check --exe` → `ok:true`（快捷入口 5 个、本机工具 13/13、最近案件 chip）；
+  - `mount-check --exe` → `ok:true`（inspect 267 ms、mount 332 ms、unmount 3 ms）；
+  - 真实 MYOS 导入 `node scripts/e2e/myos-real-import.mjs` → `ok:true, skipped:false`。
+- 说明：`scripts/bench/local-gateway-bench.mjs`（第 29 轮）是开发期基准工具，不随安装包分发（`electron-builder.yml` 未包含 `scripts/**`），源码在仓库根 `scripts/bench/` 下。

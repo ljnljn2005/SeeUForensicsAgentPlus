@@ -64,22 +64,24 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.9**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.3.10**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,881,592 B ≈ 1.03 GiB，含随包 dsh 插件与技能库） |
-| `release/win-unpacked/resources/app.asar` | 426,530,364 B（34,223 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory,qiko}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的十个预设 + MYOS MCP 行） |
-| `release/SeeUForensicsAgentPlus-0.3.9-x64.exe`（NSIS 安装包） | 281,886,671 B（blockmap 294,656 B） |
-| `release/SeeUForensicsAgentPlus-0.3.9-x64-portable.exe` | 236,647,317 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,888,873 B ≈ 1.03 GiB，含随包 dsh 插件与技能库） |
+| `release/win-unpacked/resources/app.asar` | 426,537,645 B（34,224 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory,qiko}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的十个预设 + MYOS MCP 行） |
+| `release/SeeUForensicsAgentPlus-0.3.10-x64.exe`（NSIS 安装包） | 281,889,094 B（blockmap 293,258 B） |
+| `release/SeeUForensicsAgentPlus-0.3.10-x64-portable.exe` | 236,564,870 B |
 
-实测冷启动到 dsh UI：目录版 **6180 ms**；portable 首次 48.8s（先要把 ~1.1GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **5123 ms**；portable 首次 58.5s（先要把 ~1.1GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-### v0.3.10 待发布（未打包）
+### v0.3.10 改了什么
+
+- **打包与打包态回归（第 31 轮）**：v0.3.10 已出 NSIS `281,889,094 B`（blockmap `293,258 B`）、portable `236,564,870 B`、`app.asar` `426,537,645 B`（34,224 entries）、目录版总计 `1,110,888,873 B`；`.probe/asar-0310-check.mjs` 全部检查通过（新增 `tools/ges-index/activity.mjs`、`activityModule`/`activityRoutes`/`activityBuild`/`activityPanel`/`version0310`）；打包态 `m2-ui-check`（`m2ok:true`、`activityOk:true`）、`settings-check --exe`（13 行外部工具、五项自检、思考流保存）、`plugins-check --exe`（175 包、`activationFailures:[]`）、`skills-check --exe`（6 个随包技能 + Qiko 43 个）、`hero-check --exe`（本机工具 13/13）、`mount-check --exe`（inspect 267 ms / mount 332 ms）、真实 MYOS 导入（`test:e2e:myos`：`skipped:false`）全绿；目录版冷启动 **5123 ms**、portable 首次 58.5 s。
 
 - **面板「最近活动」（第 30 轮）**：建库成功与 MYOS 导入（单表/批量）会写入 `<DSH_HOME>/index-activity.json`（最多 30 条），面板显示最近 6 条（建库/MYOS 标签、案件名、条数/表名/用时、时间），点一行直接扫描并切到对应索引，可一键清空；`/seeu-index/activity` 与 `/seeu-index/activity/clear` 提供同样能力，`tests/activity.test.mjs` 4 例、`npm test` 183/183。
 

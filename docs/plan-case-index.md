@@ -2436,3 +2436,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：`tests/activity.test.mjs` 4 例（路径解析/覆写、最多 30 条最新在前、清空与坏 JSON、不存在文件不建目录）；`m2-ui-check` 新增 `activityVisible/activityRows/activityEmptyHint/activityOk`（新 home 无历史 → 空提示，`activityOk:true`）。
 - 真机验证：对运行中的 dev 预览调 `/myos/import`（`MApps.mfs` 3 行）→ `/activity` 出现「3 条 · TBL_APPDATA_MANAGER」；再跑一次 5 张表批量 → 「8 条 · 3 张表 · 追加」（2 张空表进 `skipped`）；批量失败时不会写入活动。
 - 坑：单表 `/myos/import` 只接受 `db` 绝对路径（`dbName` 只有批量接口支持），验证脚本要用 `/myos/tables?caseId&materialId&name=` 先解析真实路径；`curl`/Git Bash 传中文目录名会 GBK 乱码，JS `fetch` 走 UTF-8 不受影响。
+
+### 20.110 v0.3.10 打包与回归（第 31 轮）
+
+- 打包内容：第 29 轮本机网关基准脚本（`scripts/bench/local-gateway-bench.mjs`，不随包）+ 第 30 轮面板「最近活动」（`tools/ges-index/activity.mjs`、`/activity` 路由、面板卡片）。
+- 版本 `0.3.10`；`npm test` 183/183、`check:overlay` OK；`release-0310` 打包约 17 分钟（portable 压缩阶段占大头）。
+- 产物：NSIS 281,889,094 B（blockmap 293,258 B）、portable 236,564,870 B、`app.asar` 426,537,645 B（34,224 entries）、目录版 1,110,888,873 B。
+- `.probe/asar-0310-check.mjs`：在 039 的基础上加 `tools/ges-index/activity.mjs` 与 `activityModule`/`activityRoutes`/`activityBuild`/`activityPanel`/`version0310`，全部 true、`missing: []`。
+- 打包态：`m2-ui-check`（`activityOk:true`）、`settings-check`、`plugins-check`、`skills-check`、`hero-check`、`mount-check`、`myos-real-import` 全绿；目录版冷启动 5123 ms、portable 58.5 s。
+- 坑：打包等待期间只应轮询 `release-0310/` 是否出现 `-portable.exe`，不要在 `win-unpacked.tmp` 阶段读 asar（会读不到文件）；portable 首次启动仍需 50–60 s 解包，属预期。
