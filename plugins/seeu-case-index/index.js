@@ -167,7 +167,8 @@ async function handle(req, res) {
       const indexes = findIndexes([...new Set(dirs)]);
       rememberDirs(indexes.map((i) => i.caseDir));
       await refreshBrief(indexes);
-      return send(res, 200, { indexes });
+      // meta 是给面板直接用的人类可读摘要（与写入会话概览的口径一致）。
+      return send(res, 200, { indexes: indexes.map((ix) => ({ ...ix, meta: indexSummary(ix) })) });
     }
     // ---------- 会话上下文里的案件概览（AGENTS.md 注入状态） ----------
     if (path === '/brief') {

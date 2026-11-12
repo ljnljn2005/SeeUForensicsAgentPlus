@@ -2173,3 +2173,20 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 **验证**：dev 预览 `POST /seeu-index/brief` 后 `.dev/dsh-home/AGENTS.md`（2,728 字符）出现「索引：22,776 条记录 · 8,191 个实体 · 360 个检材文件 · 建库 2026-11-12 23:55（用时 3 分 3 秒） · 库 63.0 MiB」；`npm test` **136/136**。
 
 **遗留**：概览只列前 5 个案件（既有逻辑）；「索引过旧」阈值暂固定 7 天，未做设置项。
+
+### 20.88 面板索引列表显示规模/新鲜度（第 10 轮）
+
+**需求**：上一轮把索引规模/建库时间写进了会话概览，但面板列表仍只有「案子名 + 体积 + 时间」，用户看不出记录/实体数与「是否需要重建」。
+
+**实现**
+- `plugins/seeu-case-index/index.js` 的 `GET /list`：`indexes.map((ix) => ({ ...ix, meta: indexSummary(ix) }))`（与写入 AGENTS.md 的摘要同源）。
+- `plugins/seeu-case-index/client.js`：索引卡片从单行改为两行——主行（案件名/案号/体积/生成时间），副行 `meta.text`（title 悬停显示全文）；`meta.warn` 存在时再显示 `⚠ …`（琥珀色 `#F5A524`）。
+- `scripts/e2e/m2-ui-check.mjs`：新增 `indexMeta`（文本含「条记录」「个实体」「建库 YYYY-MM-DD HH:mm」）与 `indexMetaText` 记录，纳入 `m2ok`。
+
+**坑**
+1. 面板卡片原来 `alignItems:'baseline'` 的单行结构，直接塞长文本会挤掉时间 → 改成 `flexDirection:'column'` 两行，主行内部再 `flex`。
+2. `meta` 字段必须由服务端算：客户端重复实现会出现「概览与面板不同口径」，且未来改阈值要改两处。
+
+**验证**：`m2-ui-check`（dev，隔离 home）→ `indexMeta:true`、`indexMetaText:"索引：22,776 条记录 · 8,191 个实体 · 360 个检材文件 · 建库 2026-11-12 23:55（用时 3 分 3 秒） · 库 63.0 MiB"`、`m2ok:true`、`errors:[]`。
+
+**遗留**：卡片未提供「重建」快捷按钮（目前要先选中库再点建库）；过期阈值未做成设置项。

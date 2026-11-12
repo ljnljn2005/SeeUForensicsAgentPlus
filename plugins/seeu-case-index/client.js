@@ -1742,20 +1742,24 @@ window.__ModuleLoader__.load({
               h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 180, overflow: 'auto' } },
                 indexes.map((ix) => {
                   const on = ix.dbPath === db;
+                  const meta = ix.meta ?? null;
                   return h('div', {
                     key: ix.dbPath,
                     className: 'seeu-row is-clickable' + (on ? ' is-active' : ''),
                     style: {
-                      display: 'flex', alignItems: 'baseline', gap: 8, minHeight: 30, padding: '5px 8px',
+                      display: 'flex', flexDirection: 'column', gap: 2, minHeight: 34, padding: '5px 8px',
                       borderBottom: '1px solid ' + C_L1, borderLeft: '2px solid ' + (on ? C_ACC : 'transparent'),
                       background: on ? C_ACTIVE : 'transparent', cursor: 'pointer', fontSize: 12.5,
                     },
                     onClick: () => openIndex(ix),
                   },
-                    h('span', { style: { color: C_FG, fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, ix.caseName ?? ix.caseNumber ?? basename(ix.caseDir)),
-                    ix.caseNumber ? h('span', { style: { ...S.tag, flex: 'none' } }, ix.caseNumber) : null,
-                    h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, fmtBytes(ix.sizeBytes ?? 0)),
-                    h('span', { style: { marginLeft: 'auto', ...S.rowTime } }, ix.builtAt ? fmtTime(ix.builtAt) : ''));
+                    h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8 } },
+                      h('span', { style: { color: C_FG, fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, ix.caseName ?? ix.caseNumber ?? basename(ix.caseDir)),
+                      ix.caseNumber ? h('span', { style: { ...S.tag, flex: 'none' } }, ix.caseNumber) : null,
+                      h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, fmtBytes(ix.sizeBytes ?? 0)),
+                      h('span', { style: { marginLeft: 'auto', ...S.rowTime } }, ix.builtAt ? fmtTime(ix.builtAt) : '')),
+                    meta?.text ? h('div', { style: { color: C_FG3, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: meta.text }, meta.text) : null,
+                    meta?.warn ? h('div', { style: { color: '#F5A524', fontSize: 11 } }, '⚠ ' + meta.warn) : null);
                 })))
             : h(EmptyState, { title: '还没有索引库', text: '在顶部填入案件目录（火眼全解析结果目录），点「建库 / 更新」；已有索引库时可点「扫描已有索引」。' })),
         onboarding,

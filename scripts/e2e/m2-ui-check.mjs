@@ -145,6 +145,9 @@ report.kpiRange = /时间范围/.test(text) && /\d{4}-\d{2}-\d{2} ~ \d{4}-\d{2}-
 // 会话上下文注入状态（AGENTS.md 里的案件概览）要能在面板上看到
 report.briefVisible = /会话语境/.test(text) && /已注入/.test(text)
 report.briefText = (text.match(/会话语境[^\n]{0,120}/) || [''])[0]
+// 索引卡片显示「记录/实体/建库时间/体积」摘要（与写入会话概览的口径一致）
+report.indexMeta = /条记录/.test(text) && /个实体/.test(text) && /建库 \d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(text)
+report.indexMetaText = (text.match(/索引：[^\n]{0,120}/) || [''])[0]
 // 刷新按钮要真的能重写 AGENTS.md
 report.briefRefreshClick = await clickText('刷新会话概览', 'button')
 await sleep(2500)
@@ -276,7 +279,7 @@ report.timelineFiltersOk = report.timelineFilterOptions.ev > 1 && report.timelin
 report.tabTablesClick = await openTab('表')
 text = await bodyText()
 report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
-report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true && report.timelineFiltersOk === true && report.entityPagingOk === true && report.entityEvSelectOk === true
+report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true && report.timelineFiltersOk === true && report.entityPagingOk === true && report.entityEvSelectOk === true && report.indexMeta === true
 
 // ---------- 浅色主题回归（SEEU_E2E_THEME=light；暗色为默认） ----------
 if (process.env.SEEU_E2E_THEME === 'light') {
