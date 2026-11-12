@@ -100,6 +100,10 @@
     <div id="cliHint" class="hint"></div>
     <div id="timing" class="hint"></div>
     <div id="lastMount" class="hint" data-last-mount="1"></div>
+    <div class="row" id="remountRow" style="display:none; margin-top:6px">
+      <button id="btnRemount">重新挂载最近镜像</button>
+      <span id="remountHint" class="hint"></span>
+    </div>
   </div>
 
   <div class="card">
@@ -132,12 +136,16 @@
 (function () {
   'use strict';
   var api = window.seeu && window.seeu.mounts;
+  var lastView = null;
   var els = {
     cliState: document.getElementById('cliState'),
     cliPath: document.getElementById('cliPath'),
     cliHint: document.getElementById('cliHint'),
     timing: document.getElementById('timing'),
     lastMount: document.getElementById('lastMount'),
+    remountRow: document.getElementById('remountRow'),
+    btnRemount: document.getElementById('btnRemount'),
+    remountHint: document.getElementById('remountHint'),
     imagePath: document.getElementById('imagePath'),
     inspectHint: document.getElementById('inspectHint'),
     partitions: document.getElementById('partitions'),
@@ -223,6 +231,9 @@
     }
     els.stateFile.textContent = view.stateFile || '';
     els.lastMount.textContent = lastMountText(view.lastMount);
+    lastView = view;
+    var last = view.lastMount;
+    els.remountRow.style.display = last && last.imagePath ? '' : 'none';
     if (!els.mountPoint.value) els.mountPoint.value = view.defaultMountPoint || 'X:';
 
     var mounts = view.mounts || [];
@@ -275,6 +286,37 @@
         '</tr>';
       }).join('') + '</tbody></table>';
     els.mountRow.style.display = 'flex';
+  }
+
+  async function remount() {
+    var last = lastView && lastView.lastMount;
+    if (!last || !last.imagePath) return;
+    els.btnRemount.disabled = true;
+    els.remountHint.className = 'hint';
+    els.remountHint.textContent = '正在重新挂载 ' + (last.imageName || last.imagePath) + '…';
+    try {
+      var inspected = await api.inspect(last.imagePath);
+      if (!inspected || !inspected.ok) {
+        els.remountHint.className = 'hint err';
+        els.remountHint.textContent = '重新挂载失败：镜像不可用（' + ((inspected && inspected.error) || '解析失败') + '）';
+        return;
+      }
+      var res = await api.mount({ imagePath: last.imagePath, partition: last.partition || 0, mountPoint: last.mountPoint });
+      if (!res || !res.ok) {
+        els.remountHint.className = 'hint err';
+        els.remountHint.textContent = '重新挂载失败：' + ((res && res.error) || '未知错误') + (res && res.hint ? '。' + res.hint : '');
+        return;
+      }
+      if (res.ms) noteTiming('挂载', res.ms);
+      els.remountHint.className = 'hint ok';
+      els.remountHint.textContent = '✓ 已重新挂载到 ' + res.mount.mountPoint + (res.ms ? '（' + fmtMs(res.ms) + '）' : '');
+      await refresh();
+    } catch (error) {
+      els.remountHint.className = 'hint err';
+      els.remountHint.textContent = '重新挂载失败：' + (error && error.message ? error.message : error);
+    } finally {
+      els.btnRemount.disabled = false;
+    }
   }
 
   async function refresh() {
@@ -361,6 +403,7 @@
   document.getElementById('btnInspect').addEventListener('click', function () { void doInspect(); });
   document.getElementById('btnMount').addEventListener('click', function () { void mount(); });
   document.getElementById('btnRefresh').addEventListener('click', function () { void refresh(); });
+  document.getElementById('btnRemount').addEventListener('click', function () { void remount(); });
   document.getElementById('btnSettings').addEventListener('click', function () {
     if (window.seeu && window.seeu.openLocalModelSettings) window.seeu.openLocalModelSettings();
   });

@@ -208,6 +208,28 @@ try {
   report.lastMountReleasedOk = /已卸载/.test(report.lastMountReleasedText) && report.lastMountReleasedText.includes('disk.E01')
   if (!report.lastMountReleasedOk) throw new Error('最近一次挂载摘要不对（已卸载）：' + report.lastMountReleasedText)
 
+  // 第 42 轮：卸载后点【重新挂载最近镜像】，应直接恢复挂载，再卸载收尾。
+  report.remountButtonVisible = await evaluate(client, "document.getElementById('remountRow').style.display !== 'none'")
+  if (report.remountButtonVisible !== true) throw new Error('卸载后没有出现「重新挂载最近镜像」按钮')
+  await evaluate(client, "document.getElementById('btnRemount').click(), true")
+  const remounted = await (async () => {
+    for (let i = 0; i < 40; i += 1) {
+      await sleep(400)
+      const state = await evaluate(client, 'window.seeu.mounts.get()')
+      if ((state?.mounts?.length ?? 0) === 1) return state
+    }
+    return null
+  })()
+  report.remountedCount = remounted?.mounts?.length ?? 0
+  if (report.remountedCount !== 1) throw new Error('重新挂载失败：' + JSON.stringify(remounted))
+  report.remountedPoint = String(remounted.mounts[0].mountPoint || '')
+  const remountText = String(await evaluate(client, "(document.getElementById('remountHint') || {}).textContent || ''"))
+  report.remountHintOk = /已重新挂载/.test(remountText)
+  if (!report.remountHintOk) throw new Error('重新挂载提示不对：' + remountText)
+  const unmountAgain = await evaluate(client, `window.seeu.mounts.unmount(${JSON.stringify(remounted.mounts[0].id)})`)
+  report.remountCleanup = unmountAgain?.ok === true
+  if (report.remountCleanup !== true) throw new Error('重新挂载后收尾卸载失败：' + JSON.stringify(unmountAgain))
+
   const shot = await client.send('Page.captureScreenshot', { format: 'png' })
   mkdirSync(join(OUT, '..'), { recursive: true })
   writeFileSync(OUT, Buffer.from(shot.data, 'base64'))

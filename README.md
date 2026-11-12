@@ -81,6 +81,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 ### v0.3.12 待发布（未打包）
 
+- **重新挂载最近镜像**（第 42 轮）：挂载窗口在存在 `lastMount` 时显示【重新挂载最近镜像】——点一下自动 `inspect` 原镜像 + 按上次分区/盘符重新挂载，并提示耗时；`mount-check` 断言卸载后按钮出现 → 点击 → 挂载恢复 1 条 → 提示「已重新挂载」→ 收尾卸载。
 - **挂载窗口显示「最近一次挂载」**（第 41 轮）：`mounts.json` 现在持久化 `lastMount`（挂载点、镜像名、分区、挂载时间；卸载后补 `releasedAt`），`status()` 一并返回；挂载窗口顶部显示「最近一次挂载：X: ← disk.E01（分区 0） · 2026-11-13 06:25:55 · 运行中/已卸载」，重启外壳也能看到上次挂载。单测与 `mount-check` 均断言挂载中/已卸载两种文案。
 - **活动可逐条移除**（第 40 轮）：每行右侧【移除】（`data-activity-remove`，`stopPropagation` 不会误触发打开）→ `POST /activity/remove {at,title}` 精确删一条并刷新统计/条形；`removeActivity()` 单测 +1（按 at+title、未命中不改文件）；`m2-ui-check` 断言移除后行数 2→1（`activityRemoveOk:true`）。
 - **活动行打开失败有提示**（第 39 轮）：点活动行时先核对 `/list` 返回的索引（按 `dbFile` 或规范化 `caseDir` 匹配），找不到就在卡片底部显示「打不开该活动：索引已不存在（…），可能被删除或移动。」（琥珀色），不再静默失败；`m2-ui-check` 内置预置活动（今天/昨天各 1 条、指向不存在的目录），断言 `activityOpenNoteOk:true` 并纳入 `activityOk`。

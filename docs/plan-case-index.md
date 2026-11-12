@@ -2530,3 +2530,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `tools/image-mount.mjs`：`readMountState()` 读取并返回 `lastMount`（保留对象，缺失为 null）；`mount()` 成功时 `writeMountState(..., { lastMount: record })`；`unmount()` 成功时写 `{ ...previous, releasedAt }`（`previous` 优先取 `state.lastMount`，否则用当前记录）；`status()` 返回 `lastMount`，且异常退出清理列表时**保留** `lastMount`（此前会丢）。
 - `renderer/mounts.html`：CLI 状态卡新增 `[data-last-mount]` 行，`lastMountText()` 渲染「最近一次挂载：X: ← disk.E01（分区 0） · 本地时间 · 运行中/已卸载」。
 - 测试：`tests/image-mount.test.mjs` 增加挂载后 `lastMount.releasedAt` 为空、卸载后 `releasedAt` 为字符串、`status().lastMount` 仍在 → 5/5；`mount-check` 新增 `lastMountOk`（挂载中含镜像名 + 运行中）与 `lastMountReleasedOk`（刷新后含已卸载）。
+
+### 20.121 挂载窗口「重新挂载最近镜像」（第 42 轮）
+
+- 动机：卸载后想再挂同一个镜像，得重新「选择镜像 → 解析 → 选分区 → 挂载」四步。
+- `renderer/mounts.html`：CLI 状态卡新增 `#remountRow`（`#btnRemount` + `#remountHint`），`renderStatus()` 缓存 `lastView`，仅当 `lastMount.imagePath` 存在时显示；`remount()` 依次 `api.inspect(原镜像)` → `api.mount({imagePath, partition: last.partition||0, mountPoint: last.mountPoint})` → 提示「✓ 已重新挂载到 X:（耗时）」→ `refresh()`；失败给可操作文案（镜像不可用/挂载失败+hint）。
+- `scripts/e2e/mount-check.mjs`：卸载/已卸载摘要断言之后，断言 `#remountRow` 可见 → 点【重新挂载】轮询 `window.seeu.mounts.get()` 至 1 条（最多 16 s）→ 校验 `remountedPoint`、提示含「已重新挂载」→ 再卸载收尾，全部纳入 `report`。
+- 坑：e2e 里判断元素可见性时把表达式包了 `String(...)`，返回字符串 `"true"` 与 `!== true` 比较恒失败 → 直接返回布尔表达式。
