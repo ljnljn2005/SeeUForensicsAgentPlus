@@ -34,12 +34,21 @@ export const TOOL_PATH_SPECS = [
   { id: 'sevenzip', label: '7-Zip', kind: 'file', env: 'SEEU_TOOL_SEVENZIP', command: '7z', defaultPath: CTF + '/4-其他工具/【8】解压工具/7z/7z.exe' },
   { id: 'sqlite3', label: 'sqlite3', kind: 'file', env: 'SEEU_TOOL_SQLITE3', command: 'sqlite3', defaultPath: CTF + '/7-物联网取证/SQLite/sqlite3.exe' },
   {
+    id: 'starmem',
+    label: 'StarMem（内存分析）',
+    kind: 'file',
+    env: 'SEEU_TOOL_STARMEM',
+    command: 'starmem',
+    defaultPath: CTF + '/1-ComputerAnalysis/3-MemAnalysis/Lovelymem/starmem-v0.2.2-windows-x64-upx/starmem.exe',
+    hint: 'StarMem 0.2.2 高速内存取证引擎（lovelymem.v3 的后续替代）；用法 starmem.exe [--json] <命令> <镜像文件>',
+  },
+  {
     id: 'volatility',
     label: 'Volatility 目录',
     kind: 'dir',
     env: 'SEEU_TOOL_VOLATILITY',
     defaultPath: CTF + '/1-ComputerAnalysis/3-MemAnalysis',
-    hint: 'lovelymem 不可用时的兜底；默认指向 Volatility 2.6 / Workbench 所在目录',
+    hint: 'StarMem / lovelymem 都不可用时的兜底；默认指向 Volatility 2.6 / Workbench 所在目录',
   },
 ]
 

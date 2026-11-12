@@ -102,3 +102,13 @@ LovelyMem 的 `version` 和 `help` 已经由真实程序成功返回，原生参
 合入远端 v0.2.7 更新后，全项目 `npm test` 的 79 项检查通过；构建、overlay 校验与目录打包通过。
 本机使用空配置成功自动发现两款 CLI 并调用版本命令；额外移除 PATH 和系统安装记录输入，
 仅通过本地盘目录查找也找到两款程序。此验证仅证明发现和调用可用，不改变上文的授权检查结论。
+
+## StarMem（内存分析，2026-11 起）
+
+内存分析预设默认改用 **StarMem 0.2.2**（`E:/CTFTools/Forensics/1-ComputerAnalysis/3-MemAnalysis/Lovelymem/starmem-v0.2.2-windows-x64-upx/starmem.exe`），不再是 `lovelymem.v3.exe`：
+
+- 会话里通过第 13 项外部工具路径注入 `$SEEU_TOOL_STARMEM`（`tools/tool-paths.mjs`，设置页「外部取证工具路径」可改）；解析顺序同样是「设置指定 → PATH 的 `starmem` → 默认路径」。
+- 用法：`"$SEEU_TOOL_STARMEM" --json <命令> <镜像文件>`（`info`、`pslist`、`netscan`、`malfind`、`hashdump`、`collect`…，详见随包技能 `starmem-cli`）。
+- `lovelymem-cli` 与 `lovelymem.v3.exe` 仍保留为兜底，只有 StarMem 不可用时才使用。
+
+LovelyCarve CLI 的默认路径为 `D:/Programs/LovelyCarve/lovelycarve-cli.exe`（`tools/image-mount.mjs` 的候选列表与设置页 `lovelycarve` 默认值）。

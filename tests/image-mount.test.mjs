@@ -53,9 +53,16 @@ test('resolveLovelyCarveCli：环境变量 / 配置文件 / 未配置', () => {
 
   writeFileSync(configFile, '{}')
   const unset = resolveLovelyCarveCli({ SEEU_DSH_HOME: home })
-  assert.equal(unset.path, null)
-  assert.equal(unset.source, 'unset')
-  assert.match(String(unset.error), /未配置 LovelyCarve CLI/)
+  // 本机装了 LovelyCarve（D:/Programs/LovelyCarve/lovelycarve-cli.exe）时走内置候选；
+  // 没装才返回未配置提示。
+  if (unset.source === 'auto') {
+    assert.ok(unset.path && existsSync(unset.path), 'auto 来源必须有可用路径')
+    assert.match(String(unset.path), /lovelycarve-cli\.exe$/)
+  } else {
+    assert.equal(unset.path, null)
+    assert.equal(unset.source, 'unset')
+    assert.match(String(unset.error), /未配置 LovelyCarve CLI/)
+  }
 })
 
 test('defaultMountPoint 跳过已占用盘符', () => {

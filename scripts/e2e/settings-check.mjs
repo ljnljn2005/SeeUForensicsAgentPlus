@@ -385,20 +385,23 @@ try {
   if (!report.toolsClearOk) throw new Error('清除工具路径后配置不符：' + JSON.stringify(clearedWritten))
   log('工具路径', '分区可见，保存/清除后 ' + TOOLS_CONFIG)
 
-  // 外部取证工具路径（Ghidra/IDA/tshark/jadx/python/7z/sqlite3…）：12 行默认值 + 可改 + 写 tool-paths.json
+  // 外部取证工具路径（Ghidra/IDA/tshark/jadx/python/7z/sqlite3/starmem…）：13 行默认值 + 可改 + 写 tool-paths.json
   const TOOL_PATHS_CONFIG = join(HOME, 'tool-paths.json')
   const toolPathsView = await evaluate(client, 'window.seeu.toolPaths.get()')
   report.toolPathsConfigFile = toolPathsView?.configFile ?? null
   report.toolPathsRows = Array.isArray(toolPathsView?.tools) ? toolPathsView.tools.length : 0
-  if (report.toolPathsRows !== 12) throw new Error('外部工具路径条数不对：' + report.toolPathsRows)
+  if (report.toolPathsRows !== 13) throw new Error('外部工具路径条数不对：' + report.toolPathsRows)
   if (report.toolPathsConfigFile !== TOOL_PATHS_CONFIG) throw new Error('外部工具路径配置文件不符：' + report.toolPathsConfigFile)
   const ghidraRow = (toolPathsView?.tools ?? []).find((tool) => tool.id === 'ghidra')
   report.toolPathsGhidra = ghidraRow?.path ?? null
   if (!String(report.toolPathsGhidra).includes('ghidra-12.1.4')) throw new Error('Ghidra 默认路径不对：' + report.toolPathsGhidra)
+  const starmemRow = (toolPathsView?.tools ?? []).find((tool) => tool.id === 'starmem')
+  report.toolPathsStarmem = starmemRow?.path ?? null
+  if (!String(report.toolPathsStarmem).includes('starmem-v0.2.2')) throw new Error('StarMem 默认路径不对：' + report.toolPathsStarmem)
   report.toolPathsSectionVisible = await evaluate(client, `(() => {
     const rows = document.querySelectorAll('[data-tool-path-row]')
     const input = document.querySelector('[data-tool-path-input="ghidra"]')
-    return rows.length === 12 && input !== null && /ghidra-12\.1\.4/.test(input.value) && document.getElementById('btn-tool-paths-save') !== null
+    return rows.length === 13 && input !== null && /ghidra-12\.1\.4/.test(input.value) && document.getElementById('btn-tool-paths-save') !== null
   })()`)
   if (report.toolPathsSectionVisible !== true) throw new Error('外部工具路径区渲染异常')
   const ghidraDir = join(HOME, 'fake-ghidra')

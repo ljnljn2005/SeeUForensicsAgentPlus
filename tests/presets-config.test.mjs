@@ -53,7 +53,7 @@ test('新增三个分析预设，顺序与名称正确', () => {
   }
 })
 
-test('流量/日志预设注入 lovelyspark-cli 技能根，内存预设注入 lovelymem-cli', () => {
+test('流量/日志预设注入 lovelyspark-cli 技能根，内存预设注入 starmem-cli（lovelymem 兜底）', () => {
   const expect = {
     'preset-traffic': 'SEEU_SKILL_SET_TRAFFIC',
     'preset-log': 'SEEU_SKILL_SET_LOG',
@@ -67,7 +67,8 @@ test('流量/日志预设注入 lovelyspark-cli 技能根，内存预设注入 l
   // persona 里要真的告诉模型用哪个 CLI 技能
   assert.match(byId.get('preset-traffic').config.plugins[0].config.prefix, /lovelyspark-cli/)
   assert.match(byId.get('preset-log').config.plugins[0].config.prefix, /lovelyspark-cli/)
-  assert.match(byId.get('preset-memory').config.plugins[0].config.prefix, /lovelymem-cli/)
+  assert.match(byId.get('preset-memory').config.plugins[0].config.prefix, /starmem-cli/)
+  assert.match(byId.get('preset-memory').config.plugins[0].config.prefix, /lovelymem-cli/)  // 兜底说明保留
 })
 
 test('取证预设不再引用分组技能根（只在默认根里保留通用技能）', () => {
@@ -77,7 +78,7 @@ test('取证预设不再引用分组技能根（只在默认根里保留通用�
   }
 })
 
-test('随包技能目录：通用技能在 skills/，lovelyspark/lovelymem 在 skill-sets/', () => {
+test('随包技能目录：通用技能在 skills/，lovelyspark/starmem 在 skill-sets/', () => {
   const skills = readdirSync(join(REPO, 'resources', 'forensics', 'skills'))
   assert.ok(skills.includes('ges-case-index'))
   assert.ok(skills.includes('lovelycarve-forensics'))
@@ -88,6 +89,7 @@ test('随包技能目录：通用技能在 skills/，lovelyspark/lovelymem 在 s
   for (const [id, skill] of [
     ['traffic', 'lovelyspark-cli'],
     ['log', 'lovelyspark-cli'],
+    ['memory', 'starmem-cli'],
     ['memory', 'lovelymem-cli'],
   ]) {
     const dir = join(setRoot, id)
@@ -118,7 +120,7 @@ test('persona 已改造成各专业专家的精简版（含关键纪律与工具
   const cases = [
     ['preset-standard', /Goldeneyes:\/\//, /evidence_mounts/, /禁止全盘递归搜索/, /元数据/],
     ['preset-traffic', /lovelyspark-cli/, /\$SEEU_WORKSPACE/],
-    ['preset-memory', /lovelymem-cli/, /\$SEEU_WORKSPACE/],
+    ['preset-memory', /starmem-cli/, /\$SEEU_WORKSPACE/],
     ['preset-data', /网钜/, /\$SEEU_WORKSPACE/],
     ['preset-apk', /APK/, /\$SEEU_WORKSPACE/],
     ['preset-exe', /PE/, /Import|导入/],
@@ -137,9 +139,9 @@ test('命令执行统一优先 bash 工具，pwsh 仅作降级', () => {
     assert.match(text, /bash/, `${id} 的 persona 没写 bash 优先`)
     assert.match(text, /pwsh/, `${id} 的 persona 没写 pwsh 降级`)
   }
-  for (const skill of ['skill-sets/memory/lovelymem-cli', 'skill-sets/traffic/lovelyspark-cli', 'skill-sets/log/lovelyspark-cli']) {
+  for (const skill of ['skill-sets/memory/starmem-cli', 'skill-sets/memory/lovelymem-cli', 'skill-sets/traffic/lovelyspark-cli', 'skill-sets/log/lovelyspark-cli']) {
     const md = readFileSync(join(REPO, 'resources', 'forensics', skill, 'SKILL.md'), 'utf8')
-    assert.ok(md.includes('"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI"'), `${skill} 缺少 bash 调用示例`)
+    assert.ok(/\$SEEU_(TOOL_STARMEM|CLI_NODE)/.test(md), `${skill} 缺少 bash 调用示例`)
     assert.ok(!/&\s*\$env:SEEU_CLI_NODE/.test(md), `${skill} 仍有 PowerShell 调用示例`)
   }
 })
@@ -151,7 +153,7 @@ test('分析预设写明本机实测工具与 lovelyspark 优先', () => {
   assert.match(traffic, /E:\/CTFTools\/Forensics\/4-其他工具/)
   assert.ok(!/Get-Command tshark/.test(traffic), 'traffic persona 不应再写 PWsh 探测空话')
   const memory = byId.get('preset-memory').config.plugins[0].config.prefix
-  assert.match(memory, /优先且默认走 `lovelymem-cli`/)
+  assert.match(memory, /优先且默认走 `starmem`/)
   for (const id of ['preset-standard','preset-apk','preset-exe','preset-data','preset-memory']) {
     assert.match(byId.get(id).config.plugins[0].config.prefix, /本机实测/, `${id} 缺少本机实测工具说明`)
     assert.match(byId.get(id).config.plugins[0].config.prefix, /2026-11-12/, `${id} 缺少实测日期`)

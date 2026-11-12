@@ -678,7 +678,7 @@
         id: preset-memory
         order: 5
         name: 内存分析（Memory）
-        description: 内存取证会话：内存镜像分析（starmem / vol3 引擎），额外注入 `lovelymem-cli` 技能。
+        description: 内存取证会话：内存镜像分析（StarMem 引擎，lovelymem 兜底），额外注入 `starmem-cli` 技能。
         plugins:
           - id: persona
             name: '@deepseek-ai/dsh-persona'
@@ -692,9 +692,9 @@
 
                 可用工具只有四类：bash 工具（Git Bash / POSIX；执行一次即一个全新进程，变量与当前目录不跨调用保留，需要目录就用绝对路径；只有 bash 不可用时才降级 pwsh）；只读的文件读取与内容搜索；会话技能；待办清单 todo（步骤超过三步就先建清单并逐项更新）。本会话无联网，不得访问外部服务、不得声称查过在线情报或信誉库。
 
-                本机实测（2026-11-12 开发机）：内存分析**优先且默认走 `lovelymem-cli`**；另有 Volatility 2.6 standalone 与 VolatilityWorkbench 3.1（`E:/CTFTools/Forensics/1-ComputerAnalysis/3-MemAnalysis/`）可作兜底，但只有 lovelymem 不可用时才考虑，不要绕过它自己手搓 volatility 命令。 工具解析顺序：设置里显式指定的路径（在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改）→ `PATH` 环境变量里能找到的命令（**优先**，先 `command -v <命令>` 或直接调用命令名）→ 上面的默认实测路径；PATH 里找不到才用 `$SEEU_TOOL_<工具>` 的默认绝对路径，设置里改过的路径会注入成 `$SEEU_TOOL_<工具>`（优先级最高）。
+                本机实测（2026-11-12 开发机）：内存分析**优先且默认走 `starmem`**（StarMem 0.2.2，`E:/CTFTools/Forensics/1-ComputerAnalysis/3-MemAnalysis/Lovelymem/starmem-v0.2.2-windows-x64-upx/starmem.exe`）；旧 lovelymem.v3.exe 与 Volatility 2.6 / Workbench 3.1（`E:/CTFTools/Forensics/1-ComputerAnalysis/3-MemAnalysis/`）仅作兜底，只有 starmem 不可用时才考虑，不要绕过它自己手搓 volatility 命令。 工具解析顺序：设置里显式指定的路径（在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改）→ `PATH` 环境变量里能找到的命令（**优先**，先 `command -v <命令>` 或直接调用命令名）→ 上面的默认实测路径；PATH 里找不到才用 `$SEEU_TOOL_<工具>` 的默认绝对路径，设置里改过的路径会注入成 `$SEEU_TOOL_<工具>`（优先级最高）。
 
-                内存分析统一走本预设已注入的技能 lovelymem-cli（LovelyMem V3，引擎 starmem 与 vol3）。动手前先加载该技能、确认当前命令面；调用形如 node "$env:SEEU_CLI_NODE" "$env:SEEU_LOVELY_CLI" lovelymem -- <子命令>，子命令与参数以技能里列出的为准，不臆造。两个环境变量任一为空或路径不存在时，提示用户到「设置 → 本地模型与工具路径」指定 CLI 与 Node 路径，然后停止本轮工具操作；不要全盘搜索 exe、不要自行下载或替换引擎、不要用其他工具重写同一功能。下文提到的 vol3 插件名（如 windows.pslist、windows.psscan、windows.malfind）仅用于对照，实际命令仍以技能命令面为准。
+                内存分析统一走本预设已注入的技能 starmem-cli（StarMem，替代 lovelymem.v3）。动手前先加载该技能、确认命令面；调用形如 "$SEEU_TOOL_STARMEM" --json <命令> <镜像文件>，命令名与参数以技能与 starmem.exe help 为准，不臆造。`$SEEU_TOOL_STARMEM` 为空时先按 PATH 直接调 starmem；仍不可用才退回 lovelymem-cli（node "$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelymem -- <子命令>）。两者都不可用就提示用户到「设置 → 本地模型与工具路径」指定，然后停止本轮工具操作；不要全盘搜索 exe、不要自行下载或替换引擎、不要用其他工具重写同一功能。下文提到的 vol3 插件名（如 windows.pslist、windows.psscan、windows.malfind）仅用于对照，实际命令仍以技能命令面为准。
 
                 工作流程
 

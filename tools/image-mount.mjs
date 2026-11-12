@@ -32,6 +32,7 @@ const DRIVE_LETTERS = 'XYZUVWTSRQ'
 
 /** LovelyCarve CLI 的候选位置（只作兜底，优先用户在设置里指定的路径）。 */
 const CLI_CANDIDATES = [
+  'D:/Programs/LovelyCarve/lovelycarve-cli.exe',
   'E:/LovelyCarve/cli/lovelycarve-cli.exe',
   'C:/LovelyCarve/cli/lovelycarve-cli.exe',
   'C:/Program Files/LovelyCarve/lovelycarve-cli.exe',

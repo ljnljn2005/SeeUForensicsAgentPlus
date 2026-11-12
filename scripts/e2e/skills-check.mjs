@@ -131,7 +131,7 @@ try {
   // 0.3.2 起 lovelymem/lovelyspark 不再装进默认技能根，改为按预设分组
   // （<DSH_HOME>/skill-sets/<id>，由流量/日志/内存三个预设的 customSkillDirs 引用）。
   const want = ['ges-case-index', 'lovelycarve-forensics']
-  const folderOnly = ['lovelymem-cli', 'lovelyspark-cli']
+  const folderOnly = ['starmem-cli', 'lovelymem-cli', 'lovelyspark-cli']
   report.found = {}
   for (const name of want) report.found[name] = report.skills.includes(name)
   const missing = want.filter((name) => report.found[name] !== true)
@@ -149,6 +149,7 @@ try {
   for (const [id, expected] of [
     ['traffic', 'lovelyspark-cli'],
     ['log', 'lovelyspark-cli'],
+    ['memory', 'starmem-cli'],
     ['memory', 'lovelymem-cli'],
   ]) {
     const dir = join(home, 'skill-sets', id)

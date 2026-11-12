@@ -33,6 +33,8 @@ export const LOVELY_TOOL_SPECS = [
     id: 'lovelycarve',
     label: 'LovelyCarve CLI',
     env: 'SEEU_LOVELYCARVE_CLI',
+    // 开发机实测安装位置；可在设置里改，清空后回落到这里。
+    defaultPath: 'D:/Programs/LovelyCarve/lovelycarve-cli.exe',
     hint: '选择 lovelycarve-cli.exe（随 LovelyCarve 安装包提供，用于镜像挂载/分区解析；不是 GUI 的 LovelyCarve.exe）。',
   },
 ]
@@ -55,16 +57,20 @@ export function readLovelyConfig(env = process.env) {
 
 function toolState(spec, env, config) {
   const fromEnv = typeof env[spec.env] === 'string' ? env[spec.env] : ''
-  const configured = fromEnv || (typeof config[spec.id] === 'string' ? config[spec.id] : '')
-  const found = Boolean(configured) && isAbsolute(configured) && existsSync(configured)
+  const fromConfig = typeof config[spec.id] === 'string' ? config[spec.id] : ''
+  const fromDefault = typeof spec.defaultPath === 'string' ? spec.defaultPath : ''
+  const configured = fromEnv || fromConfig
+  const selected = configured || fromDefault
+  const found = Boolean(selected) && isAbsolute(selected) && existsSync(selected)
   return {
     id: spec.id,
     label: spec.label,
     env: spec.env,
     hint: spec.hint,
-    path: configured || '',
-    /** env = 环境变量覆盖（调试）；config = 设置窗口保存；unset = 还没指定。 */
-    source: fromEnv ? 'env' : configured ? 'config' : 'unset',
+    defaultPath: fromDefault || undefined,
+    path: selected || '',
+    /** env = 环境变量覆盖（调试）；config = 设置窗口保存；default = 内置实测默认值；unset = 还没有可用路径。 */
+    source: fromEnv ? 'env' : fromConfig ? 'config' : fromDefault ? 'default' : 'unset',
     configured: Boolean(configured),
     found,
   }

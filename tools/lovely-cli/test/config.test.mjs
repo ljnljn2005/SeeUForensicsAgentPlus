@@ -25,12 +25,17 @@ test('未配置时两款工具都是 unconfigured，且配置路径来自 SEEU_L
   assert.equal(view.configFile, lovelyConfigFile(env));
   assert.equal(view.error, undefined);
   assert.equal(view.tools.length, 3);
-  for (const tool of view.tools) {
+  // lovelymem/lovelyspark 必须未配置；lovelycarve 有内置默认路径（D:/Programs/LovelyCarve/lovelycarve-cli.exe）。
+  for (const tool of view.tools.filter((item) => item.id !== 'lovelycarve')) {
     assert.equal(tool.found, false);
     assert.equal(tool.source, 'unset');
     assert.equal(tool.configured, false);
     assert.equal(tool.path, '');
   }
+  const carve = view.tools.find((item) => item.id === 'lovelycarve');
+  assert.equal(carve.configured, false);
+  assert.equal(carve.source, 'default');
+  assert.match(String(carve.defaultPath), /lovelycarve-cli\.exe$/);
   assert.deepEqual(LOVELY_TOOL_SPECS.map((s) => s.id), ['lovelymem', 'lovelyspark', 'lovelycarve']);
 });
 

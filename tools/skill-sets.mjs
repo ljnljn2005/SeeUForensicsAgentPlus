@@ -5,7 +5,7 @@
  * 所有预设都能看到。现在要「按预设注入不同 CLI 技能」：
  *   - 取证预设：<DSH_HOME>/skills（默认根，含 ges-case-index / lovelycarve-forensics 等）
  *   - 流量分析 / 日志分析：<DSH_HOME>/skill-sets/traffic、<DSH_HOME>/skill-sets/log（lovelyspark-cli）
- *   - 内存分析：<DSH_HOME>/skill-sets/memory（lovelymem-cli）
+ *   - 内存分析：<DSH_HOME>/skill-sets/memory（starmem-cli 主用；lovelymem-cli 兜底）
  * 各个预设的 `skill-filesystem` 通过 `customSkillDirs` 指向自己那组技能根，
  * 默认根仍保留（案件索引技能所有预设都要用）。
  *

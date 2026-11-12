@@ -77,11 +77,20 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
+### v0.3.5 待发布（未打包）
+
+- **内存分析预设改用 StarMem 0.2.2**（`E:/CTFTools/Forensics/1-ComputerAnalysis/3-MemAnalysis/Lovelymem/starmem-v0.2.2-windows-x64-upx/starmem.exe`；用户指定：后续用 starmem，lovelymem 退为兜底）：
+  - 新增随包技能 `resources/forensics/skill-sets/memory/starmem-cli/SKILL.md`（`starmem.exe [--json] <命令> <镜像文件>`、常用命令表、`collect` 落 SQLite、`--csv/--limit/--raw-objects`、符号参数与证据纪律）；
+  - 内存 persona 改为「统一走 `starmem-cli`，`"$SEEU_TOOL_STARMEM" --json <命令> <镜像文件>`；`$SEEU_TOOL_STARMEM` 为空先按 PATH 试 `starmem`，仍不可用才退回 lovelymem-cli」；
+  - `tools/tool-paths.mjs` 新增第 13 项 `starmem`（`SEEU_TOOL_STARMEM`、`command: starmem`、默认路径），设置页「外部取证工具路径」随之 13 行；`scripts/e2e/settings-check.mjs` 增加 StarMem 默认路径断言。
+- **LovelyCarve CLI 默认路径改为 `D:/Programs/LovelyCarve/lovelycarve-cli.exe`**（用户指定）：镜像挂载解析候选第一位；`tools/lovely-tools.mjs` 给 `lovelycarve` 增加 `defaultPath`（设置页未指定时显示/使用该路径，清空后回落到它）。
+- 验证：`npm test` **122/122**；`check:overlay` OK；`settings-check` `ok:true`（`toolPathsRows:13`、`toolPathsStarmem:"…starmem-v0.2.2…"`、`errors:[]`）；`skills-check` `ok:true`（`skill-sets/memory` 同时装 `starmem-cli` 与 `lovelymem-cli`，`leaked:[]`）；`starmem.exe build-info --json` 可执行（`version 0.2.2`）。
+
 ### v0.3.4 改了什么
 
 - **每个会话预设换成精简版专家 persona**（来源：`E:\取证桌面` 下 7 份弘连「取证桌面」专家提示词，约 33–37 KB/份 → 精简到 8.7–13.7 KB，删掉本机不存在的 `D:\Programs\Honglian\GoldenEyesV4\skills\…` 技能清单与「取证桌面」外壳指令，保留取证纪律、溯源红线与三分结论要求）：
   - 取证分析（Forensics）：火眼 + 服务器/主机取证合并稿（认环境 → 索引 → 火眼挂载目录 → 镜像挂载 → `ges read` 角标 → 三分强度 → 服务器 Windows/Linux 排查子段）；
-  - 流量分析（Traffic）、内存分析（Memory）：分别写清 `lovelyspark-cli` / `lovelymem-cli` 的调用方式与证据链要求；
+  - 流量分析（Traffic）、内存分析（Memory）：分别写清 `lovelyspark-cli` / `starmem-cli` 的调用方式与证据链要求；
   - 日志分析（Log）：暂无对应专家文件，保持原 persona；
   - 新增三个预设：**数据分析（网钜资金）**（order 6，资金流水清洗/口径/可疑特征/账户网络）、**APK 分析**（order 7）、**EXE 逆向分析**（order 8），工具面与取证预设一致（`tool-fs` 只读，落盘用 `bash` 重定向到 `$SEEU_WORKSPACE`）。
 - **提示词再加固「先挂载、后原始」**：概览规则 1/2 明确「设备/系统类问题先看备注 → `ges status --json` 的 `evidence_mounts` 与火眼只读挂载目录」，并**禁止在 `W:\` 上直接解压/整份读取原始 `.zip`/`.E01`/`.dd`**（确实没有挂载入口时才按需只读单条目，并在答复里说明「火眼未提供该检材挂载入口」）；`ges-case-index` 技能同步。
@@ -799,7 +808,7 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 | 取证分析（本地模型精简） | 2 | 同上（工具面更小，适合小模型） | 本地小模型 |
 | 流量分析（Traffic） | 3 | `lovelyspark-cli` | PCAP、会话、协议、文件提取 |
 | 日志分析（Log） | 4 | `lovelyspark-cli` | 系统/应用日志、时间线还原 |
-| 内存分析（Memory） | 5 | `lovelymem-cli` | 内存镜像、进程/服务/注册表/凭据 |
+| 内存分析（Memory） | 5 | `starmem-cli`（`lovelymem-cli` 兜底） | 内存镜像、进程/服务/注册表/凭据 |
 | 数据分析（网钜资金） | 6 | 通用技能 | 网钜导出的流水/账户/交易数据清洗与资金分析 |
 | APK 分析 | 7 | 通用技能 | Android 应用静态分析、权限/组件/签名/IOC |
 | EXE 逆向分析 | 8 | 通用技能 | Windows PE 结构、导入导出、查壳、静态行为研判 |
