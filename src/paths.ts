@@ -26,6 +26,12 @@ export function dshCliEntry(): string {
   return join(dshRuntimeDir(), 'lib', 'bin.js')
 }
 
+/** shell 调用的纯 Node 薄层；真实路径兼容 Electron 与系统 Node。 */
+export function lovelyCliEntry(): string {
+  const root = appRoot()
+  return join(root.endsWith('.asar') ? `${root}.unpacked` : root, 'tools', 'lovely-cli', 'cli.mjs')
+}
+
 /** 本次桌面版专用的 DSH_HOME：与用户 `~/.dsh` 完全隔离，避免污染/被污染。 */
 export function dshHome(): string {
   return process.env.SEEU_DSH_HOME ?? join(app.getPath('userData'), 'dsh-home')
@@ -45,7 +51,7 @@ export function workspaceDir(): string {
 
 /** 外壳日志目录（dsh 子进程 stdout/stderr 也落在这里）。 */
 export function logDir(): string {
-  return join(app.getPath('userData'), 'logs')
+  return join(userDataDir(), 'logs')
 }
 
 export function hostLogFile(): string {
@@ -75,8 +81,15 @@ export function windowIconPath(): string {
   return join(appRoot(), 'build', 'icon.ico')
 }
 
-/** 用户数据根（%APPDATA%/SeeUForensicsAgentPlus）。 */
+/**
+ * 用户数据根（%APPDATA%/SeeUForensicsAgentPlus）。
+ *
+ * `SEEU_USER_DATA` 可覆盖：自动化截图/验收要用独立目录，避免污染真实配置
+ * （Electron 的 `--user-data-dir` 只影响 Chromium 数据，不改 `app.getPath('userData')`）。
+ */
 export function userDataDir(): string {
+  const override = process.env.SEEU_USER_DATA
+  if (override !== undefined && override.trim() !== '') return override
   return app.getPath('userData')
 }
 

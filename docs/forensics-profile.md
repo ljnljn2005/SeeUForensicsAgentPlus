@@ -94,6 +94,12 @@ plan 模式都是取证分析要用的，**必须保留**；取证场景明确�
 真正的大头应该在「长会话压缩」（`compaction` 已启用）和「工具结果裁剪」
 （`tool-result-pruner`：>8192 字符留头 4096 / 尾 1024）上省，而不是砍工具。
 
+**长上下文/本地模型调优（v0.2.0 起）**：preset 内 `compaction-basic` 显式写了
+`thresholdRatio: 0.8 / headroomTokens: 8192 / retainRatio: 0.16`。官方默认
+`headroomTokens: 65536` 会让 128k 窗口在 ~57k tokens 就压缩（一半窗口浪费、每次压缩都在本地模型上重算
+prefill）；8192 后 128k 窗口阈值约 102k（`0.8×W`）、256k 按 `0.8×W`、32k 约 19k（`W−O−B` 仍为正，
+小模型不必再手改）。取 8192 是因为它等于随包输出上限 `maxTokens: 8192`。
+
 **怎么恢复/调整**：`plugins` 里每一项都是独立行，加回/删掉即可。官方原文见
 `node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml`，或
 `dsh --profile web --dump-default-config`；升级 dsh 后必须重新对齐这份列表。

@@ -301,9 +301,34 @@ node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-un
 
 验证：启动后看 `logs\shell.log` 的 `skills: N 个（…）→ …\dsh-home\skills` 行，以及该目录下的 `.seeu-skills.json` 指纹。
 
+### 5.5 主题插件与本地模型配置（v0.2.0 起）
+
+**主题插件** `plugins/seeu-theme/`（宿主 `index.js` + `theme.css` + 客户端 `client.js`）与案件索引插件走同一条路：
+
+- `electron-builder.yml` 的 `files` 已含 `plugins/**`，`theme.css` 随之进 asar；
+- 宿主 half 用 `readFileSync(new URL('./theme.css', import.meta.url))` 读同包 CSS——asar 兼容层覆盖 `fs.readFileSync`，所以打包态可读；**这也是必须钉 Electron 44.7.0 的又一个理由**（回退系统 node 时 asar 不可读，主题会静默失效）；
+- overlay 末尾第二条 insert：`- id: seeu-theme` / `name: ../../plugins/seeu-theme/index.js`；同时 `- id: ui-brand-official` 置 `disabled: true`、`- id: locale` 设 `config.preference: zh`。
+
+自检（打包后，确认主题资产在包里）：
+
+```bash
+node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-unpacked/resources/app.asar').map(p=>p.replace(/\\/g,'/').replace(/^\/+/,''));console.log(['plugins/seeu-theme/index.js','plugins/seeu-theme/client.js','plugins/seeu-theme/theme.css'].filter(p=>!l.includes(p)))"
+```
+
+输出 `[]` 即齐全；再确认运行时注入成功：打开应用后 CDP 采样应为
+`{"title":"SeeU 取证智能体增强版","dark":true,"bgBase":"#0A111E","accent":"#22D3EE","themeStyle":true}`（见 `.probe/shot.mjs`）。
+
+**本地模型**：
+
+- 生成逻辑 `tools/local-model.mjs` 被 `src/local-model.ts` 静态 import，esbuild 已把它内联进 `dist/main.cjs`（`files` 只放行 `dist/**`，所以**不需要**单独放行 `tools/local-model.mjs`）；自检：
+  `grep -c "local-model.patch.yml" dist/main.cjs` 应为 `1`。
+- 用户配置在 `<userData>\local-model.json`（asar 外，升级/重装后仍在），示例随包放在 `resources/forensics/local-model.example.json`（`resources/**` 白名单已覆盖）。
+- 设置窗口 `renderer/local-model.html` 由 `scripts/build.mjs` 复制到 `dist/renderer/`，随 `dist/**` 进 asar；`src/main.ts` 用 `loadFile(join(rendererDir(),'local-model.html'))` 加载，asar 内 `loadFile` 正常。开发/自动化钩子：`SEEU_USER_DATA`（覆盖 userData 根）、`SEEU_OPEN_SETTINGS=1`（启动即打开设置窗口），两者都不影响打包产物默认行为。
+- 运行时生成的 `local-model.patch.yml` 也写在 `<userData>`，作为第二个 `--patch` 传给 dsh——不写 asar、不需要重打包即可换网关。
+
 ## 6. 体积现状
 
-以 2026-11-11 **v0.1.7** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验 + 案件索引插件 + M2 typed 层 + M5 跨案库）为准。
+以 2026-11-11 **v0.2.0** 轮（Electron 44.7.0，工具面 19 项 + 打包前 overlay 校验 + 案件索引插件 + M2 typed 层 + M5 跨案库 + 主题/品牌插件 + 本地模型接入）为准。
 更早的 Electron 44.11.0 首轮产物已作废，不引用其数字。
 
 `npm run package:dir` 产物：
@@ -311,22 +336,26 @@ node -e "const a=require('@electron/asar');const l=a.listPackage('release/win-un
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 | 234.9 MiB | Electron 主程序（含 rcedit 写入的图标/版本资源） |
-| `release/win-unpacked/resources/app.asar` | 168,558,803 | 160.7 MiB | JS + 资源 + node_modules 生产依赖 + 索引插件 + `tools/ges-index`（19,639 个 asar 条目，`@deepseek-ai` 330/330） |
+| `release/win-unpacked/resources/app.asar` | 168,656,136 | 160.8 MiB | JS + 资源 + node_modules 生产依赖 + 索引/主题插件 + `tools/ges-index`（19,647 个 asar 条目，`@deepseek-ai` 330/330） |
 | `release/win-unpacked/`（整个目录） | — | 769 MiB | 含 Electron 运行时、locales、`app.asar.unpacked` 原生模块（`du -sm`） |
 
 `npm run package:win` 额外产出（同一轮）：
 
 | 产物 | 字节 | 约合 | 说明 |
 | --- | --- | --- | --- |
-| `release/SeeUForensicsAgentPlus-0.1.7-x64.exe` | 211,895,076 | 202.1 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
-| `release/SeeUForensicsAgentPlus-0.1.7-x64.exe.blockmap` | 221,194 | 216.0 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
-| `release/SeeUForensicsAgentPlus-0.1.7-x64-portable.exe` | 189,498,334 | 180.7 MiB | 免安装单文件（自解压运行） |
+| `release/SeeUForensicsAgentPlus-0.2.0-x64.exe` | 211,911,443 | 202.1 MiB | NSIS 安装包（oneClick=false，可选安装目录） |
+| `release/SeeUForensicsAgentPlus-0.2.0-x64.exe.blockmap` | 220,870 | 215.7 KiB | 差量更新用 blockmap（后续自动更新通道使用） |
+| `release/SeeUForensicsAgentPlus-0.2.0-x64-portable.exe` | 189,515,660 | 180.7 MiB | 免安装单文件（自解压运行） |
 
 即：安装包约 **202 MiB**、portable 约 **181 MiB**，解包目录约 **769 MiB**。
 
-> v0.1.0（缺 21 个 peer 包，启动即崩）、v0.1.1（overlay 是定稿前的工具面）与 v0.1.2
-> （工具面还有 21 项，含插件管理/市场）、v0.1.3（无索引插件）、v0.1.4（无 M3 会话查库）、v0.1.5（无 M2 typed 层）、v0.1.6（无 M5 跨案）均已作废，对外只发 v0.1.7；各版本 asar 体积差异
+> v0.1.0（缺 21 个 peer 包，启动即崩）、v0.1.1（overlay 是定稿前的工具面）、v0.1.2
+> （工具面还有 21 项，含插件管理/市场）、v0.1.3（无索引插件）、v0.1.4（无 M3 会话查库）、v0.1.5（无 M2 typed 层）、v0.1.6（无 M5 跨案）、v0.1.7（无主题/本地模型）均已作废，对外只发 v0.2.0；各版本 asar 体积差异
 > 来自补包与取证预设内容。
+>
+> 另注：本轮打包时上一版 portable 仍在运行，`release/` 目录被其 exe 占用无法整体删除，
+> 因此产物先出到 `release-020/` 再逐个移入 `release/`；`release/SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`
+> 是那次遗留（正在运行的进程），0.2.0 三个文件不受影响。
 
 体积构成大头：Electron 运行时本体（exe + DLL/pak/icudtl）、`app.asar` 中
 `@deepseek-ai/*` 与 office/语音/终端相关依赖、`app.asar.unpacked` 中
@@ -581,3 +610,207 @@ asar 自检（19,639 entries）命中：`plugins/seeu-case-index/{index.js,clien
 
 > 测试用的第二案是把真实库复制后改 `meta.case_number` 的夹具（`Documents\SeeUForensicsWorkspace\caseB-test`）；
 > 验证完已删除夹具与 `indexes/crosscase.db`，交付版首次使用时重新同步即可。
+
+### v0.2.1 回归验证
+
+产物（Electron 44.7.0、无签名、x64）：
+
+| 产物 | 大小 |
+| --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B |
+| `release/win-unpacked/resources/app.asar` | 168,708,872 B（19,647 entries） |
+| `release/SeeUForensicsAgentPlus-0.2.1-x64.exe` | 211,919,582 B（blockmap 220,872 B） |
+| `release/SeeUForensicsAgentPlus-0.2.1-x64-portable.exe` | 189,530,173 B |
+
+asar 自检：14 个必需路径全部命中（`plugins/seeu-theme/*`、`plugins/seeu-case-index/*`、`tools/ges-index/{typed,cross,build}.mjs`、`dist/renderer/{local-model,loading,error}.html`、`resources/forensics/cordis.patch.yml`、`resources/forensics/skills/ges-case-index/SKILL.md`、`resources/forensics/local-model.example.json`）。
+
+启动验证（`SEEU_DEV_MULTI=1` 绕过单实例锁；验收机上有用户正在运行的 0.1.7 portable，所以不能 kill）：
+
+```json
+// 目录版：node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9336
+{"ok": true, "elapsedMs": 5123, "url": "http://127.0.0.1:60909/?token=…", "title": "SeeUForensicsAgentPlus"}
+
+// portable：--exe release/SeeUForensicsAgentPlus-0.2.1-x64-portable.exe --port 9337
+{"ok": true, "elapsedMs": 43481, "url": "http://127.0.0.1:51091/?token=…", "title": "SeeUForensicsAgentPlus"}
+```
+
+打包态 UI（`scripts/e2e/m2-ui-check.mjs`，`SEEU_UI_EXE` 指向 win-unpacked exe、`SEEU_NO_KILL=1`）：`m2ok: true`、`errors: []`，七个标签、KPI（W盘 / 5 检材 / 22777 记录 / 8191 实体 / 63.0 MiB）、检材名与备注、检索「加密」20 命中。
+
+打包态设置页（`scripts/e2e/settings-check.mjs --exe <win-unpacked exe>`）：`ok: true`，页面来自 `app.asar/dist/renderer/local-model.html`，`presetApplied: true`（256k → 262144/8192）、`previewWarnings: ["output-window","retries"]`、`copiedDiagnostics: true`、`errors: []`。
+
+> `release/` 里的 0.1.7 portable 删不掉是用户正在运行它（Windows 文件占用），与 0.2.1 产物无关。打包时先用 `-c.directories.output=release-021` 出包，再把文件搬进 `release/`。
+
+### v0.2.2 回归验证
+
+版本 **0.2.2**（`package.json` / `package-lock.json` 顶层与 `packages[""].version` 同步）。产物（无签名、Windows x64、Electron 44.7.0）：
+
+| 产物 | 大小 |
+| --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,731,959 B（19,647 entries） |
+| `release/SeeUForensicsAgentPlus-0.2.2-x64.exe` | 211,923,744 B（blockmap 220,936 B） |
+| `release/SeeUForensicsAgentPlus-0.2.2-x64-portable.exe` | 189,545,900 B |
+
+asar 自检（`@electron/asar.listPackage`，14 个必需路径）：`{"entries":19647,"missing":[]}`；另用 `extractFile(asar, 'plugins\\seeu-case-index\\client.js')`（**注意路径要用反斜杠**，`listPackage` 的条目以 `\` 开头、`extractFile` 只认不带前导分隔符的反斜杠写法）读出 89,943 字节，确认含「复制实体清单」「citationListMarkdown」。
+
+启动验证（`SEEU_DEV_MULTI=1`，规避用户正在运行的 0.1.7 实例单实例锁；不跑 `scripts/kill-app.mjs`）：
+
+- 目录版 `node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9349` → `"ok": true, "elapsedMs": 4109`；
+- portable `--exe release/SeeUForensicsAgentPlus-0.2.2-x64-portable.exe --port 9350 --timeout 180000` → `"ok": true, "elapsedMs": 39362`。
+
+打包态 UI（`SEEU_UI_EXE` 指向 win-unpacked exe、`SEEU_NO_KILL=1`、独立 `SEEU_DSH_HOME` / `SEEU_USER_DATA`）：
+
+- `scripts/e2e/m2-ui-check.mjs` → `evNames: true`、`evRemark: true`、`searchOk: true`、`m2ok: true`、`errors: []`（本轮修了探针自身：检索框按 placeholder 含「关键词」定位，原先按「最后一个 input」会命中外层筛选框 → 误报 `searchOk:false`）；
+- `scripts/e2e/settings-check.mjs --exe <win-unpacked exe>` → `ok: true`，页面来自 `app.asar/dist/renderer/local-model.html`，`presetApplied / previewWarnings ["output-window","retries"] / copiedDiagnostics / 网关自报窗口 32768 / probeMissing ["ghost-7b"] / disableLocalModel 保留字段` 全绿；
+- `scripts/e2e/export-check.mjs`（端口 9354）→ `ok: true`，记录清单 14,996 字符 / 实体清单 1,888 字符 / 表清单 7,025 字符，与开发态一致。
+
+> 打包仍先用 `-c.directories.output=release-022` 出到旁路目录，再逐个 `mv` 进 `release/`：用户正在运行 0.1.7 portable，`rm -rf release` 会 `Device or resource busy`。0.2.1 的三个旧文件已删除，0.1.7 portable 保留。
+
+### v0.2.3 回归验证
+
+版本 **0.2.3**（`package.json` / `package-lock.json` 顶层与 `packages[""].version` 同步）。产物（无签名、Windows x64、Electron 44.7.0）：
+
+| 产物 | 大小 |
+| --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B |
+| `release/win-unpacked/resources/app.asar` | 168,751,123 B（19,647 entries） |
+| `release/SeeUForensicsAgentPlus-0.2.3-x64.exe` | 211,926,785 B（blockmap 220,685 B） |
+| `release/SeeUForensicsAgentPlus-0.2.3-x64-portable.exe` | 189,518,082 B |
+| `release/win-unpacked` 总计 | 803,583,838 B（≈766 MiB） |
+
+打包命令与 0.2.2 相同：`npx electron-builder --win --x64 -c.directories.output=release-023`（用户机上 0.1.7 portable 在运行，不能先 `rm -rf release`），随后把 `win-unpacked`、两个 exe、blockmap 搬进 `release/`、删掉 0.2.2 的三个文件。
+
+asar 自检（`@electron/asar.listPackage`）：19,647 entries，必需路径 14/14 命中（`plugins/seeu-theme/{index,client}.js + theme.css`、`plugins/seeu-case-index/{index,client}.js`、`tools/ges-index/{typed,cross,build}.mjs`、`dist/renderer/{local-model,loading,error}.html`、`resources/forensics/cordis.patch.yml`、`resources/forensics/local-model.example.json`）。**注意 `tools/local-model.mjs` 不在 asar 里是正常的**：它被 esbuild 打进 `dist/main.cjs`（`dist/main.cjs` 内含 `tools/local-model.mjs` 的分节注释），打包运行时不需要这个源文件。
+
+启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`，避免杀掉用户正在用的实例）：
+
+- 目录版 `verify-launch --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9355` → `"ok": true, "elapsedMs": 5102`；
+- portable `--exe release/SeeUForensicsAgentPlus-0.2.3-x64-portable.exe --port 9356 --timeout 180000` → `"ok": true, "elapsedMs": 37572`。
+
+打包态功能回归（全部用 `SEEU_UI_EXE` + 独立 `SEEU_DSH_HOME` / `SEEU_USER_DATA`）：
+
+- 面板：`node scripts/e2e/m2-ui-check.mjs` → `m2ok:true`、`searchOk:true`、`evNames:true`、`errors:[]`；
+- 设置页：`node scripts/e2e/settings-check.mjs --exe "<win-unpacked exe>"` → `ok:true`（页面来自 `app.asar/dist/renderer/local-model.html`，`presetApplied:true`、`budgetText`「固定开销估算：约 6.6k tokens…」、`copiedDiagnostics:true`、网关自报窗口 `32768`、`errors:[]`）；
+- 导出：`SEEU_EXPORT_E2E_PORT=9357 node scripts/e2e/export-check.mjs` → `ok:true`（记录 14,996 / 实体 1,888 / 表 7,025 / 时间线 3,235 字符）。
+
+**排障记录**：第一次跑打包态设置页 e2e 报 `preload 桥未暴露 window.seeu.localModel`，但同一 exe 用 CDP 手工探测时 `window.seeu` 的键齐全（`info/onStatus/retry/openLogs/openWorkspace/openLocalModelSettings/quit/writeClipboard/localModel`）。这是上一轮中断的 CDP 会话占着 9351 端口、脚本连到了旧页面导致的**偶发**问题；换干净进程重跑即通过。以后 e2e 失败先看 `/json/list` 里是否有多个 Chromium 残留，再确认不是代码问题。
+
+### v0.2.4 回归验证
+
+产物（`npx electron-builder --win --x64 -c.directories.output=release-024`，无证书跳过签名，产物再搬进 `release/`）：
+
+| 产物 | 大小 |
+| --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,621,299 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,768,410 B（19,647 entries） |
+| `release/SeeUForensicsAgentPlus-0.2.4-x64.exe` | 211,929,804 B（blockmap 220,797 B） |
+| `release/SeeUForensicsAgentPlus-0.2.4-x64-portable.exe` | 189,498,621 B |
+
+asar 自检（`@electron/asar.listPackage` + `extractFile`，entries 带前导反斜杠要先归一化）：`{"entries":19647,"missing":[]}`，14 个必需路径齐全；`plugins\seeu-case-index\client.js` 107,182 B，含 `evLabel`（检索结果行检材名）与「复制案件概览」；`plugins\seeu-theme\client.js` 含 `data-seeu-local-model`（欢迎页模型 chip）与 `data-seeu-recent`（最近案件 chip）；`dist\renderer\local-model.html` 含 `btn-warmup`（预热）、`renderBudget`（固定开销估算）、`data-preset`（窗口档位）。
+
+启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：
+
+- 目录版 `verify-launch --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9361` → `"ok": true, "elapsedMs": 4091`；
+- portable `--exe release/SeeUForensicsAgentPlus-0.2.4-x64-portable.exe --port 9362 --timeout 180000` → `"ok": true, "elapsedMs": 52547`（机器上同时有 0.1.7 实例在跑，解包更慢）。
+
+打包态功能回归（`SEEU_UI_EXE` + 独立 `SEEU_DSH_HOME` / `SEEU_USER_DATA`）：
+
+- 面板：`m2-ui-check` → `m2ok:true`、`searchOk:true`、`searchEvNames:true`、`evNames:true`、`errors:[]`；
+- 设置页：`settings-check.mjs --exe "<win-unpacked exe>"` → `ok:true`（页面来自 `app.asar/dist/renderer/local-model.html`；`presetApplied:true`、`copiedDiagnostics:true`、`pulledContextWindow:"32768"`、`warmupApiOk:true`/`warmupOk:true`、`probeMissing:["ghost-7b"]`、`probeMismatch{configured:131072,gateway:32768}`、`disableLocalModel.enabled:false`、`errors:[]`）；
+- 导出：`SEEU_EXPORT_E2E_PORT=9363 export-check.mjs` → `ok:true`（`overviewNote:"已复制案件概览（685 字符，含 5 个检材）"`、`timelineNote:"已复制 86 个时间段的清单（3235 字符）"`、`errors:[]`）。
+
+**注意**：`release/` 里仍保留用户在跑的 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`；打包时若 `release/win-unpacked` 被占用会报 `Device or resource busy`，用旁路输出目录（`-c.directories.output=release-024`）再搬。
+
+### v0.2.5 回归验证
+
+产物（`npx electron-builder --win --x64 -c.directories.output=release-025`，无证书跳过签名，产物再搬进 `release/`）：
+
+| 产物 | 大小 |
+| --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,610,372 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,777,657 B（19,647 entries） |
+| `release/SeeUForensicsAgentPlus-0.2.5-x64.exe` | 211,931,937 B（blockmap 220,676 B） |
+| `release/SeeUForensicsAgentPlus-0.2.5-x64-portable.exe` | 189,540,572 B |
+
+asar 自检（`@electron/asar.listPackage` + `extractFile`）：`{"entries":19647,"missing":[]}`，15 个必需路径齐全；`plugins\seeu-case-index\index.js` 含 `briefState` 与 `/brief` 路由，`plugins\seeu-case-index\client.js` 含「会话语境」「刷新会话概览」「evLabel」；`plugins\seeu-theme\client.js` 含欢迎页两个 chip（`data-seeu-local-model` / `data-seeu-recent`）；`dist\renderer\local-model.html` 含 `btn-warmup`。
+
+启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：
+
+- 目录版：`node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9371` → `"ok": true, "elapsedMs": 4088`；
+- portable：`--exe release/SeeUForensicsAgentPlus-0.2.5-x64-portable.exe --port 9372` → `"ok": true, "elapsedMs": 51586`。
+
+打包态 e2e（`SEEU_UI_EXE` 指向 win-unpacked exe，独立 `SEEU_DSH_HOME`/`SEEU_USER_DATA`）：
+
+- 面板：`node scripts/e2e/m2-ui-check.mjs` → `{"evNames":true,"briefVisible":true,"briefText":"会话语境：已注入 1 个案件概览（含本库） · 05:21:56 · 新会话会自动带上检材清单","briefRefreshOk":true,"searchOk":true,"searchEvNames":true,"m2ok":true,"errors":[]}`——**打包态也确认概览注入可见、可刷新**；
+- 设置页：`node scripts/e2e/settings-check.mjs --exe "<win-unpacked exe>"` → `ok:true`（页面来自 `app.asar/dist/renderer/local-model.html`；`presetApplied`、`pulledContextWindow:"32768"`、`warmupOk:true`、`probeMismatch{configured:131072,gateway:32768}`、`probeMissing:["ghost-7b"]`、`disableLocalModel.enabled:false`、`errors:[]`）。
+
+注：`release/` 里仍保留 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`（用户机上有旧实例在跑、文件被占用）。
+
+### v0.2.6 回归验证
+
+产物（`npx electron-builder --win --x64 -c.directories.output=release-026`，无证书跳过签名，产物再搬进 `release/`）：
+
+| 产物 | 大小 |
+| --- | --- |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,628,886 B ≈ 766 MiB） |
+| `release/win-unpacked/resources/app.asar` | 168,796,171 B（19,647 entries） |
+| `release/SeeUForensicsAgentPlus-0.2.6-x64.exe` | 211,934,094 B（blockmap 220,737 B） |
+| `release/SeeUForensicsAgentPlus-0.2.6-x64-portable.exe` | 189,542,424 B |
+
+asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目前导 `\` 归一化 + `extractFile` 用反斜杠）：`{"entries":19647,"missing":[]}`，15 个必需路径齐全；代码抽查全 true（`facets`、实体分页、跨案清单、时间线下拉、`/brief` 状态、树过滤、KPI 时间范围、欢迎页两个 chip、设置页 `btn-warmup`/`titleGen`/`usageInStreaming`）；`client.js` 109,770 B、`index.js` 16,231 B。
+
+启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：
+
+- 目录版：`node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9391` → `"ok": true, "elapsedMs": 4083`；
+- portable：`--exe release/SeeUForensicsAgentPlus-0.2.6-x64-portable.exe --port 9392` → `"ok": true, "elapsedMs": 51560`。
+
+打包态 e2e（`SEEU_UI_EXE` 指向 win-unpacked exe，独立 `SEEU_DSH_HOME`/`SEEU_USER_DATA`）：
+
+- 面板：`m2-ui-check.mjs` → `m2ok:true, errors:[]`，其中 `recordsFilterOk:true`（22,777 → 8,443）、`recordsAppFilterOk:true`（→ 3,028）、`entityPagingOk:true`（共 3,999 条聚合）、`entityEvSelectOk:true`（6 个检材选项）、`timelineFiltersOk:true`（检材 6 / 应用 9 个选项）、`briefVisible:true`、`treeFilterOk:true`、`kpiRange:true`；
+- 设置页：`settings-check.mjs --exe "<win-unpacked exe>"` → `ok:true`（页面来自 `app.asar/dist/renderer/local-model.html`；`titleGenDefault/titleGenOffPreview/titleGenSaved`、`usagePreview/usageSaved`、`warmupOk:true`、`pulledContextWindow:"32768"`、`probeMismatch{configured:131072,gateway:32768}`、`probeMissing:["ghost-7b"]`、`lightShell:true`、`errors:[]`）；
+- 导出：`SEEU_EXPORT_E2E_PORT=9395 export-check.mjs` → `ok:true`（案件概览 718 字符且 `hasRange:true`、记录 14,996、实体 1,888、表 7,025、时间线 3,235 字符、`savedTab:"timeline"`）；
+- 跨案：`SEEU_CROSS_E2E_PORT=9396 cross-case-check.mjs` → `ok:true`（`syncNote:"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。"`，两份夹具都在列表里，复制 30 条重合实体清单 2,675 字符、含两个案号与类别）。
+
+排障记录：`SEEU_UI_EXE` 必须传 **Windows 路径**（`D:/.../SeeUForensicsAgentPlus.exe`）；传 MSYS 路径（`$PWD/...` → `/d/...`）会 `spawn ... ENOENT`。打包日志里的 `duplicate dependency references` 巨量列表属正常现象（electron-builder 的依赖去重提示）。
+
+### v0.2.7 回归验证
+
+- 打包：`npm version 0.2.7 --no-git-tag-version`；`node scripts/build.mjs`、`npm run check:overlay`、`npm test`（55/55）全绿；`npx electron-builder --win --x64 -c.directories.output=release-027`（约 14 分钟，无证书跳过签名），产物搬进 `release/` 并删 0.2.6 三件（保留 0.1.7 portable）。
+- 产物：`release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B；`resources/app.asar` **168,807,728 B（19,648 entries）**；NSIS **211,936,354 B**（blockmap 220,843 B）；portable **189,590,954 B**；`release/win-unpacked` 总计 803,640,443 B。
+- asar 自检（`.probe/asar-027-check.mjs`，`listPackage` 条目前导 `\` 归一化、`extractFile` 用反斜杠无前导分隔符）：条目 19,648、16 个必需路径（多了 `tools/ges-index/csv.mjs`）`missing:[]`；代码抽查 16 项全 true，新增 `csvRecordsRoute`/`csvTableRoute`/`csvSaveIpc`（`dist/preload.cjs` 含 `save-export`）/`recordsCsvButton`/`tableCsvButton`。
+- 启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：目录版 `node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9421` → `"ok":true,"elapsedMs":4150`；portable `--port 9422 --timeout 240000` → `"ok":true,"elapsedMs":47614`。
+- 打包态 e2e（都传 Windows 路径给 `SEEU_UI_EXE`，隔离 home/userData）：
+  - `m2-ui-check`（端口默认）→ `{"m2ok":true,"searchOk":true,"searchEvNames":true,"recordsFilterOk":true,"entityPagingOk":true,"timelineFiltersOk":true,"briefVisible":true,"treeFilterOk":true,"kpiRange":true,"errors":[]}`；
+  - `export-check`（`SEEU_EXPORT_E2E_PORT=9423`，`SEEU_EXPORT_DIR` 默认 `.dev/exports`）→ `{"ok":true,"csvNote":"已导出 20000 行（共 22777 条，单次最多 20000 行）…","csvFile":{"bytes":4608566,"bom":true,"hasHeader":true,"dataLines":20000,"hasTs":true},"csvTableNote":"已导出 745 行到 …","csvTableFile":{"bytes":143621,"bom":true,"hasHeader":true,"dataLines":745},"errors":[]}`（概览 718 / 记录 14,996 / 时间线 3,235 字符不变）；
+  - `settings-check` → `{"ok":true,"presetApplied":true,"budgetText":"固定开销估算：约 6.6k tokens…","pulledContextWindow":"32768","warmupOk":true,"titleGenDefault":true,"usagePreview":true,"lightShell":true,"errors":[]}`；
+  - `cross-case-check`（`SEEU_CROSS_E2E_PORT=9424`）→ `{"ok":true,"syncNote":"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。","copyNote":"已复制 30 条重合实体清单（2675 字符）","clipboard":{"hasTwoCases":true,"hasCaseNumbers":true,"hasKinds":true},"errors":[]}`。
+- 预览仍在线（重启后 token 会变），等用户视觉验收 + 真实网关联调。
+
+### v0.2.8 回归验证
+
+- 打包：`npm version 0.2.8 --no-git-tag-version`；`node scripts/build.mjs`、`npm run check:overlay`、`npm test`（80/80）全绿；`npx electron-builder --win --x64 -c.directories.output=release-028`（约 12 分钟，无证书跳过签名），产物搬进 `release/` 并删 0.2.7 三件（保留 0.1.7 portable）。
+- 产物：`release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B；`resources/app.asar` **168,818,135 B（19,655 entries）**；NSIS **211,947,042 B**（blockmap 220,668 B）；portable **189,582,714 B**；`release/win-unpacked` 总计 803,669,553 B。
+- asar 自检（`.probe/asar-028-check.mjs`）：条目 19,655、必需路径（含 `tools/lovely-cli/cli.mjs`、`discovery.mjs`、两个 `SKILL.md`、`tools/ges-index/csv.mjs`）`missing:[]`；22 项代码抽查全 true，新增 `lovelyCli`/`lovelyDiscovery`/`lovelySkillMem`/`lovelySkillSpark`/`hostLovelyEnv`/`lovelyUnpacked`（`resources/app.asar.unpacked/tools/lovely-cli/*.mjs` 存在）、`reportedRecordCount`、`briefCountNote`、`searchCsvButton`。
+- 打包版 lovely CLI 实跑：`node release/win-unpacked/resources/app.asar.unpacked/tools/lovely-cli/cli.mjs status` → `{"lovelymem":{"path":"E:\\CTFTools\\...lovelymem.v3.exe","found":true},"lovelyspark":{"path":"E:\\CTFTools\\...lovelyspark.exe","found":true}}`。
+- 启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：目录版 `node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9441` → `"ok":true,"elapsedMs":5130`；portable `--port 9442 --timeout 240000` → `"ok":true,"elapsedMs":36459`。
+- 打包态 e2e（都传 Windows 路径给 `SEEU_UI_EXE`，隔离 home/userData）：
+  - `m2-ui-check` → `{"m2ok":true,"searchOk":true,"searchEvNames":true,"recordsFilterOk":true,"recordsAppFilterOk":true,"entityPagingOk":true,"entityEvSelectOk":true,"timelineFiltersOk":true,"briefVisible":true,"treeFilterOk":true,"kpiRange":true,"errors":[]}`；
+  - `settings-check --exe "<win-unpacked exe>"` → `{"ok":true,"presetApplied":true,"pulledContextWindow":"32768","warmupOk":true,"titleGenDefault":true,"usagePreview":true,"probeNoContextWindow":false,"probeMismatch":{"configured":131072,"gateway":32768},"probeMissing":["ghost-7b"],"lightShell":true,"errors":[]}`；
+  - `export-check`（`SEEU_EXPORT_E2E_PORT=9445`）→ `ok:true`（案件概览 713 字符且 `hasRange:true`、记录 CSV 20,000 行 4,608,566 B BOM true、表 CSV 745 行 143,621 B、记录 14,996 / 实体 1,888 / 时间线 3,235 字符、`savedTab:"timeline"`）；
+  - `cross-case-check`（`SEEU_CROSS_E2E_PORT=9446`）→ `ok:true`（`syncNote:"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。"`，复制 30 条重合实体清单 2,675 字符、含两个案号与类别）。
+- 排障：同 v0.2.7，`SEEU_UI_EXE` 必须 Windows 路径；`release-028` 中间目录在产物搬完后删除。
+- 预览仍在线（重启后 token 会变），等用户视觉验收；真实网关（`deepseek-flash`）已联调通过。
+
+### v0.2.9 回归验证
+
+- 打包：`npm version 0.2.9 --no-git-tag-version`；`node scripts/build.mjs`、`npm test`（79/79）全绿；`npx electron-builder --win --x64 -c.directories.output=release-029`（约 12 分钟、无证书跳过签名），产物搬进 `release/` 并删 0.2.8 三件（保留 0.1.7 portable）。
+- 产物：`release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B；`resources/app.asar` **168,835,443 B（19,654 entries）**；NSIS **211,947,119 B**（blockmap 220,827 B）；portable **189,553,401 B**；`release/win-unpacked` 总计 803,679,886 B。
+- asar 自检（`.probe/asar-029-check.mjs`）：条目 19,654、`missing:[]`；24 项内容检查全 true —— 新增 `lovelyManualOnly`（asar 里没有 discovery、`cli.mjs` 不再 `import ./discovery.mjs`）、`lovelyToolsIpc`（`dist/main.cjs` 含 `seeu:lovely-tools:save`、preload 有 `lovelyTools`）、`settingsLovelyTools`（设置页含「本机取证工具路径」与 `btn-tools-save`）、`lovelyToolsModule`（`dist/main.cjs` 里有 `saveLovelyToolPaths`/`lovelyToolsView`——`tools/lovely-tools.mjs` 被 esbuild 打进主进程，不在 asar 里单列）、`lovelySkipHint`（SKILL.md 含「手动指定」）、`lovelyUnpacked`（unpacked 里有 `cli.mjs`、没有 `discovery.mjs`）。
+- 启动验证（`SEEU_DEV_MULTI=1`，不跑 `scripts/kill-app.mjs`）：目录版 `node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9451` → `"ok":true,"elapsedMs":5249`；portable `--port 9452 --timeout 240000` → `"ok":true,"elapsedMs":37389`。
+- 打包态 e2e（`SEEU_UI_EXE` 传 Windows 路径，隔离 home/userData）：
+  - `m2-ui-check` → `{"m2ok":true,"searchOk":true,"searchEvNames":true,"recordsFilterOk":true,"entityPagingOk":true,"timelineFiltersOk":true,"briefVisible":true,"treeFilterOk":true,"kpiRange":true,"errors":[]}`；
+  - `settings-check --exe "<win-unpacked exe>"` → `{"ok":true,"toolsConfigFile":"…\.dev\settings-home\lovely-cli.json","toolsRows":2,"toolsSectionVisible":true,"toolsApiSaved":true,"toolsUiSaved":true,"toolsFileOk":true,"toolsAfterClear":{"lovelyspark":"…fake-lovelyspark.exe"},"toolsClearOk":true,"pulledContextWindow":"32768","warmupOk":true,"titleGenDefault":true,"usagePreview":true,"probeNoContextWindow":false,"lightShell":true,"errors":[]}`；
+  - `export-check`（`SEEU_EXPORT_E2E_PORT=9455`）→ `ok:true`（概览 713 字符且 `hasRange:true`、记录 CSV 20,000 行 4,608,566 B BOM true、表 CSV 745 行 143,621 B、记录 14,996 / 实体 1,888 / 时间线 3,235 字符、`savedTab:"timeline"`）；
+  - `cross-case-check`（`SEEU_CROSS_E2E_PORT=9456`）→ `ok:true`（`syncNote:"同步完成：扫描索引 2 个，处理 2 案（新增 0、更新 2）；现共 2 案。"`，30 条重合实体清单 2,675 字符、含两个案号）。
+- 尝试用 `real-gateway-ui.mjs` 直接跑打包版（临时给脚本加过 `SEEU_UI_EXE` 支持）：页面能起、但打包版首次启动会落在「选择工作区」页，composer 驱动不稳（`stage:"type-failed"`），脚本改动已回滚；真机联调仍以 dev Electron 版脚本（`SEEU_UI_TOOL=1`，`ok:true`）+ headless 版为准。
+- 预览仍在线（重启后 token 会变），等用户视觉验收与手动工具路径设置。

@@ -115,6 +115,8 @@
         name: '@deepseek-ai/dsh-agent-instructions'
         config:
           maxBytes: 65536
+          # 除 AGENTS.md 外，也把 SeeU 自动生成的案件概览当指令读取（面板建库/启动时刷新）
+          instructionFileCandidates: ["AGENTS.md", "CLAUDE.md", "SEEU-CASE-BRIEF.md"]
       - id: time-context
         name: '@deepseek-ai/dsh-time-context'
       - id: tool-bash
@@ -181,6 +183,19 @@
         config:
           - id: compaction-basic
             name: '@deepseek-ai/dsh-compaction-basic'
+            config:
+              # 触发阈值 = min(W×0.8, W − O − B)，W=上下文窗口、O=系统/工具描述开销(实测 ~5k)、
+              # B=headroomTokens=给「本轮输出 + 压缩摘要」预留的空间。
+              # 官方默认 B=65536 对 128k 窗口会把阈值压到 ~57k（只用掉不到一半窗口），
+              # 本地模型每次压缩都要重算 prefill，非常慢，所以必须把阈值往后推。
+              # 这里用 8192：正好等于随包配置的输出上限（maxTokens 8192），
+              #   128k 窗口 → 阈值 ~102k（0.8×W 生效，不再受 B 限制）
+              #   256k 窗口 → 0.8×W
+              #   32k 窗口  → 阈值 ~19k（W−O−B 仍为正，小模型也能跑，不必再手工调）
+              # 若某天输出上限被调大（>8192），这里要跟着调大，否则长输出会触发溢出重试。
+              thresholdRatio: 0.8
+              headroomTokens: 8192
+              retainRatio: 0.16
           - id: command-compact
             name: '@deepseek-ai/dsh-command-compact'
           - id: tool-result-pruner
@@ -224,6 +239,16 @@
       - id: present
         name: '@deepseek-ai/dsh-tool-present'
 
+# ── 品牌与语言（覆盖官方行）──────────────────────────────────────────────────
+# 官方鲸鱼 logo + DSH 字标让位给 seeu-theme 的取证盾徽（同一槽位两份注册会叠在一起）。
+- id: ui-brand-official
+  disabled: true
+
+# 界面语言固定中文：取证报告、面板、设置页都按中文呈现（官方默认跟随浏览器语言）。
+- id: locale
+  config:
+    preference: zh
+
 # ── 案件索引插件（新增行，id 见 plugins/seeu-case-index）────────────────────
 # 相对路径以本文件所在目录（resources/forensics/）为基准，app-boot 会转成 file: URL：
 #   开发态 → <仓库根>/plugins/seeu-case-index/index.js
@@ -232,3 +257,94 @@
 - insert:
     - id: seeu-case-index
       name: ../../plugins/seeu-case-index/index.js
+
+# ── 取证主题插件（新增行，id 见 plugins/seeu-theme）────────────────────────
+# 纯客户端插件：覆盖 dsh 设计 token（深海蓝/青蓝、中文优先字体）+ 浏览器标题。
+# 宿主行本身不挂任何服务，只为了让 client.js 被 dsh-client-modules serve。
+- insert:
+    - id: seeu-theme
+      name: ../../plugins/seeu-theme/index.js
+
+# ── 本地模型精简预设（新增行，id 见 local-model 生成的 patch）────────────────
+# 为什么要有这一行：一次会话请求的固定开销里，工具描述占大头（实测 27 个工具
+# ≈26,687 字符 ≈1.2 万 tokens，系统提示 ≈6,000 字符）。本地小模型窗口 32k 时
+# 扣掉这些只剩一半给对话；精简预设把工具表压到 ~10 个（≈9,900 字符）、
+# 系统提示换成紧凑版（≈1,300 字符），固定开销降到约 1/3。
+#
+# 只由「本地模型设置」里的「精简工具集」开关启用：外壳生成的 local-model.patch.yml
+# 会把 agent-preset-registry 的 default 指向 seeu-lite；关掉开关则默认仍是 standard。
+# 想临时用完整工具面：在会话里把预设切回「取证分析（Forensics）」即可。
+- insert:
+    - id: preset-seeu-lite
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: seeu-lite
+        order: 2
+        name: 取证分析（本地模型精简）
+        description: 给本地小模型/低并发网关的精简预设：工具表约 10 个、系统提示紧凑版，固定上下文开销约为完整预设的 1/3；需要子代理/工作流时切回「取证分析（Forensics）」。
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是 SeeUForensicsAgentPlus 的取证分析助手（DFIR）。目标：给出可复核、可追溯的结论。
+                1. 证据优先：结论必须指向具体证据（路径、哈希、时间戳、命令输出）；报告结尾自查每条结论能否落到证据上。
+                2. 只读优先：默认只读；写入/删除/上传/修改证据前先说明目标与影响并取得确认。
+                3. 不臆造：不确定就标「未验证/推测」，不补全不存在的文件、日志行或哈希。
+                4. 不改原始证据；要加工先复制到工作目录并记录哈希对应关系。
+                5. 报告结构：结论 → 支撑证据（路径/哈希/时间戳）→ 方法 → 置信度 → 局限；区分事实与推断。
+                6. 时间标时区与来源；敏感信息脱敏但保留可定位信息。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+              instructionFileCandidates: ["AGENTS.md", "CLAUDE.md", "SEEU-CASE-BRIEF.md"]
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: true
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: false
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+                config:
+                  thresholdRatio: 0.8
+                  headroomTokens: 8192
+                  retainRatio: 0.16
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'

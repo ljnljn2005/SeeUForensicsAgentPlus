@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "route": "local-openai",
+  "displayName": "本地模型（OpenAI 兼容网关）",
+  "baseURL": "http://127.0.0.1:8000/v1",
+  "apiKey": "local",
+  "model": "your-model-id",
+  "contextLengthNote": "个人赛一般 128k，团体赛 256k；per-model 也可以用下面 models 数组逐条覆盖",
+  "contextWindow": 131072,
+  "maxTokens": 8192,
+  "useAsDefault": false,
+  "retryMaxRetries": 3,
+  "titleMaxOutputTokens": 512,
+  "titleTimeoutMs": 20000,
+  "timeoutMs": 600000,
+  "streamIdleTimeoutMs": 600000,
+  "litePreset": true,
+  "usageInStreaming": false,
+  "titleGeneration": true
+}

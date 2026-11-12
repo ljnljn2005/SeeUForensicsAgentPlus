@@ -9,8 +9,8 @@
  * 明确不负责：dsh agent 本身的工具、模型、会话 —— 那些在 dsh 运行时里。
  */
 
-import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, session, shell, type MenuItemConstructorOptions } from 'electron'
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
+import { app, BrowserWindow, Menu, Tray, clipboard, dialog, ipcMain, nativeImage, session, shell, type MenuItemConstructorOptions } from 'electron'
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   APP_ID,
@@ -20,6 +20,21 @@ import {
   PRODUCT_NAME,
 } from './brand.js'
 import { DshHost, type HostState } from './host.js'
+import {
+  describeLocalModelConfig,
+  diagnoseLocalGateway,
+  disableLocalModel,
+  localModelConfigFile,
+  previewLocalModelPatch,
+  probeableLocalModel,
+  readLocalModelConfig,
+  testLocalGateway,
+  warmupLocalGateway,
+  contextWindowMismatch,
+  gatewayContextReported,
+  writeLocalModelConfig,
+} from './local-model.js'
+import { lovelyToolsView, saveLovelyToolPaths } from './lovely-tools.js'
 import { bundledSkillsDir, installBundledSkills, userSkillsDir } from './skills.js'
 import {
   bundledSkillNames,
@@ -55,6 +70,7 @@ interface StatusPayload {
 
 let mainWindow: BrowserWindow | undefined
 let skillsWindow: BrowserWindow | undefined
+let settingsWindow: BrowserWindow | undefined
 let tray: Tray | undefined
 let host: DshHost | undefined
 let quitting = false
@@ -132,6 +148,147 @@ async function showErrorPage(message: string, detail?: string): Promise<void> {
 
 // ── dsh Host 生命周期 ───────────────────────────────────────────────────────
 
+/**
+ * 已配置本地模型时，启动阶段先做一次短超时连通性探测。
+ * 目的：本地网关没开时不要等到用户发第一条消息才报错——先在日志和加载页里说清楚。
+ * 探测失败不阻塞启动（仍可以继续用官方模型），只更新提示。
+ *
+ * 结果会缓存到 `localModelProbeState`，供托盘 tooltip、菜单「本地模型状态…」和
+ * 设置窗口显示；`reason = 'manual'` 时（用户主动点重新探测）不改加载页状态。
+ */
+interface LocalModelProbeState {
+  readonly ok: boolean
+  readonly baseURL: string
+  readonly models: string[]
+  /** 配置里写了、但网关 /v1/models 没返回的模型 id（通常是模型改名或抄错）。 */
+  readonly missing?: string[]
+  /** 配置的上下文窗口超过网关自报能力时给出两者数值。 */
+  readonly mismatch?: { configured: number; gateway: number }
+  /** 网关 /v1/models 没有自报任何上下文窗口（Ollama 等）时为 true：窗口只能按模型文档手填。 */
+  readonly noContextWindow?: boolean
+  readonly error?: string
+  readonly at: string
+}
+
+let localModelProbeState: LocalModelProbeState | undefined
+
+function modelStatusLabel(): string {
+  if (localModelProbeState === undefined) return '官方模型'
+  if (localModelProbeState.ok) {
+    const first = localModelProbeState.models[0]
+    return first === undefined ? '本地模型（网关已连通）' : `本地模型 ${first}`
+  }
+  return '本地网关未连通（当前用官方模型）'
+}
+
+/** 托盘提示与菜单是外壳里唯一常驻的「我现在用哪个模型」提示位。 */
+function refreshModelIndicators(): void {
+  if (tray === undefined) return
+  try {
+    tray.setToolTip(`${PRODUCT_NAME} · ${modelStatusLabel()}`)
+  } catch {
+    // 托盘已销毁时忽略
+  }
+}
+
+async function probeLocalModelGateway(reason: 'startup' | 'manual' = 'startup'): Promise<LocalModelProbeState | undefined> {
+  const target = probeableLocalModel()
+  if (target === undefined) {
+    localModelProbeState = undefined
+    refreshModelIndicators()
+    broadcastLocalModelProbe()
+    if (reason === 'manual') logShell('local model probe: 未配置本地模型，跳过')
+    return undefined
+  }
+  const { baseURL, apiKey } = target
+  try {
+    const probe = await testLocalGateway({ baseURL, apiKey, timeoutMs: 4000 })
+    const ids = (probe.models ?? []).map((item) => item.id ?? item.name ?? '').filter(Boolean)
+    const missing = target.models.filter((id) => !ids.includes(id))
+    const mismatch = contextWindowMismatch(target.contextWindow, target.models, probe.models)
+    const noContextWindow = probe.ok && ids.length > 0 && !gatewayContextReported(probe.models)
+    localModelProbeState = probe.ok
+      ? {
+          ok: true,
+          baseURL,
+          models: ids,
+          ...(missing.length === 0 ? {} : { missing }),
+          ...(mismatch === null ? {} : { mismatch }),
+          ...(noContextWindow ? { noContextWindow: true } : {}),
+          at: new Date().toISOString(),
+        }
+      : { ok: false, baseURL, models: [], ...(probe.error === undefined ? {} : { error: probe.error }), at: new Date().toISOString() }
+    refreshModelIndicators()
+    broadcastLocalModelProbe()
+    if (probe.ok) {
+      logShell(`local model probe: ${baseURL} 可用（${ids.join(', ') || '网关未返回模型列表'}）`)
+      if (missing.length > 0) {
+        logShell(`local model probe: 配置的模型 ${missing.join(', ')} 不在网关列表里（网关有：${ids.join(', ')}）`)
+      }
+      if (mismatch !== null) {
+        logShell(`local model probe: 配置的上下文窗口 ${mismatch.configured} 超过网关自报的 ${mismatch.gateway}，超出部分请求会被拒`)
+      }
+      if (noContextWindow) {
+        logShell(`local model probe: 网关没有自报上下文窗口（只有模型 id），按配置的 ${target.contextWindow} 使用，模型实际窗口更小会报 400`)
+      }
+      return localModelProbeState
+    }
+    logShell(`local model probe: ${baseURL} 不可用 → ${probe.error ?? '未知错误'}`)
+    if (reason === 'startup' && lastStatus.phase === 'starting') {
+      setStatus({ phase: 'starting', message: '本地模型网关暂未连通，先用官方模型启动…' })
+    }
+    return localModelProbeState
+  } catch (error) {
+    logShell(`local model probe 异常: ${errorDetail(error) ?? error}`)
+    return undefined
+  }
+}
+
+/** 把探测结果推给所有窗口：设置窗口可能在探测完成前就已经打开。 */
+function broadcastLocalModelProbe(): void {
+  const payload = localModelProbeState ?? null
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('seeu:local-model:probe', payload)
+  }
+}
+
+/** 工具 → 本地模型状态…：把配置文件、探测地址/时间/结果一次讲清楚。 */
+function showLocalModelStatus(): void {
+  const view = describeLocalModelConfig()
+  const probe = localModelProbeState
+  const lines: string[] = [`配置文件：${view.path}${view.exists ? '' : '（不存在）'}`]
+  if (view.error !== undefined) lines.push(`配置错误：${view.error}`)
+  if (probe === undefined) {
+    lines.push('启动探测：未配置本地模型（使用官方模型）')
+  } else {
+    lines.push(
+      `启动探测：${probe.ok ? `可用 · ${probe.models.join(', ') || '网关未返回模型列表'}` : `不可用 · ${probe.error ?? '未知错误'}`}`,
+      `探测地址：${probe.baseURL}`,
+      `探测时间：${probe.at}`,
+    )
+  }
+  lines.push('', '修改配置：工具 → 本地模型设置…（保存后需重启应用才生效）')
+  const canProbe = probe !== undefined
+  const buttons = canProbe ? ['重新探测', '关闭'] : ['关闭']
+  void dialog
+    .showMessageBox({
+      type: probe?.ok === true ? 'info' : 'warning',
+      title: '本地模型状态',
+      message: modelStatusLabel(),
+      detail: lines.join('\n'),
+      buttons,
+      defaultId: buttons.length - 1,
+      cancelId: buttons.length - 1,
+    })
+    .then((result) => {
+      if (result.response === 0 && canProbe) {
+        void probeLocalModelGateway('manual').then(() => {
+          showLocalModelStatus()
+        })
+      }
+    })
+}
+
 async function startHost(): Promise<void> {
   if (host !== undefined) await host.stop()
   await showLoadingPage()
@@ -141,6 +298,7 @@ async function startHost(): Promise<void> {
     `skills: ${skills.skills.length} 个（${skills.skills.join(', ') || '无'}）→ ${skills.dir}${skills.changed ? ' [已更新]' : ' [无变化]'}`,
   )
   logShell(`start host: runtime=${dshRuntimeDir()} home=${dshHome()} patch=${forensicsPatchPath()}`)
+  void probeLocalModelGateway()
 
   const next = new DshHost()
   host = next
@@ -263,6 +421,40 @@ function focusMainWindow(): void {
   mainWindow.focus()
 }
 
+/**
+ * 本地模型设置窗口：只读写 `<userData>/local-model.json`，保存后重启生效。
+ * 用独立窗口而不是 dsh 设置页，是因为同一服务行的 settings 写入会被 overlay
+ * 覆盖并硬拒（`Configuration for "<id>" is overridden by …`）。
+ */
+function openLocalModelSettings(): void {
+  if (settingsWindow !== undefined && !settingsWindow.isDestroyed()) {
+    settingsWindow.focus()
+    return
+  }
+  settingsWindow = new BrowserWindow({
+    width: 700,
+    height: 780,
+    minWidth: 560,
+    minHeight: 520,
+    title: '本地模型设置',
+    parent: mainWindow === undefined || mainWindow.isDestroyed() ? undefined : mainWindow,
+    modal: false,
+    show: false,
+    backgroundColor: COLORS.background,
+    icon: existsSync(windowIconPath()) ? windowIconPath() : undefined,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: preloadFile(),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  })
+  settingsWindow.once('ready-to-show', () => settingsWindow?.show())
+  settingsWindow.on('closed', () => { settingsWindow = undefined })
+  void settingsWindow.loadFile(join(rendererDir(), 'local-model.html'))
+}
+
 function createTray(): void {
   const icon = trayIconPath()
   if (!existsSync(icon)) {
@@ -271,12 +463,14 @@ function createTray(): void {
   }
   try {
     tray = new Tray(nativeImage.createFromPath(icon))
-    tray.setToolTip(PRODUCT_NAME)
+    tray.setToolTip(`${PRODUCT_NAME} · ${modelStatusLabel()}`)
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: '显示主窗口', click: () => focusMainWindow() },
       { type: 'separator' },
       { label: '打开取证工作区', click: () => void shell.openPath(workspaceDir()) },
       { label: '打开日志目录', click: () => void shell.openPath(logDir()) },
+      { label: '本地模型设置…', click: () => openLocalModelSettings() },
+      { label: '本地模型状态…', click: () => showLocalModelStatus() },
       { type: 'separator' },
       { label: '退出', click: () => void requestQuit() },
     ]))
@@ -427,6 +621,7 @@ function showAbout(): void {
       `Chromium：${process.versions.chrome}`,
       `Node：${process.versions.node}`,
       `运行时：@deepseek-ai/dsh（web profile + 取证 overlay）`,
+      `本地模型：${modelStatusLabel()}`,
       `DSH_HOME：${dshHome()}`,
       `工作区：${workspaceDir()}`,
     ].join('\n'),
@@ -482,6 +677,16 @@ function buildMenu(): void {
       ],
     },
     {
+      label: '工具',
+      submenu: [
+        { label: '本地模型设置…', click: () => openLocalModelSettings() },
+        { label: '本地模型状态…', click: () => showLocalModelStatus() },
+        { label: '重新探测本地网关', click: () => { void probeLocalModelGateway('manual').then(() => { showLocalModelStatus() }) } },
+        { type: 'separator' },
+        { label: '打开配置文件目录', click: () => void shell.openPath(userDataDir()) },
+      ],
+    },
+    {
       label: '帮助',
       submenu: [
         { label: `关于 ${PRODUCT_NAME}`, click: () => showAbout() },
@@ -494,6 +699,27 @@ function buildMenu(): void {
 // ── IPC ────────────────────────────────────────────────────────────────────
 
 function registerIpc(): void {
+  ipcMain.handle('seeu:clipboard:write', (_event, text: unknown) => {
+    clipboard.writeText(String(text ?? ''))
+    return true
+  })
+  // 面板导出的落盘（CSV 等）：默认存到 <下载>/seeu-exports，SEEU_EXPORT_DIR 可覆盖（e2e 用）。
+  ipcMain.handle('seeu:file:save-export', (_event, input: unknown) => {
+    const payload = input as { name?: unknown; text?: unknown } | null
+    const text = typeof payload?.text === 'string' ? payload.text : ''
+    if (!text) return { ok: false, error: '导出内容为空' }
+    const dir = process.env.SEEU_EXPORT_DIR || join(app.getPath('downloads'), 'seeu-exports')
+    const rawName = typeof payload?.name === 'string' && payload.name.trim() ? payload.name.trim() : 'seeu-export.csv'
+    const safeName = rawName.replace(/[\\/:*?"<>|\r\n]+/g, '_').slice(0, 120) || 'seeu-export.csv'
+    try {
+      mkdirSync(dir, { recursive: true })
+      const target = join(dir, safeName)
+      writeFileSync(target, text, 'utf8')
+      return { ok: true, path: target, bytes: Buffer.byteLength(text, 'utf8') }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
   ipcMain.handle('seeu:info', () => ({
     productName: PRODUCT_NAME,
     displayName: PRODUCT_DISPLAY_NAME,
@@ -562,11 +788,93 @@ function registerIpc(): void {
     return result
   })
   ipcMain.on('seeu:skills:open-dir', () => { void shell.openPath(userSkillsDir()) })
+
+  ipcMain.on('seeu:open-settings', () => { openLocalModelSettings() })
+
+  // 本地模型设置窗口。配置文件存在时以文件为准（生产路径）；
+  // 只在 SEEU_LOCAL_MODEL_JSON 注入、没有文件时（开发/联调）也返回生效配置，
+  // 否则欢迎页的「本地模型」chip 会看不到当前正在跑的路由。
+  ipcMain.handle('seeu:local-model:get', () => {
+    const view = describeLocalModelConfig()
+    const probe = localModelProbeState ?? null
+    if (view.exists) return { ...view, probe }
+    try {
+      const inline = readLocalModelConfig()
+      return inline === undefined ? { ...view, probe } : { ...view, config: inline, probe }
+    } catch {
+      return { ...view, probe }
+    }
+  })
+  ipcMain.handle('seeu:local-model:probe', async () => (await probeLocalModelGateway('manual')) ?? null)
+  ipcMain.handle('seeu:local-model:save', (_event, input: unknown) => writeLocalModelConfig(input))
+  ipcMain.handle('seeu:local-model:preview', (_event, input: unknown) => previewLocalModelPatch(input))
+  ipcMain.handle('seeu:local-model:test', (_event, probe: { baseURL?: string; apiKey?: string }) =>
+    testLocalGateway(probe ?? {}))
+  ipcMain.handle('seeu:local-model:warmup', async (_event, probe: { baseURL?: string; apiKey?: string; model?: string } | undefined) => {
+    const input = probe ?? {}
+    if (input.baseURL !== undefined && input.baseURL !== '') return warmupLocalGateway(input)
+    const target = probeableLocalModel()
+    if (target === undefined) {
+      return { ok: false, elapsedMs: 0, error: '未配置本地模型', hint: '先在设置页填网关地址与模型，保存后再预热。' }
+    }
+    return warmupLocalGateway({ baseURL: target.baseURL, apiKey: target.apiKey, model: target.models[0] })
+  })
+  ipcMain.handle('seeu:local-model:diagnose', (_event, probe: { baseURL?: string; apiKey?: string; model?: string }) =>
+    diagnoseLocalGateway(probe ?? {}))
+  ipcMain.handle('seeu:local-model:disable', () => {
+    const res = disableLocalModel()
+    logShell(res.ok ? `local model: 已禁用（${res.path}）` : `local model: 禁用失败（${res.error}）`)
+    return res
+  })
+  ipcMain.handle('seeu:local-model:disable-restart', () => {
+    const res = disableLocalModel()
+    logShell(res.ok
+      ? `local model: 启动失败兜底，已禁用本地模型并重启（${res.path}）`
+      : `local model: 启动失败兜底，禁用本地模型失败（${res.error}）`)
+    if (res.ok) setTimeout(() => { app.relaunch(); void requestQuit() }, 250)
+    return res
+  })
+  ipcMain.on('seeu:local-model:restart', () => {
+    logShell('local model: 用户从设置页请求重启')
+    app.relaunch()
+    void requestQuit()
+  })
+  ipcMain.on('seeu:local-model:open-file', () => {
+    const file = localModelConfigFile()
+    if (existsSync(file)) shell.showItemInFolder(file)
+    else void shell.openPath(userDataDir())
+  })
+
+  // 本机取证工具路径：不自动发现，路径只来自设置窗口（写 <DSH_HOME>/lovely-cli.json）。
+  ipcMain.handle('seeu:lovely-tools:get', () => lovelyToolsView(process.env))
+  ipcMain.handle('seeu:lovely-tools:pick', async (_event, tool: unknown) => {
+    const id = tool === 'lovelyspark' ? 'lovelyspark' : 'lovelymem'
+    const label = id === 'lovelyspark' ? 'LovelySpark' : 'LovelyMem V3'
+    const result = await dialog.showOpenDialog({
+      title: `选择 ${label} 的 exe`,
+      properties: ['openFile'],
+      filters: [{ name: '可执行文件', extensions: ['exe'] }],
+    })
+    if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+    return { ok: true, path: result.filePaths[0] }
+  })
+  ipcMain.handle('seeu:lovely-tools:save', (_event, input: unknown) => {
+    try {
+      const res = saveLovelyToolPaths(input, process.env)
+      logShell(`lovely tools: 已保存工具路径（${res.saved.map((item) => `${item.id}:${item.action}`).join(', ')}）`)
+      return res
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
 }
 
 // ── 启动 ────────────────────────────────────────────────────────────────────
 
-const gotLock = app.requestSingleInstanceLock()
+// 开发/截图时允许并行实例（例如用户正开着安装版验收，开发态要另起一个窗口截图）。
+// 仅当显式设置 SEEU_DEV_MULTI=1 时生效，装出来的桌面版不受影响。
+const allowMultiInstance = process.env.SEEU_DEV_MULTI === '1'
+const gotLock = allowMultiInstance ? true : app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
@@ -599,6 +907,8 @@ if (!gotLock) {
     buildMenu()
     createTray()
     mainWindow = createWindow()
+    // 开发/自动化：SEEU_OPEN_SETTINGS=1 时启动即打开本地模型设置窗口（截图与 CDP 验收用）。
+    if (process.env.SEEU_OPEN_SETTINGS === '1') openLocalModelSettings()
     await startHost()
   })
 }

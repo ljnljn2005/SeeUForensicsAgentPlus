@@ -48,6 +48,96 @@ export interface SeeuSkillImportResult {
   readonly sourcePath?: string
 }
 
+export interface LovelyToolState {
+  readonly id: 'lovelymem' | 'lovelyspark'
+  readonly label: string
+  readonly env: string
+  readonly hint: string
+  readonly path: string
+  readonly source: 'env' | 'config' | 'unset'
+  readonly configured: boolean
+  readonly found: boolean
+}
+
+export interface LovelyToolsView {
+  readonly configFile: string
+  readonly tools: LovelyToolState[]
+  readonly error?: string
+}
+
+export interface LovelyToolsSaveResult {
+  readonly ok: boolean
+  readonly error?: string
+  readonly saved?: { id: 'lovelymem' | 'lovelyspark'; action: 'set' | 'cleared' }[]
+  readonly configFile?: string
+  readonly tools?: LovelyToolState[]
+}
+
+export interface LocalModelProbeState {
+  readonly ok: boolean
+  readonly baseURL: string
+  readonly models: string[]
+  readonly error?: string
+  readonly at: string
+  readonly missing?: string[]
+  /** 配置的上下文窗口超过网关自报能力时给出两者数值。 */
+  readonly mismatch?: { configured: number; gateway: number }
+  /** 网关没有自报上下文窗口（Ollama 等）：窗口只能按模型文档手填。 */
+  readonly noContextWindow?: boolean
+}
+
+export interface LocalModelView {
+  readonly path: string
+  readonly exists: boolean
+  readonly config?: unknown
+  readonly error?: string
+  readonly probe?: LocalModelProbeState | null
+}
+
+export interface LocalModelWarmupResult {
+  readonly ok: boolean
+  /** 非流式最小请求的往返毫秒数（模型冷启动时可能几十秒）。 */
+  readonly elapsedMs: number
+  readonly reply?: string
+  readonly error?: string
+  readonly hint?: string
+}
+
+export interface LocalModelSaveResult {
+  readonly ok: boolean
+  readonly path?: string
+  readonly error?: string
+}
+
+export interface LocalModelDiagnosisItem {
+  readonly key: string
+  readonly label: string
+  readonly ok: boolean
+  readonly detail: string
+  readonly ms?: number
+}
+
+export interface LocalModelDiagnosis {
+  readonly ok: boolean
+  readonly baseURL: string
+  readonly model?: string
+  readonly items: LocalModelDiagnosisItem[]
+}
+
+export interface LocalModelWarning {
+  readonly level: 'err' | 'warn' | 'info'
+  readonly key: string
+  readonly message: string
+}
+
+export interface LocalModelProbeResult {
+  readonly ok: boolean
+  readonly status?: number
+  readonly models?: Array<{ id?: string; name?: string; contextWindow?: number }>
+  readonly error?: string
+  readonly hint?: string
+}
+
 const api = {
   info: (): Promise<SeeuInfo> => ipcRenderer.invoke('seeu:info') as Promise<SeeuInfo>,
   onStatus: (callback: (status: SeeuStatus) => void): (() => void) => {
@@ -58,6 +148,7 @@ const api = {
   retry: (): void => { ipcRenderer.send('seeu:retry') },
   openLogs: (): void => { ipcRenderer.send('seeu:open-logs') },
   openWorkspace: (): void => { ipcRenderer.send('seeu:open-workspace') },
+  openLocalModelSettings: (): void => { ipcRenderer.send('seeu:open-settings') },
   quit: (): void => { ipcRenderer.send('seeu:quit') },
   // ── 技能管理（技能管理器页面专用；导入由主进程弹原生选择框）──
   skillsList: (): Promise<SeeuSkillSummary[]> =>
@@ -77,6 +168,73 @@ const api = {
     const listener = (): void => callback()
     ipcRenderer.on('seeu:skills-changed', listener)
     return () => ipcRenderer.removeListener('seeu:skills-changed', listener)
+  },
+  writeClipboard: (text: string): Promise<boolean> => ipcRenderer.invoke('seeu:clipboard:write', text) as Promise<boolean>,
+  saveExport: (name: string, text: string): Promise<{ ok: boolean; path?: string; bytes?: number; error?: string }> =>
+    ipcRenderer.invoke('seeu:file:save-export', { name, text }) as Promise<{ ok: boolean; path?: string; bytes?: number; error?: string }>,
+  localModel: {
+    get: (): Promise<LocalModelView> => ipcRenderer.invoke('seeu:local-model:get') as Promise<LocalModelView>,
+    save: (config: unknown): Promise<LocalModelSaveResult> =>
+      ipcRenderer.invoke('seeu:local-model:save', config) as Promise<LocalModelSaveResult>,
+    preview: (
+      config: unknown,
+    ): Promise<{
+      ok: boolean
+      patch?: string
+      error?: string
+      warnings?: LocalModelWarning[]
+      budget?: {
+        preset: 'full' | 'lite'
+        toolsCount: number
+        fixedChars: number
+        fixedTokens: number
+        contextWindow: number
+        remainingTokens: number
+        conversationShare: number
+      }
+    }> =>
+      ipcRenderer.invoke('seeu:local-model:preview', config) as Promise<{
+        ok: boolean
+        patch?: string
+        error?: string
+        warnings?: LocalModelWarning[]
+        budget?: {
+          preset: 'full' | 'lite'
+          toolsCount: number
+          fixedChars: number
+          fixedTokens: number
+          contextWindow: number
+          remainingTokens: number
+          conversationShare: number
+        }
+      }>,
+    test: (probe: { baseURL?: string; apiKey?: string }): Promise<LocalModelProbeResult> =>
+      ipcRenderer.invoke('seeu:local-model:test', probe) as Promise<LocalModelProbeResult>,
+    warmup: (probe: { baseURL?: string; apiKey?: string; model?: string }): Promise<LocalModelWarmupResult> =>
+      ipcRenderer.invoke('seeu:local-model:warmup', probe) as Promise<LocalModelWarmupResult>,
+    diagnose: (probe: { baseURL?: string; apiKey?: string; model?: string }): Promise<LocalModelDiagnosis> =>
+      ipcRenderer.invoke('seeu:local-model:diagnose', probe) as Promise<LocalModelDiagnosis>,
+    disable: (): Promise<{ ok: boolean; path?: string; error?: string }> =>
+      ipcRenderer.invoke('seeu:local-model:disable') as Promise<{ ok: boolean; path?: string; error?: string }>,
+    disableAndRestart: (): Promise<{ ok: boolean; path?: string; error?: string }> =>
+      ipcRenderer.invoke('seeu:local-model:disable-restart') as Promise<{ ok: boolean; path?: string; error?: string }>,
+    probe: (): Promise<LocalModelProbeState | null> =>
+      ipcRenderer.invoke('seeu:local-model:probe') as Promise<LocalModelProbeState | null>,
+    onProbe: (callback: (probe: LocalModelProbeState | null) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, probe: LocalModelProbeState | null): void => callback(probe)
+      ipcRenderer.on('seeu:local-model:probe', listener)
+      return () => ipcRenderer.removeListener('seeu:local-model:probe', listener)
+    },
+    restart: (): void => { ipcRenderer.send('seeu:local-model:restart') },
+    openFile: (): void => { ipcRenderer.send('seeu:local-model:open-file') },
+  },
+  // 本机取证工具路径：只支持手动指定（不自动发现）。
+  lovelyTools: {
+    get: (): Promise<LovelyToolsView> => ipcRenderer.invoke('seeu:lovely-tools:get') as Promise<LovelyToolsView>,
+    pick: (tool: 'lovelymem' | 'lovelyspark'): Promise<{ ok: boolean; path?: string; canceled?: boolean }> =>
+      ipcRenderer.invoke('seeu:lovely-tools:pick', tool) as Promise<{ ok: boolean; path?: string; canceled?: boolean }>,
+    save: (paths: Partial<Record<'lovelymem' | 'lovelyspark', string>>): Promise<LovelyToolsSaveResult> =>
+      ipcRenderer.invoke('seeu:lovely-tools:save', paths) as Promise<LovelyToolsSaveResult>,
   },
 }
 

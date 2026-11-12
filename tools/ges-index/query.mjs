@@ -3,7 +3,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { CASE_DATA_ROOT } from './parse.mjs';
+import { CASE_DATA_ROOT, SCHEMA_VERSION } from './parse.mjs';
 import { TYPED_TABLES } from './typed.mjs';
 import { ges } from './ges.mjs';
 
@@ -98,11 +98,25 @@ export function evidences(db) {
   } catch {
     rows = db.prepare('select eid,name,holder,platform,type,timezone from evidence order by eid').all();
   }
+  // evidence.record_count 是火眼自己统计的数字，和索引里实际解析入库的 record 行数常常不一致
+  // （例如某检材在火眼里 3065 条，索引里按会话展开后 8443 条）。面板/概览/会话概览必须用同一来源，
+  // 否则「总记录」和「各检材记录数之和」对不上——真机联调时模型当场指出了这个矛盾。
+  let counts = new Map();
+  try {
+    counts = new Map(
+      db.prepare('select eid, count(*) c from record where eid is not null group by eid').all()
+        .map((r) => [Number(r.eid), Number(r.c)]),
+    );
+  } catch {
+    counts = new Map();
+  }
   return rows.map((r) => ({
     eid: r.eid, name: r.name ?? '', holder: r.person_name || r.holder || '',
     platform: r.platform ?? '', type: r.type ?? '', timezone: r.timezone ?? '',
     remark: r.remark ?? '', evidenceNumber: r.evidence_number ?? '',
-    recordCount: r.record_count ?? null, sizeBytes: r.size_bytes ?? null,
+    recordCount: counts.get(Number(r.eid)) ?? r.record_count ?? null,
+    reportedRecordCount: r.record_count ?? null,
+    sizeBytes: r.size_bytes ?? null,
     sha256: r.sha256 ?? null,
     label: [r.name, r.person_name || r.holder, r.platform].filter(Boolean).join(' · '),
   }));
@@ -121,9 +135,13 @@ function evidenceName(db, eid) {
 export function tree(db, node = 'root') {
   const { one, all } = helpers(db);
   if (!node || node === 'root') {
+    const schemaVersion = one("select v from meta where k='schema_version'")?.v ?? null;
     return {
       node: 'root',
       case: one("select v from meta where k='case_number'")?.v,
+      schemaVersion,
+      currentSchemaVersion: SCHEMA_VERSION,
+      needsRebuild: schemaVersion !== null && String(schemaVersion) !== String(SCHEMA_VERSION),
       name: one("select v from meta where k='case_name'")?.v,
       totals: {
         evidences: one('select count(*) n from evidence').n || one('select count(distinct eid) n from artifact').n,
@@ -241,6 +259,7 @@ export function search(db, opts = {}) {
   const q = String(opts.q ?? '').trim();
   if (!q) { const e = new Error('缺少关键词'); e.code = 'E_NO_QUERY'; throw e; }
   const limit = Math.min(100, Number(opts.limit) || 10);
+  const offset = Math.max(0, Number(opts.offset) || 0);
   const filters = [];
   const params = [];
   if (opts.eid) { filters.push('r.eid=?'); params.push(Number(opts.eid)); }
@@ -250,6 +269,7 @@ export function search(db, opts = {}) {
   if (opts.from) { filters.push('r.ts>=?'); params.push(String(opts.from)); }
   if (opts.to) { filters.push('r.ts<=?'); params.push(String(opts.to)); }
   const kw = typeof opts.q === 'string' ? opts.q.trim() : '';
+  const filterParams = [...params];
   if (kw) {
     if (kw.length >= 3) {
       filters.push('r.id in (select rowid from record_fts where record_fts match ?)');
@@ -262,23 +282,29 @@ export function search(db, opts = {}) {
   const where = filters.length ? ` and ${filters.join(' and ')}` : '';
   let engine = 'like';
   let rows = null;
+  let total = null;
   if (q.length >= 3) {
     engine = 'fts5-trigram';
     try {
       rows = db.prepare(`select r.id, r.eid, r.app, r.account, r.category, r.ts, r.line_no,
           snippet(record_fts, 0, '«', '»', '…', 10) snip
         from record_fts f join record r on r.id=f.rowid
-        where record_fts match ?${where} limit ?`).all(q, ...params, limit);
-    } catch { rows = null; }
+        where record_fts match ?${where} limit ? offset ?`).all(q, ...params, limit, offset);
+      total = db.prepare(`select count(*) n
+        from record_fts f join record r on r.id=f.rowid
+        where record_fts match ?${where}`).get(q, ...params).n;
+    } catch { rows = null; total = null; }
   }
   if (!rows) {
     engine = 'like';
     const like = q.replace(/[\\%_]/g, (m) => '\\' + m);
     rows = db.prepare(`select r.id, r.eid, r.app, r.account, r.category, r.ts, r.line_no, substr(r.text,1,160) snip
-      from record r where r.text like '%'||?||'%' escape '\\'${where} limit ?`).all(like, ...params, limit);
+      from record r where r.text like '%'||?||'%' escape '\\'${where} limit ? offset ?`).all(like, ...params, limit, offset);
+    total = db.prepare(`select count(*) n from record r where r.text like '%'||?||'%' escape '\\'${where}`).get(like, ...params).n;
   }
+  const nextOffset = offset + rows.length < total ? offset + rows.length : null
   return {
-    query: q, engine, returned: rows.length,
+    query: q, engine, returned: rows.length, total, offset, limit, next: nextOffset,
     rows: rows.map((r) => ({
       id: r.id, eid: r.eid, app: r.app, account: r.account ?? '', cat: r.category,
       ts: r.ts, line: r.line_no, snip: clip(r.snip, 100),
@@ -392,11 +418,17 @@ export function entity(db, opts = {}) {
     return { query: q, matched: 'aggregate', returned: top.length, rows: top.map((r) => ({ kind: r.kind, value: r.value_norm, count: r.n, evidences: r.eids, eids: r.eid_list.split(',').map(Number) })) };
   }
 
+  const offset = Math.max(0, Number(opts.offset) || 0);
   const rows = db.prepare(`select kind, value_norm, count(*) n, count(distinct eid) eids, group_concat(distinct eid) eid_list
-    from entity${where} group by kind, value_norm order by n desc, eids desc limit ?`).all(...params, limit);
+    from entity${where} group by kind, value_norm order by n desc, eids desc limit ? offset ?`).all(...params, limit, offset);
+  const total = db.prepare(`select count(*) c from (select 1 from entity${where} group by kind, value_norm)`).get(...params).c;
   const kinds = db.prepare('select kind, count(*) n from entity group by kind order by n desc').all();
   return {
     returned: rows.length,
+    total,
+    offset,
+    limit,
+    next: offset + rows.length < total ? offset + rows.length : null,
     kinds,
     crossEvidence: rows.filter((r) => r.eids > 1).length,
     rows: rows.map((r) => ({ kind: r.kind, value: r.value_norm, count: r.n, evidences: r.eids, eids: r.eid_list.split(',').map(Number) })),
@@ -420,6 +452,17 @@ export function timeline(db, opts = {}) {
 }
 
 /** 记录分页（给面板「记录」视图与深链）。 */
+export function facets(db, opts = {}) {
+  const conds = [];
+  const params = [];
+  if (opts.eid) { conds.push('eid=?'); params.push(Number(opts.eid)); }
+  const extra = conds.length ? ' and ' + conds.join(' and ') : '';
+  const apps = db.prepare(`select app, count(*) n from record where ifnull(app,'')<>''${extra} group by app order by n desc limit 60`).all(...params);
+  const categories = db.prepare(`select category, count(*) n from record where ifnull(category,'')<>''${extra} group by category order by n desc limit 60`).all(...params);
+  const accounts = db.prepare(`select account, count(*) n from record where ifnull(account,'')<>''${extra} group by account order by n desc limit 40`).all(...params);
+  return { eid: opts.eid ? Number(opts.eid) : null, apps, categories, accounts };
+}
+
 export function records(db, opts = {}) {
   const limit = Math.min(200, Number(opts.limit) || 20);
   const offset = Math.max(0, Number(opts.offset) || 0);

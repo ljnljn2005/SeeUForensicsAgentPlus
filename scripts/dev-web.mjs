@@ -7,6 +7,7 @@ import { createServer } from 'node:net';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { localModelEnv, localModelPatch, normalizeLocalModel } from '../tools/local-model.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -68,6 +69,9 @@ const env = {
   NO_COLOR: '1',
   SEEU_WORKSPACE: workspace,
   SEEU_SKILLS_DIR: skillsDst,
+  SEEU_LOVELY_CLI: join(root, 'tools', 'lovely-cli', 'cli.mjs'),
+  SEEU_CLI_NODE: process.execPath,
+  SEEU_LOVELY_CONFIG: process.env.SEEU_LOVELY_CONFIG || join(devHome, 'lovely-cli.json'),
   SEEU_INDEX_API: `http://127.0.0.1:${listenPort}/seeu-index`,
   SEEU_INDEX_SEARCH_DIRS: searchDirs.join(';'),
   SEEU_INDEX_STATE_FILE: stateFile,
@@ -76,10 +80,50 @@ const env = {
 delete env.ELECTRON_RUN_AS_NODE;
 
 mkdirSync(workspace, { recursive: true });
-const argv = [dshEntry, '--patch', overlay, '--profile', 'web', '--host', '127.0.0.1', '--port', String(listenPort), '--no-open'];
+
+// 4) 本地模型（OpenAI 兼容网关）：`--local-model <json>` 或 SEEU_LOCAL_MODEL_JSON
+//    与桌面版同一套生成逻辑（tools/local-model.mjs），写成第二份 --patch。
+const localModelArg = opt('local-model', process.env.SEEU_LOCAL_MODEL_FILE);
+let localPatchFile = null;
+let localSummary = '未配置';
+if (localModelArg !== undefined && localModelArg !== null) {
+  try {
+    const raw = localModelArg.startsWith('{')
+      ? JSON.parse(localModelArg)
+      : JSON.parse(readFileSync(resolve(localModelArg), 'utf8'));
+    const cfg = normalizeLocalModel(raw);
+    const patch = localModelPatch(cfg);
+    if (patch !== undefined) {
+      localPatchFile = join(devHome, 'local-model.patch.yml');
+      writeFileSync(localPatchFile, patch, 'utf8');
+      Object.assign(env, localModelEnv(cfg));
+      localSummary = `${cfg.route} → ${cfg.baseURL}（${cfg.models.map((m) => m.id).join(', ')}）`;
+    } else {
+      localSummary = '已禁用';
+    }
+  } catch (error) {
+    console.error(`[dev-web] 本地模型配置无效：${error.message}`);
+    process.exit(1);
+  }
+}
+
+const argv = [
+  dshEntry,
+  '--patch',
+  overlay,
+  ...(localPatchFile !== null ? ['--patch', localPatchFile] : []),
+  '--profile',
+  'web',
+  '--host',
+  '127.0.0.1',
+  '--port',
+  String(listenPort),
+  '--no-open',
+];
 console.log('[dev-web] 工作目录：' + workspace);
 console.log('[dev-web] DSH_HOME：' + devHome);
 console.log('[dev-web] 技能：' + skills.join(', '));
+console.log('[dev-web] 本地模型：' + localSummary);
 console.log('[dev-web] 索引 API：' + env.SEEU_INDEX_API);
 console.log('[dev-web] 启动：node ' + argv.slice(1).join(' '));
 

@@ -1,0 +1,800 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+<title>本地模型设置 · SeeUForensicsAgentPlus</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0A111E;
+    --surface: #0E1728;
+    --surface-2: #131E33;
+    --border: rgba(34, 211, 238, .16);
+    --accent: #22D3EE;
+    --accent-soft: rgba(34, 211, 238, .12);
+    --text: #E6EDF7;
+    --muted: #A9BBD1;
+    --dim: #8397B0;
+    --ok: #34D399;
+    --warn: #FBBF24;
+    --err: #F87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+    font-size: 13px;
+    overflow-y: auto;
+  }
+  .wrap { max-width: 660px; margin: 0 auto; padding: 22px 26px 30px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  header svg { width: 30px; height: 30px; flex: none; filter: drop-shadow(0 0 10px rgba(34,211,238,.35)); }
+  h1 { font-size: 16px; font-weight: 600; margin: 0; letter-spacing: .3px; }
+  .sub { color: var(--muted); font-size: 12px; margin: 8px 0 18px; line-height: 1.7; }
+  .sub code { color: var(--accent); background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+  .field { margin-bottom: 14px; }
+  .field > label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  .field .hint { color: var(--dim); font-size: 11px; margin-top: 5px; line-height: 1.6; }
+  input[type="text"], input[type="number"], textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font: inherit;
+    padding: 8px 10px;
+    outline: none;
+  }
+  input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34,211,238,.12); }
+  textarea { min-height: 86px; resize: vertical; font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .check { display: flex; align-items: flex-start; gap: 9px; margin-bottom: 14px; }
+  .check input { margin-top: 2px; accent-color: var(--accent); }
+  .check label { color: var(--text); }
+  .check .hint { color: var(--dim); font-size: 11px; margin-top: 3px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 12px; }
+  button {
+    font: inherit;
+    border-radius: 8px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:hover { border-color: rgba(34,211,238,.4); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #04121A; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.06); }
+  button:disabled { opacity: .5; cursor: default; }
+  /* 本机取证工具路径：手动指定，不做自动发现 */
+  .tools .tool { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .tools .tool-name { width: 108px; flex: none; color: var(--muted); font-size: 12px; }
+  .tools .tool-path { flex: 1; font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+  .tools .tool-path.missing { border-color: rgba(248,113,113,.55); }
+  .tools .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--dim); }
+  .tools .dot.ok { background: var(--ok); }
+  .tools .dot.bad { background: var(--err); }
+  #tools-status { min-height: 16px; }
+  #status { min-height: 40px; border-radius: 8px; padding: 9px 12px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; line-height: 1.7; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+  #status.ok { border-color: rgba(52,211,153,.35); color: var(--ok); }
+  #status.warn { border-color: rgba(251,191,36,.35); color: var(--warn); }
+  .diag { display: grid; gap: 6px; margin: 8px 0 4px; }
+  .diag .row { display: flex; gap: 8px; align-items: baseline; padding: 7px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; line-height: 1.6; }
+  .diag .row .dot { font-weight: 700; }
+  .diag .row.ok .dot { color: var(--ok); }
+  .diag .row.bad .dot { color: var(--err); }
+  .diag .row .label { min-width: 84px; color: var(--text); }
+  .diag .row .detail { color: var(--muted); flex: 1; word-break: break-all; }
+  .diag .row .ms { color: var(--muted); opacity: .7; }
+  .diag .sum { font-size: 12px; color: var(--muted); padding-left: 2px; }
+  #status.err { border-color: rgba(248,113,113,.35); color: var(--err); }
+  #probe { border-radius: 8px; padding: 8px 12px; background: var(--surface); border: 1px dashed var(--border); color: var(--dim); font-size: 11px; line-height: 1.7; word-break: break-all; }
+  #probe.ok { border-color: rgba(52,211,153,.35); color: var(--ok); }
+  #probe.warn { border-color: rgba(251,191,36,.35); color: var(--warn); }
+  #probe.err { border-color: rgba(248,113,113,.35); color: var(--err); }
+  pre#preview { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--dim); font-size: 11px; line-height: 1.6; overflow: auto; max-height: 180px; display: none; }
+  footer { margin-top: 18px; color: var(--dim); font-size: 11px; line-height: 1.7; border-top: 1px solid var(--border); padding-top: 12px; }
+
+    .presets { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
+    .presets-label { font-size: 12px; color: var(--fg2); font-weight: 600; }
+    .presets button { padding: 4px 10px; font-size: 12px; }
+    .presets .hint { color: var(--dim); font-size: 11px; }
+    .warns { display: flex; flex-direction: column; gap: 6px; margin: 0 0 10px; }
+    .warns .w { border-radius: 8px; padding: 7px 10px; font-size: 12px; line-height: 1.6; border: 1px solid var(--line); }
+    .warns .w.warn { border-color: rgba(251,191,36,.35); color: var(--warn); }
+    .warns .w.err { border-color: rgba(248,113,113,.4); color: var(--err); }
+    .warns .w.info { color: var(--dim); }
+    details.adv { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: rgba(255,255,255,0.02); }
+    details.adv > summary { cursor: pointer; font-size: 12px; color: var(--fg2); font-weight: 600; }
+    details.adv[open] > summary { margin-bottom: 8px; }
+
+  /* 跟随系统浅色主题：设置窗口不再固定深色（深色仍是默认） */
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #F5F7FA;
+      --surface: #FFFFFF;
+      --surface-2: #EEF3F8;
+      --border: rgba(14, 116, 144, .18);
+      --accent: #0E7490;
+      --accent-soft: rgba(14, 116, 144, .10);
+      --text: #0B1220;
+      --muted: #44546A;
+      --dim: #64748B;
+      --ok: #047857;
+      --warn: #B45309;
+      --err: #B91C1C;
+    }
+    header svg { filter: none; }
+    header svg path:first-of-type { fill: var(--accent-soft); stroke: var(--accent); }
+    header svg circle, header svg path:last-of-type { stroke: var(--accent); }
+    button.primary { color: #FFFFFF; }
+  }
+</style></style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <path d="M24 3l16 6v13c0 10-6.6 18.6-16 23C14.6 40.6 8 32 8 22V9l16-6z" stroke="#22D3EE" stroke-width="2.4" fill="rgba(34,211,238,.08)"/>
+      <circle cx="22" cy="22" r="6.5" stroke="#22D3EE" stroke-width="2.4"/>
+      <path d="M27 27l6 6" stroke="#22D3EE" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>
+    <h1>本地模型设置</h1>
+  </header>
+
+  <p class="sub">
+    接入任何 <strong>OpenAI 兼容网关</strong>（<code>GET /v1/models</code>、<code>POST /v1/chat/completions</code> 支持 SSE）。
+    保存后写入 <code id="config-path">…</code>，<strong>重启应用生效</strong>；官方 DeepSeek 账号链路保持可用，随时可关闭。
+  </p>
+
+  <div class="check">
+    <input type="checkbox" id="enabled" />
+    <label for="enabled">
+      启用本地模型
+      <div class="hint">关闭后仅使用官方 DeepSeek 模型；已保存的网关信息会保留。</div>
+    </label>
+  </div>
+
+  <div class="field">
+    <label for="baseURL">网关地址（baseURL）</label>
+    <input type="text" id="baseURL" placeholder="http://127.0.0.1:8000/v1" spellcheck="false" />
+    <div class="hint">要带 <code>/v1</code>，不含 <code>/chat/completions</code>。例：<code>http://127.0.0.1:11434/v1</code>（Ollama）、<code>http://127.0.0.1:1234/v1</code>（LM Studio）。</div>
+  </div>
+
+  <div class="field">
+    <label for="apiKey">API Key（可选）</label>
+    <input type="text" id="apiKey" placeholder="local" spellcheck="false" />
+    <div class="hint">多数本地网关不校验；不能留空时随便填一个（会写进子进程环境变量，不进补丁文件）。</div>
+  </div>
+
+  <div class="field">
+    <label for="models">模型列表（一行一个，可选“ | 显示名”）</label>
+    <textarea id="models" placeholder="qwen2.5-32b-instruct&#10;qwen2.5-32b-instruct | Qwen2.5 32B（本地）" spellcheck="false"></textarea>
+    <div class="hint">ID 必须与网关 <code>/v1/models</code> 返回的一致；“设为默认”用第一个模型。不确定就点下方<b>【从网关拉取模型列表】</b>自动填。</div>
+  </div>
+
+  <div class="row2">
+    <div class="field">
+      <label for="contextWindow">上下文窗口（tokens）</label>
+      <input type="number" id="contextWindow" min="1024" step="1024" placeholder="131072" />
+      <div class="hint">个人赛常用 131072（128k），团体赛 262144（256k）。</div>
+    </div>
+    <div class="field">
+      <label for="maxTokens">单次输出上限（tokens）</label>
+      <input type="number" id="maxTokens" min="256" step="256" placeholder="8192" />
+      <div class="hint">建议 8192；太大易触发网关 OOM。</div>
+    </div>
+  </div>
+
+  <div class="presets" id="presets">
+    <span class="presets-label">窗口档位：</span>
+    <button type="button" data-preset="32k">32k 小窗口</button>
+    <button type="button" data-preset="128k">128k 个人赛</button>
+    <button type="button" data-preset="256k">256k 团体赛</button>
+    <span class="hint">一键填「上下文窗口 / 输出上限」，再按模型实测调整。</span>
+  </div>
+
+  <div id="warnings" class="warns" hidden></div>
+  <details class="adv">
+    <summary>高级：超时与重试（低并发本地网关）</summary>
+    <div class="row2">
+      <div class="field">
+        <label for="timeoutSec">请求超时（秒）</label>
+        <input type="number" id="timeoutSec" min="10" step="10" placeholder="600" />
+        <div class="hint">本地 32B 首次 prefill 可能几十秒，默认 600 秒。</div>
+      </div>
+      <div class="field">
+        <label for="streamIdleSec">流式空闲超时（秒）</label>
+        <input type="number" id="streamIdleSec" min="30" step="30" placeholder="600" />
+        <div class="hint">两个分片之间最长等待；网关卡住时靠它中断。</div>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="retryMaxRetries">失败重试次数</label>
+        <input type="number" id="retryMaxRetries" min="0" max="10" step="1" placeholder="3" />
+        <div class="hint">dsh 默认 5 次；单机网关建议 3 次，避免排队更久。</div>
+      </div>
+      <div class="field">
+        <label for="titleMaxOutputTokens">标题生成上限（tokens）</label>
+        <input type="number" id="titleMaxOutputTokens" min="64" step="64" placeholder="512" />
+        <div class="hint">会话标题用的小请求，默认 512，省本地算力。</div>
+      </div>
+    </div>
+    <div class="hint">留空即用默认值；改完记得保存并重启应用。</div>
+  </details>
+
+  <div class="check">
+    <input type="checkbox" id="useAsDefault" />
+    <label for="useAsDefault">
+      设为新会话默认模型
+      <div class="hint">等价于覆盖 <code>agent-default-model</code>；官方模型仍可在会话内切换。</div>
+    </label>
+  </div>
+
+  <div class="check">
+    <input type="checkbox" id="litePreset" checked />
+    <label for="litePreset">
+      精简工具集（推荐，省约 2 万字符固定上下文）
+      <div class="hint">本地模型默认用「取证分析（本地模型精简）」预设：工具表从 27 个减到约 10 个、系统提示换成紧凑版；需要子代理/工作流时在会话里切回「取证分析（Forensics）」。</div>
+    </label>
+  </div>
+
+  <div class="check">
+    <input type="checkbox" id="titleGen" checked />
+    <label for="titleGen">
+      用本地模型生成会话标题
+      <div class="hint">每次新会话会多发一次小请求（约 700 字符、512 输出上限）。网关并发低、首轮有明显排队时关掉，标题回退到首句截断，首轮只发一次请求。</div>
+    </label>
+  </div>
+
+  <div class="check">
+    <input type="checkbox" id="usageInStreaming" />
+    <label for="usageInStreaming">
+      流式响应带 token 用量（stream_options.include_usage）
+      <div class="hint">打开后会话里才能看到 token 用量/上下文占比；vLLM、LM Studio、llama.cpp 新版一般支持，老网关可能直接报 400，打不开就保持关闭。</div>
+    </label>
+  </div>
+
+  <div class="hint" id="budget" style="margin:2px 0 10px"></div>
+
+  <div class="field tools">
+    <label>本机取证工具路径（手动指定，不做自动发现）</label>
+    <div class="tool" data-tool="lovelymem">
+      <span class="dot" data-tool-dot></span>
+      <span class="tool-name">LovelyMem V3</span>
+      <input type="text" class="tool-path" data-tool-path="lovelymem" readonly placeholder="未指定：点「选择…」选 lovelymem.v3.exe" />
+      <button data-tool-pick="lovelymem">选择…</button>
+      <button data-tool-clear="lovelymem">清除</button>
+    </div>
+    <div class="tool" data-tool="lovelyspark">
+      <span class="dot" data-tool-dot></span>
+      <span class="tool-name">LovelySpark</span>
+      <input type="text" class="tool-path" data-tool-path="lovelyspark" readonly placeholder="未指定：点「选择…」选 lovelyspark.exe" />
+      <button data-tool-pick="lovelyspark">选择…</button>
+      <button data-tool-clear="lovelyspark">清除</button>
+    </div>
+    <div class="hint">只支持手动指定：程序不会去 PATH / 注册表 / 快捷方式里找 exe。选好后点下面的「保存工具路径」，新会话生效。LovelyMem 请选支持 <code>--cli</code> 的 v3 主程序，不要选 Lite / Luxe 的 GUI。</div>
+    <div class="actions" style="margin:10px 0 6px"><button id="btn-tools-save">保存工具路径</button></div>
+    <div id="tools-status" class="hint"></div>
+    <div id="tools-config" class="hint"></div>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="btn-save">保存</button>
+    <button id="btn-models">从网关拉取模型列表</button>
+    <button id="btn-test">测试连接与能力自检</button>
+    <button id="btn-warmup">预热模型（加载进显存）</button>
+    <button id="btn-copy">复制诊断信息</button>
+    <button id="btn-probe">重新探测网关</button>
+    <button id="btn-save-restart">保存并重启</button>
+    <button id="btn-reload">重新读取</button>
+    <button id="btn-open">打开配置文件位置</button>
+  </div>
+
+  <div id="probe" class="hint">启动探测：探测中…</div>
+  <div id="diag" class="diag" hidden></div>
+  <div id="status">就绪。</div>
+  <pre id="preview"></pre>
+
+  <footer>
+    常见问题：<br />
+    · 「测试连接与能力自检」由外壳依次请求 <code>/v1/models</code>、一次非流式对话、一次带 <code>ping_tool</code> 的工具调用请求，不经过 dsh；失败通常是网关没起、端口不对或模型不支持函数调用。<br />
+    · 上下文窗口要按模型实际能力填（128k 填 131072）；随包 preset 的压缩余量已按 8192 调好，<strong>32k 及以上的模型都能直接用</strong>，不需要再改配置（见 README §9.2）。<br />
+    · 保存后必须重启应用：dsh 只在启动时读取 <code>local-model.patch.yml</code>。
+  </footer>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id)
+  const statusEl = $('status')
+  const probeEl = $('probe')
+  const previewEl = $('preview')
+  const api = window.seeu && window.seeu.localModel
+  // 最近一次读到的配置/探测/自检结果，供「复制诊断信息」拼文本
+  let lastView = null
+  let lastProbe = null
+  let lastDiag = null
+
+  function setStatus(text, kind) {
+    statusEl.textContent = text
+    statusEl.className = kind || ''
+  }
+
+  /** 启动探测结果：外壳启动时已经打过一次 4 秒超时的 /v1/models，这里只做展示。 */
+  function renderProbe(probe) {
+    lastProbe = probe || null
+    if (!probe) {
+      probeEl.textContent = '启动探测：尚未完成（或未配置本地模型，当前使用官方模型）。'
+      probeEl.className = 'hint'
+      return
+    }
+    const at = String(probe.at || '').replace('T', ' ').replace(/\..*$/, '')
+    if (probe.ok) {
+      const models = Array.isArray(probe.models) && probe.models.length > 0 ? probe.models.join(', ') : '网关未返回模型列表'
+      const missing = Array.isArray(probe.missing) && probe.missing.length > 0 ? probe.missing : []
+      const mismatch = probe.mismatch && probe.mismatch.gateway > 0 ? probe.mismatch : null
+      const k = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n))
+      const notes = []
+      if (missing.length > 0) notes.push(`配置的模型 ${missing.join(', ')} 不在网关列表`)
+      if (mismatch) notes.push(`配置窗口 ${k(mismatch.configured)} 超过网关自报的 ${k(mismatch.gateway)}，超出部分请求会被拒`)
+      if (probe.noContextWindow) notes.push(`网关没有自报上下文窗口，当前按表单里的 ${k(Number(document.getElementById('contextWindow').value) || 0)} 使用；模型实际窗口更小会报 400，请按模型文档手填`)
+      const suffix = notes.length > 0 ? `｜${notes.join('；')}` : ''
+      probeEl.textContent = `启动探测：可用 · ${models} · ${probe.baseURL} · ${at}${suffix}`
+      probeEl.className = notes.length > 0 ? 'hint warn' : 'hint ok'
+    } else {
+      probeEl.textContent = `启动探测：不可用 · ${probe.error || '未知错误'} · ${probe.baseURL} · ${at}（仍可用官方模型）`
+      probeEl.className = 'hint err'
+    }
+  }
+
+  function readForm() {
+    const models = $('models').value
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line !== '')
+      .map((line) => {
+        const parts = line.split('|')
+        const id = parts[0].trim()
+        const name = (parts[1] || '').trim()
+        return name ? { id, name } : { id }
+      })
+    const contextWindow = Number($('contextWindow').value)
+    const maxTokens = Number($('maxTokens').value)
+    return {
+      enabled: $('enabled').checked,
+      baseURL: $('baseURL').value.trim(),
+      apiKey: $('apiKey').value.trim() || undefined,
+      models,
+      contextWindow: Number.isFinite(contextWindow) && contextWindow > 0 ? contextWindow : undefined,
+      maxTokens: Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : undefined,
+      useAsDefault: $('useAsDefault').checked,
+      litePreset: $('litePreset').checked,
+      usageInStreaming: $('usageInStreaming').checked,
+      titleGeneration: $('titleGen').checked,
+      timeoutMs: secToMs($('timeoutSec').value),
+      streamIdleTimeoutMs: secToMs($('streamIdleSec').value),
+      retryMaxRetries: numOrUndef($('retryMaxRetries').value),
+      titleMaxOutputTokens: numOrUndef($('titleMaxOutputTokens').value),
+    }
+  }
+
+  /** 秒 → 毫秒；空/非法返回 undefined（交给默认值）。 */
+  function secToMs(value) {
+    const n = Number(value)
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 1000) : undefined
+  }
+
+  function numOrUndef(value) {
+    const n = Number(value)
+    return Number.isFinite(n) && n >= 0 ? Math.round(n) : undefined
+  }
+
+  function fillForm(config) {
+    const c = config || {}
+    $('enabled').checked = c.enabled !== false
+    $('baseURL').value = c.baseURL || ''
+    $('apiKey').value = c.apiKey || ''
+    const models = Array.isArray(c.models) && c.models.length > 0
+      ? c.models
+      : (c.model ? [{ id: c.model }] : [])
+    $('models').value = models
+      .map((m) => (m.name && m.name !== m.id ? m.id + ' | ' + m.name : m.id))
+      .join('\n')
+    $('contextWindow').value = c.contextWindow || 131072
+    $('maxTokens').value = c.maxTokens || 8192
+    $('useAsDefault').checked = c.useAsDefault === true || c.defaultModel !== undefined
+    $('litePreset').checked = c.litePreset !== false
+    $('usageInStreaming').checked = c.usageInStreaming === true
+    $('titleGen').checked = c.titleGeneration !== false
+    $('timeoutSec').value = c.timeoutMs ? Math.round(c.timeoutMs / 1000) : 600
+    $('streamIdleSec').value = c.streamIdleTimeoutMs ? Math.round(c.streamIdleTimeoutMs / 1000) : 600
+    $('retryMaxRetries').value = Number.isFinite(c.retryMaxRetries) ? c.retryMaxRetries : 3
+    $('titleMaxOutputTokens').value = c.titleMaxOutputTokens || 512
+  }
+
+  /** 能力自检结果：模型列表 / 基础对话 / 工具调用逐项展示。 */
+  function renderDiag(res) {
+    lastDiag = res && Array.isArray(res.items) ? res : null
+    const diagEl = document.getElementById('diag')
+    if (!res || !Array.isArray(res.items)) {
+      diagEl.hidden = true
+      return
+    }
+    diagEl.hidden = false
+    diagEl.textContent = ''
+    for (const item of res.items) {
+      const row = document.createElement('div')
+      row.className = 'row ' + (item.ok ? 'ok' : 'bad')
+      const dot = document.createElement('span')
+      dot.className = 'dot'
+      dot.textContent = item.ok ? '✓' : '✗'
+      const label = document.createElement('span')
+      label.className = 'label'
+      label.textContent = item.label || item.key
+      const detail = document.createElement('span')
+      detail.className = 'detail'
+      detail.textContent = item.detail || ''
+      row.append(dot, label, detail)
+      if (typeof item.ms === 'number') {
+        const ms = document.createElement('span')
+        ms.className = 'ms'
+        ms.textContent = item.ms + ' ms'
+        row.append(ms)
+      }
+      diagEl.append(row)
+    }
+    const sum = document.createElement('div')
+    sum.className = 'sum'
+    const tools = res.items.find((i) => i.key === 'tools')
+    sum.textContent = res.ok
+      ? '自检通过：网关可用于取证会话（含工具调用）。模型：' + (res.model || '(未指定)')
+      : tools && !tools.ok
+        ? '网关能对话，但工具调用不可用 —— 该模型在本产品里只能聊天，不能查案件库、不能用技能。'
+        : '自检未通过，按上面标红的一项排查。'
+    diagEl.append(sum)
+  }
+
+  /** 拼一段可直接贴给开发者的诊断文本（不含 apiKey 原文）。 */
+  function diagnosticsText() {
+    const cfg = lastView && lastView.config ? lastView.config : readForm()
+    const lines = []
+    lines.push('=== SeeU 取证智能体增强版 · 本地模型诊断 ===')
+    lines.push('时间: ' + new Date().toISOString())
+    lines.push('配置文件: ' + (lastView && lastView.path ? lastView.path : '(未知)'))
+    lines.push('启用: ' + (cfg.enabled === false ? '否' : '是'))
+    lines.push('网关: ' + (cfg.baseURL || '(未填)'))
+    lines.push('apiKey: ' + (cfg.apiKey ? '(已设置，已省略)' : '(未设置)'))
+    const models = Array.isArray(cfg.models) && cfg.models.length ? cfg.models : (cfg.model ? [{ id: cfg.model }] : [])
+    lines.push('模型: ' + (models.map((m) => m.name && m.name !== m.id ? m.id + ' | ' + m.name : m.id).join(', ') || '(未填)'))
+    lines.push('上下文窗口: ' + (cfg.contextWindow || 131072) + '  输出上限: ' + (cfg.maxTokens || 8192))
+    lines.push('请求超时: ' + Math.round((cfg.timeoutMs || 600000) / 1000) + 's  流式空闲: ' + Math.round((cfg.streamIdleTimeoutMs || 600000) / 1000) + 's  重试: ' + (cfg.retryMaxRetries ?? 3))
+    if (lastProbe) {
+      lines.push('启动探测: ' + (lastProbe.ok ? '可用 · ' + (lastProbe.models || []).join(', ') : '不可用 · ' + (lastProbe.error || '未知错误')) + ' · ' + (lastProbe.at || ''))
+      if (Array.isArray(lastProbe.missing) && lastProbe.missing.length > 0) {
+        lines.push('配置缺失模型: ' + lastProbe.missing.join(', ') + '（不在网关 /models 列表里）')
+      }
+    } else {
+      lines.push('启动探测: (尚未完成)')
+    }
+    if (lastDiag) {
+      lines.push('能力自检:')
+      for (const it of lastDiag.items) {
+        lines.push('  ' + (it.ok ? '✓' : '✗') + ' ' + (it.label || it.key) + ' · ' + (it.detail || '') + (typeof it.ms === 'number' ? ' · ' + it.ms + ' ms' : ''))
+      }
+    } else {
+      lines.push('能力自检: (未运行)')
+    }
+    return lines.join('\n')
+  }
+
+  async function copyDiagnostics() {
+    const text = diagnosticsText()
+    try {
+      const ok = await window.seeu.writeClipboard(text)
+      setStatus(ok ? '已复制诊断信息（' + text.length + ' 字符），可直接粘贴给开发者。' : '复制失败：剪贴板不可用。', ok ? 'ok' : 'err')
+    } catch (error) {
+      setStatus('复制失败：' + (error && error.message ? error.message : error), 'err')
+    }
+  }
+
+  // ── 本机取证工具路径（手动指定） ────────────────────────────────────────
+  const toolsApi = window.seeu && window.seeu.lovelyTools
+  let toolsView = null
+
+  function toolRow(id) { return document.querySelector('[data-tool="' + id + '"]') }
+
+  function renderTools(view) {
+    toolsView = view || null
+    const list = (view && Array.isArray(view.tools)) ? view.tools : []
+    for (const tool of list) {
+      const row = toolRow(tool.id)
+      if (!row) continue
+      const input = row.querySelector('[data-tool-path]')
+      const dot = row.querySelector('[data-tool-dot]')
+      input.value = tool.path || ''
+      const bad = Boolean(tool.configured) && !tool.found
+      input.classList.toggle('missing', bad)
+      dot.className = 'dot' + (tool.found ? ' ok' : (bad ? ' bad' : ''))
+      dot.title = tool.found ? '文件存在（' + tool.source + '）' : (bad ? '配置的路径不存在' : '未指定')
+    }
+    const status = $('tools-status')
+    if (view && view.error) {
+      status.textContent = '配置文件读取失败：' + view.error
+      status.style.color = 'var(--err)'
+    } else {
+      status.textContent = ''
+    }
+    const cfg = $('tools-config')
+    if (cfg) cfg.textContent = view && view.configFile ? '配置文件：' + view.configFile : ''
+  }
+
+  async function loadTools() {
+    if (!toolsApi) {
+      $('tools-status').textContent = '预加载桥不可用（window.seeu.lovelyTools 缺失），无法在这里指定工具路径。'
+      $('tools-status').style.color = 'var(--err)'
+      return
+    }
+    try {
+      renderTools(await toolsApi.get())
+    } catch (error) {
+      $('tools-status').textContent = '读取工具路径失败：' + (error && error.message ? error.message : error)
+      $('tools-status').style.color = 'var(--err)'
+    }
+  }
+
+  async function saveTools() {
+    if (!toolsApi) return
+    const payload = {}
+    for (const id of ['lovelymem', 'lovelyspark']) {
+      const row = toolRow(id)
+      payload[id] = row ? row.querySelector('[data-tool-path]').value : ''
+    }
+    $('btn-tools-save').disabled = true
+    try {
+      const res = await toolsApi.save(payload)
+      if (!res.ok) {
+        $('tools-status').textContent = '保存失败：' + res.error
+        $('tools-status').style.color = 'var(--err)'
+        return
+      }
+      renderTools(res)
+      $('tools-status').textContent = '已保存工具路径，新会话生效。'
+      $('tools-status').style.color = 'var(--ok)'
+    } finally {
+      $('btn-tools-save').disabled = false
+    }
+  }
+
+  for (const id of ['lovelymem', 'lovelyspark']) {
+    const row = toolRow(id)
+    if (!row) continue
+    row.querySelector('[data-tool-pick]').addEventListener('click', async () => {
+      if (!toolsApi) return
+      const res = await toolsApi.pick(id)
+      if (res && res.ok && res.path) {
+        const input = row.querySelector('[data-tool-path]')
+        input.value = res.path
+        input.classList.remove('missing')
+        $('tools-status').textContent = '已选择 ' + res.path + '（记得点「保存工具路径」）'
+        $('tools-status').style.color = 'var(--muted)'
+      }
+    })
+    row.querySelector('[data-tool-clear]').addEventListener('click', () => {
+      const input = row.querySelector('[data-tool-path]')
+      input.value = ''
+      input.classList.remove('missing')
+      $('tools-status').textContent = '已清空（记得点「保存工具路径」才会删掉配置）'
+      $('tools-status').style.color = 'var(--muted)'
+    })
+  }
+  $('btn-tools-save').addEventListener('click', () => { void saveTools() })
+
+  async function load() {
+    if (!api) {
+      setStatus('预加载桥不可用（window.seeu.localModel 缺失），请从桌面版菜单打开本页。', 'err')
+      return
+    }
+    const view = await api.get()
+    $('config-path').textContent = view.path
+    if (view.config) fillForm(view.config)
+    else fillForm({})
+    renderProbe(view.probe)
+    if (!view.exists) {
+      setStatus('当前未配置本地模型（文件不存在）。填好网关后点「保存并重启」。', 'warn')
+    } else if (view.error) {
+      setStatus('配置文件读取失败：' + view.error, 'err')
+    } else {
+      lastView = view
+      setStatus('已加载现有配置。', 'ok')
+    }
+    renderPreview()
+  }
+
+  /** 配置健康度建议：窗口/输出上限/重试/超时的配比不合理时提前说出来。 */
+  function renderWarnings(list) {
+    const box = document.getElementById('warnings')
+    if (!Array.isArray(list) || list.length === 0) {
+      box.hidden = true
+      box.textContent = ''
+      return
+    }
+    box.hidden = false
+    box.textContent = ''
+    for (const w of list) {
+      const item = document.createElement('div')
+      item.className = 'w ' + (w.level || 'info')
+      item.textContent = w.message
+      box.append(item)
+    }
+  }
+
+  async function renderPreview() {
+    if (!api) return
+    const res = await api.preview(readForm())
+    if (res && res.ok && res.patch) {
+      previewEl.style.display = 'block'
+      previewEl.textContent = res.patch
+    } else {
+      previewEl.style.display = 'none'
+      previewEl.textContent = ''
+    }
+    renderWarnings(res && res.ok ? res.warnings : [])
+    renderBudget(res && res.ok ? res.budget : null)
+  }
+
+  /** 固定开销估算：工具描述 + 系统提示是每次请求都要付的成本，本地小窗口模型尤其需要看到。 */
+  function renderBudget(budget) {
+    const el = $('budget')
+    if (!el) return
+    if (!budget) { el.textContent = ''; return }
+    const k = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n))
+    el.textContent =
+      '固定开销估算：约 ' + k(budget.fixedTokens) + ' tokens（工具 ' + budget.toolsCount +
+      ' 个 + 系统提示，共 ' + budget.fixedChars.toLocaleString('en-US') + ' 字符）｜窗口 ' + k(budget.contextWindow) +
+      ' → 约 ' + k(budget.remainingTokens) + ' tokens 留给对话（' + Math.round(budget.conversationShare * 100) + '%）'
+    el.style.color = budget.conversationShare < 0.5 ? '#FBBF24' : 'var(--fg2)'
+  }
+
+  async function save() {
+    const res = await api.save(readForm())
+    if (res.ok) {
+      setStatus('已保存到 ' + res.path + '\n重启应用后生效。', 'ok')
+      renderPreview()
+    } else {
+      setStatus('保存失败：' + res.error, 'err')
+    }
+  }
+
+  $('btn-save').addEventListener('click', () => { void save() })
+  $('btn-save-restart').addEventListener('click', async () => {
+    const res = await api.save(readForm())
+    if (!res.ok) { setStatus('保存失败：' + res.error, 'err'); return }
+    setStatus('已保存，正在重启应用…', 'ok')
+    setTimeout(() => api.restart(), 400)
+  })
+  /** 从网关 /v1/models 拉取模型 id，填进「模型列表」；已有「id | 显示名」的显示名保留。 */
+  /** 一键套用窗口档位（只改输入框，仍要用户点保存才会写文件）。 */
+  const PRESETS = {
+    '32k': { contextWindow: 32768, maxTokens: 4096 },
+    '128k': { contextWindow: 131072, maxTokens: 8192 },
+    '256k': { contextWindow: 262144, maxTokens: 8192 },
+  }
+  for (const btn of document.querySelectorAll('#presets button[data-preset]')) {
+    btn.addEventListener('click', () => {
+      const preset = PRESETS[btn.dataset.preset]
+      if (!preset) return
+      $('contextWindow').value = String(preset.contextWindow)
+      $('maxTokens').value = String(preset.maxTokens)
+      setStatus('已套用「' + btn.textContent.trim() + '」，确认后点保存。', 'ok')
+      void renderPreview()
+    })
+  }
+
+  $('btn-copy').addEventListener('click', copyDiagnostics)
+  $('btn-models').addEventListener('click', async () => {
+    const baseURL = $('baseURL').value.trim()
+    if (!baseURL) { setStatus('先填网关地址。', 'err'); return }
+    $('btn-models').disabled = true
+    setStatus('正在读取 ' + baseURL.replace(/\/$/, '') + '/models …')
+    try {
+      const res = await api.test({ baseURL, apiKey: $('apiKey').value.trim() })
+      if (!res || res.ok !== true) {
+        const hint = res && res.hint ? '\n' + res.hint : ''
+        setStatus('拉取失败：' + ((res && res.error) || '未知错误') + hint, 'err')
+        return
+      }
+      const ids = (res.models ?? []).map((m) => m && m.id).filter(Boolean)
+      if (ids.length === 0) { setStatus('网关返回了 200，但模型列表为空。', 'warn'); return }
+      const names = new Map()
+      for (const line of $('models').value.split('\n')) {
+        const [id, name] = line.split('|').map((s) => (s ?? '').trim())
+        if (id) names.set(id, name)
+      }
+      $('models').value = ids.map((id) => (names.get(id) ? id + ' | ' + names.get(id) : id)).join('\n')
+      // 网关若自报上下文窗口（vLLM 的 max_model_len / llama.cpp 的 n_ctx），顺手填上，省得手猜
+      const windows = [...new Set((res.models ?? []).map((m) => (m && m.contextWindow) || 0).filter((n) => n > 0))]
+      let windowNote = ''
+      if (windows.length === 1) {
+        $('contextWindow').value = String(windows[0])
+        windowNote = '；已按网关自报填上下文窗口 ' + windows[0]
+      } else if (windows.length > 1) {
+        windowNote = '；网关自报的窗口不一致（' + windows.join(' / ') + '），请按实际模型选'
+      }
+      renderPreview()
+      setStatus('已从网关读到 ' + ids.length + ' 个模型：' + ids.join(', ') + windowNote + '（记得点「保存」）', 'ok')
+    } catch (error) {
+      setStatus('拉取失败：' + (error && error.message ? error.message : String(error)), 'err')
+    } finally {
+      $('btn-models').disabled = false
+    }
+  })
+
+  $('btn-test').addEventListener('click', async () => {
+    const form = readForm()
+    if (!form.baseURL) { setStatus('先填网关地址。', 'err'); return }
+    const model = (form.models && form.models[0] && form.models[0].id) || undefined
+    setStatus('正在自检 ' + form.baseURL.replace(/\/$/, '') + '（模型列表 → 基础对话 → 工具调用，本地模型首 token 慢可能等十几秒）…')
+    $('btn-test').disabled = true
+    try {
+      const res = await api.diagnose({ baseURL: form.baseURL, apiKey: form.apiKey, model })
+      renderDiag(res)
+      setStatus(res.ok ? '自检通过。' : '自检发现问题，见下方逐项结果。', res.ok ? 'ok' : 'warn')
+    } catch (error) {
+      renderDiag(null)
+      setStatus('自检失败：' + (error && error.message ? error.message : String(error)), 'err')
+    } finally {
+      $('btn-test').disabled = false
+    }
+  })
+  $('btn-warmup').addEventListener('click', async () => {
+    const form = readForm()
+    if (!form.baseURL) { setStatus('先填网关地址。', 'err'); return }
+    const model = (form.models && form.models[0] && form.models[0].id) || ''
+    if (!model) { setStatus('先填模型 id（不确定就点「从网关拉取模型列表」）。', 'err'); return }
+    $('btn-warmup').disabled = true
+    setStatus('正在预热 ' + model + '（冷启动可能要几十秒到几分钟，窗口别关）…')
+    try {
+      const res = await api.warmup({ baseURL: form.baseURL, apiKey: form.apiKey, model })
+      if (res && res.ok === true) {
+        const cost = res.elapsedMs < 1000 ? res.elapsedMs + ' ms' : (res.elapsedMs / 1000).toFixed(1) + ' s'
+        setStatus('预热完成：' + model + ' 已加载（首次响应 ' + cost + '）' + (res.reply ? '，回复「' + res.reply + '」' : '') + '；现在开新会话就不用等加载了。', 'ok')
+      } else {
+        const hint = res && res.hint ? '\n' + res.hint : ''
+        setStatus('预热失败：' + ((res && res.error) || '未知错误') + hint, 'err')
+      }
+    } catch (error) {
+      setStatus('预热失败：' + (error && error.message ? error.message : String(error)), 'err')
+    } finally {
+      $('btn-warmup').disabled = false
+    }
+  })
+  $('btn-probe').addEventListener('click', async () => {
+    setStatus('正在按已保存配置探测网关…')
+    const probe = await api.probe()
+    renderProbe(probe)
+    setStatus(probe ? (probe.ok ? '探测完成：网关可用。' : '探测完成：网关不可用（仍可用官方模型）。') : '当前没有已保存的本地模型配置。', probe ? (probe.ok ? 'ok' : 'warn') : 'warn')
+  })
+  $('btn-reload').addEventListener('click', () => { void load() })
+  $('btn-open').addEventListener('click', () => api.openFile())
+
+  for (const el of document.querySelectorAll('input, textarea')) {
+    if (el.classList.contains('tool-path')) continue
+    el.addEventListener('input', () => { void renderPreview() })
+    el.addEventListener('change', () => { void renderPreview() })
+  }
+
+  // 探测是启动时并发跑的：设置窗口可能先打开，等外壳推结果过来再刷新这一行。
+  if (api && typeof api.onProbe === 'function') {
+    api.onProbe((probe) => { renderProbe(probe) })
+  }
+
+  void loadTools()
+  void load()
+</script>
+</body>
+</html>

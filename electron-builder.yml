@@ -20,6 +20,7 @@ files:
   # 走 overlay 的 insert 行按相对路径加载，所以必须原样进 asar（可被 dsh 直接 import）。
   - plugins/**
   - tools/ges-index/**
+  - tools/lovely-cli/cli.mjs
   - build/icon.ico
   - build/tray.ico
   - build/icon.png
@@ -49,6 +50,7 @@ asar: true
 # 需要可执行文件路径），必须解包到 resources/app.asar.unpacked/。
 # 来源：node_modules 内 *.node 扫描结果 + dsh 运行时依赖清单。
 asarUnpack:
+  - tools/lovely-cli/cli.mjs
   - "**/*.node"
   - "node_modules/**/prebuilds/**"
   - "node_modules/node-pty/**"

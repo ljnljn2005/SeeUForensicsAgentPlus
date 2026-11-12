@@ -1,0 +1,18 @@
+{
+  "name": "@seeu/theme",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SeeU 取证智能体增强版 — dsh Web 界面的取证主题（配色/字体/密度）与文案补丁",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

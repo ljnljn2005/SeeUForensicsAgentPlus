@@ -201,7 +201,8 @@ export function topShared(crossDb, { minCases = 2, kind, limit = 30 } = {}) {
   let where = '';
   if (kind) { where = ' where kind = ?'; params.push(String(kind)); }
   const rows = crossDb.prepare(`select kind, value_norm valueNorm, min(value_text) valueText,
-      count(distinct case_number) caseCount, count(distinct eid) evidenceCount, sum(hits) hits
+      count(distinct case_number) caseCount, count(distinct eid) evidenceCount, sum(hits) hits,
+      group_concat(distinct case_number) caseNumbers
     from cross_entity${where}
     group by kind, value_norm having count(distinct case_number) >= ?
     order by caseCount desc, hits desc limit ?`).all(...params, Number(minCases), Math.min(200, Number(limit) || 30));
