@@ -332,9 +332,11 @@
     <div class="hint">一次性检查：随包 dsh 插件、取证技能、外部工具路径、本机模型配置、镜像挂载（LovelyCarve）、MYOS MCP、案件索引目录。只读检查，不会启动会话或改动配置。</div>
     <div class="actions" style="margin:10px 0 6px">
       <button id="btn-env-check">开始体检</button>
+      <button id="btn-env-copy" disabled>复制结果</button>
       <span id="env-summary" class="hint" style="margin-left:8px"></span>
     </div>
     <div id="env-items"></div>
+    <div id="env-copy-status" class="hint"></div>
   </div>
 
   <div class="actions">
@@ -767,10 +769,27 @@
       row.append(mark, label, detail)
       box.append(row)
     }
+    lastEnvText = report.text || ''
+    const copyButton = $('btn-env-copy')
+    if (copyButton) copyButton.disabled = !lastEnvText
     const sum = report.summary || {}
     const summary = $('env-summary')
     summary.textContent = '体检结果：' + (sum.ok || 0) + ' 项正常 · ' + (sum.warn || 0) + ' 项注意 · ' + (sum.fail || 0) + ' 项不可用'
     summary.style.color = (sum.fail || 0) > 0 ? ENV_COLOR.fail : (sum.warn || 0) > 0 ? ENV_COLOR.warn : ENV_COLOR.ok
+  }
+
+  let lastEnvText = ''
+
+  async function copyEnvReport() {
+    if (!lastEnvText) return
+    try {
+      const ok = await window.seeu.writeClipboard(lastEnvText)
+      $('env-copy-status').textContent = ok ? '已复制体检结果（' + lastEnvText.length + ' 字符），可直接粘贴给别人。' : '复制失败：剪贴板不可用。'
+      $('env-copy-status').style.color = ok ? 'var(--muted)' : 'var(--err)'
+    } catch (error) {
+      $('env-copy-status').textContent = '复制失败：' + (error && error.message ? error.message : error)
+      $('env-copy-status').style.color = 'var(--err)'
+    }
   }
 
   async function runEnvCheck() {
@@ -781,7 +800,7 @@
       if (!envApi) throw new Error('预加载桥不可用（window.seeu.env 缺失）')
       const res = await envApi.report()
       if (!res || !res.ok || !res.report) throw new Error((res && res.error) || '体检失败')
-      renderEnvReport(res.report)
+      renderEnvReport({ ...res.report, text: res.text })
     } catch (error) {
       $('env-summary').textContent = '体检失败：' + (error && error.message ? error.message : error)
       $('env-summary').style.color = 'var(--err)'
@@ -1096,6 +1115,8 @@
   void loadTools()
   const envButton = $('btn-env-check')
   if (envButton) envButton.addEventListener('click', () => { void runEnvCheck() })
+  const envCopyButton = $('btn-env-copy')
+  if (envCopyButton) envCopyButton.addEventListener('click', () => { void copyEnvReport() })
   void loadToolPaths()
   void load()
 </script>

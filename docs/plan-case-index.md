@@ -2467,3 +2467,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `plugins/seeu-case-index/index.js` 的 `GET /activity` 返回 `{file, entries, summary, summaryText}`；`client.js` 增加 `activitySummary` state，标题行渲染 `[data-activity-summary]` 文本，清空时一并清空。
 - 测试：`tests/activity.test.mjs` +2 例（窗口过滤与平均值、空输入/时长格式）→ 6/6；`npm test` **189/189**；`m2-ui-check` 加 `activitySummaryPresent`/`activitySummaryText`（新 home 无历史 → 元素存在、文本空），实测 `activitySummaryPresent:1`、`activityOk:true`、`m2ok:true`、`errors:[]`。
 - 坑：`client.js` 是普通 JS（不是 JSX），改完用 `node --check` 校验即可；`m2-ui-check` 里 `ev()` 返回的是 `document.querySelectorAll(...).length` 数值，断言要按数值比较。
+
+### 20.113 环境体检「复制结果」（第 34 轮）
+
+- 动机：体检结果只在设置页里，要让用户把它贴给支持人员/留档，需要能一键复制。
+- `src/main.ts` 的 `seeu:env:report` 在 `report` 之外返回 `text: envReportText(report)`（`formatEnvReport()` 纯文本版：逐项 `[OK]/[!]/[X]` + 详情 + 非 ok 项的 `→` 提示 + 合计行）。
+- `src/preload.ts` 类型加 `text?`；`renderer/local-model.html` 体检卡片加【复制结果】按钮（无报告时 disabled）与 `#env-copy-status` 状态行，走已有的 `window.seeu.writeClipboard()`。
+- e2e：`settings-check` 在体检断言后点【复制结果】，用 PowerShell `Get-Clipboard -Raw` 读回，断言含「SeeU 环境体检」「合计：」「外部工具路径」→ `envClipboardChars:380`、`envCopyOk:true`、`ok:true`。
+- 坑：页面里 `renderEnvReport()` 只吃 `report` 对象，复制文本要单独经 `res.text` 传进来（不要从 DOM 反解析，条目里的提示文案会丢）。

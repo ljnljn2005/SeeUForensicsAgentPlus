@@ -83,7 +83,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 - **面板最近活动统计（第 33 轮）**：`/seeu-index/activity` 在 `entries` 之外返回 `summary`（近 7 天建库次数、平均用时、MYOS 导入次数与累计条数、最近活动时间）与 `summaryText`（如「近 7 天：建库 2 次（平均 2 分 5 秒） · MYOS 导入 1 次，12,345 条」），面板「最近活动」标题右侧直接显示该摘要；实现 `tools/ges-index/activity.mjs` 的 `summarizeActivity`/`formatActivitySummary`/`formatActivityDuration`，单测 +2 例、`npm test` **189/189**，`m2-ui-check` 断言 `activitySummaryPresent:1`。
 
-- **设置页「运行环境体检」（第 32 轮）**：一键汇总七项——随包 dsh 插件（6 bundle 是否都能解析）、取证技能（随包 6 个 + 技能组 4 组 + 已安装数）、外部工具路径（13 项 ready/total）、本机模型配置（是否启用 / 模型 id / 窗口）、镜像挂载 CLI（LovelyCarve 版本 / 活动挂载数）、MYOS MCP 服务端、案件索引目录；每项给 `ok/warn/fail` + 一句可操作提示，只读检查不启动会话。实现：`tools/env-report.mjs`（纯判定 + 文案，单测 4 例）+ `src/env-report.ts`（宿主收集事实，`collectEnvReport()`）+ IPC `seeu:env:report` + `window.seeu.env.report()`；设置页「运行环境体检」卡片，`tests/env-report.test.mjs` 4 例、`npm test` **187/187**；`settings-check` 实测 `envItemCount:7`、`envSummary:"体检结果：6 项正常 · 1 项注意 · 0 项不可用"`、`envReportOk:true`。
+- **设置页「运行环境体检」（第 32 轮）**：一键汇总七项——随包 dsh 插件（6 bundle 是否都能解析）、取证技能（随包 6 个 + 技能组 4 组 + 已安装数）、外部工具路径（13 项 ready/total）、本机模型配置（是否启用 / 模型 id / 窗口）、镜像挂载 CLI（LovelyCarve 版本 / 活动挂载数）、MYOS MCP 服务端、案件索引目录；每项给 `ok/warn/fail` + 一句可操作提示，只读检查不启动会话。实现：`tools/env-report.mjs`（纯判定 + 文案，单测 4 例）+ `src/env-report.ts`（宿主收集事实，`collectEnvReport()`）+ IPC `seeu:env:report` + `window.seeu.env.report()`；设置页「运行环境体检」卡片，`tests/env-report.test.mjs` 4 例、`npm test` **187/187**；`settings-check` 实测 `envItemCount:7`、`envSummary:"体检结果：6 项正常 · 1 项注意 · 0 项不可用"`、`envReportOk:true`。第 34 轮补【复制结果】按钮：`/env:report` 同时返回纯文本版（`envReportText()`），点一下复制整份报告（含逐项详情与提示、合计行），实测 380 字符、`envCopyOk:true`。
 
 ### v0.3.10 改了什么
 

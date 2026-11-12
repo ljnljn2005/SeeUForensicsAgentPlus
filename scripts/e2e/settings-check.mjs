@@ -10,7 +10,7 @@
  *
  * 用法：node scripts/e2e/settings-check.mjs [--out scripts/e2e/shots/local-model.png]
  */
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join, resolve } from 'node:path'
@@ -521,6 +521,13 @@ try {
   report.envReportOk = report.envItemCount >= 7 && /体检结果/.test(report.envSummary) && (envReport?.statuses ?? []).includes('ok') && /插件|技能|工具/.test(envReport?.text ?? '')
   if (!report.envReportOk) throw new Error('环境体检没渲染出完整清单：' + JSON.stringify(envReport))
   log('环境体检', report.envSummary)
+  await evaluate(client, `document.getElementById('btn-env-copy').click(), true`)
+  await sleep(400)
+  const envClipboard = execFileSync('powershell.exe', ['-NoProfile', '-Command', '[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Clipboard -Raw'], { encoding: 'utf8' })
+  report.envClipboardChars = String(envClipboard ?? '').trim().length
+  report.envCopyOk = /SeeU 环境体检/.test(envClipboard) && /合计：/.test(envClipboard) && /外部工具路径/.test(envClipboard)
+  if (!report.envCopyOk) throw new Error('复制体检结果内容不符：' + String(envClipboard).slice(0, 160))
+  log('复制体检结果', `${report.envClipboardChars} 字符`)
 
   // 真实点「从网关拉取模型列表」按钮：应把 /v1/models 的 id 填进 textarea（保留已有显示名）
   await evaluate(client, `document.getElementById('btn-models').click(), true`)

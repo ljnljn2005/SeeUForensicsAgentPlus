@@ -346,8 +346,8 @@ const api = {
   },
   // 运行环境体检：插件/技能/工具路径/本机模型/挂载/MYOS/索引目录。
   env: {
-    report: (): Promise<{ ok: boolean; report?: EnvReport; error?: string }> =>
-      ipcRenderer.invoke('seeu:env:report') as Promise<{ ok: boolean; report?: EnvReport; error?: string }>,
+    report: (): Promise<{ ok: boolean; report?: EnvReport; text?: string; error?: string }> =>
+      ipcRenderer.invoke('seeu:env:report') as Promise<{ ok: boolean; report?: EnvReport; text?: string; error?: string }>,
   },
   // 镜像挂载：取证镜像 → 只读盘符（LovelyCarve CLI 常驻进程，关闭外壳释放）。
   mounts: {
