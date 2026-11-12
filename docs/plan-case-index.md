@@ -2459,3 +2459,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：`tests/env-report.test.mjs` 4 例（齐全全 ok；工具缺一半 fail、少量缺 warn；插件缺包 fail + 提示、挂载/模型未配置 warn；空事实不抛异常 + worstStatus/formatEnvReport）→ 4/4；`npm test` **187/187**、`check:overlay` OK、build OK。
 - `scripts/e2e/settings-check.mjs` 加环境体检断言（点按钮 → 等 `[data-env-key]` ≥7 → 读 summary/statuses）→ `envItemCount:7`、`envKeys` 七项、`envStatuses` 6 ok + 1 warn（隔离 home 未登记索引目录）、`envSummary:"体检结果：6 项正常 · 1 项注意 · 0 项不可用"`、`envReportOk:true`、`ok:true`。
 - 坑：设置页脚本由内联 `<script>` 直接跑，改完必须用 `esbuild transformSync(loader:'js')` 校验（本轮一次通过）；`env-check` 按钮在 `window.seeu.env` 缺失时要走失败提示而不是静默。
+
+### 20.112 最近活动统计（第 33 轮）
+
+- 背景：活动记录已有（第 30 轮），但只能逐条看，看不出「最近建库慢不慢、导入多不多」。
+- `tools/ges-index/activity.mjs` 新增：`ACTIVITY_SUMMARY_DAYS=7`、`formatActivityDuration(ms)`（秒/分/小时）、`summarizeActivity(entries, now, days)`（窗口内统计 `builds`/`imports`/`avgBuildMs`/`rows`/`lastAt`/`total`；坏时间戳计入次数但不参与平均）、`formatActivitySummary(summary)`（无活动返回空串，面板据此隐藏/留空）。
+- `plugins/seeu-case-index/index.js` 的 `GET /activity` 返回 `{file, entries, summary, summaryText}`；`client.js` 增加 `activitySummary` state，标题行渲染 `[data-activity-summary]` 文本，清空时一并清空。
+- 测试：`tests/activity.test.mjs` +2 例（窗口过滤与平均值、空输入/时长格式）→ 6/6；`npm test` **189/189**；`m2-ui-check` 加 `activitySummaryPresent`/`activitySummaryText`（新 home 无历史 → 元素存在、文本空），实测 `activitySummaryPresent:1`、`activityOk:true`、`m2ok:true`、`errors:[]`。
+- 坑：`client.js` 是普通 JS（不是 JSX），改完用 `node --check` 校验即可；`m2-ui-check` 里 `ev()` 返回的是 `document.querySelectorAll(...).length` 数值，断言要按数值比较。

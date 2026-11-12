@@ -50,3 +50,76 @@ export function clearActivity(env = process.env) {
   mkdirSync(dirname(file), { recursive: true })
   writeFileSync(file, `${JSON.stringify({ updatedAt: new Date().toISOString(), entries: [] }, null, 2)}\n`, 'utf8')
 }
+
+/** 活动统计窗口（天）。 */
+export const ACTIVITY_SUMMARY_DAYS = 7
+
+/** 把毫秒格式化成「X 秒 / X 分 Y 秒 / X 小时 Y 分」。 */
+export function formatActivityDuration(ms) {
+  const total = Math.max(0, Math.round(Number(ms) || 0))
+  const seconds = Math.round(total / 1000)
+  if (seconds < 60) return `${seconds} 秒`
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  if (minutes < 60) return rest === 0 ? `${minutes} 分` : `${minutes} 分 ${rest} 秒`
+  const hours = Math.floor(minutes / 60)
+  return `${hours} 小时 ${minutes % 60} 分`
+}
+
+/**
+ * 最近 N 天的活动统计（纯函数，给面板摘要行用）。
+ *
+ * 只统计窗口内的记录：建库次数/平均用时、MYOS 导入次数/累计条数。
+ * 时间字段坏掉（无法解析）的条目计入次数但不参与平均。
+ */
+export function summarizeActivity(entries, now = Date.now(), days = ACTIVITY_SUMMARY_DAYS) {
+  const list = Array.isArray(entries) ? entries.filter((item) => item && typeof item === 'object') : []
+  const since = now - Math.max(1, Number(days) || ACTIVITY_SUMMARY_DAYS) * 24 * 60 * 60 * 1000
+  let builds = 0
+  let imports = 0
+  let buildMsTotal = 0
+  let buildMsCount = 0
+  let rows = 0
+  let lastAt = ''
+  for (const entry of list) {
+    const at = Date.parse(String(entry.at ?? ''))
+    if (!Number.isFinite(at) || at < since) continue
+    if (!lastAt || at > Date.parse(lastAt)) lastAt = String(entry.at ?? '')
+    if (entry.kind === 'build') {
+      builds += 1
+      const duration = Number(entry.durationMs)
+      if (Number.isFinite(duration) && duration > 0) {
+        buildMsTotal += duration
+        buildMsCount += 1
+      }
+    } else if (entry.kind === 'myos-import') {
+      imports += 1
+      const count = Number(entry.rows)
+      if (Number.isFinite(count) && count > 0) rows += count
+    }
+  }
+  return {
+    days: Math.max(1, Number(days) || ACTIVITY_SUMMARY_DAYS),
+    builds,
+    imports,
+    avgBuildMs: buildMsCount > 0 ? Math.round(buildMsTotal / buildMsCount) : null,
+    rows,
+    lastAt,
+    total: builds + imports,
+  }
+}
+
+/** 摘要文案（无活动返回空串，面板据此隐藏这一行）。 */
+export function formatActivitySummary(summary) {
+  if (!summary || summary.total === 0) return ''
+  const parts = []
+  if (summary.builds > 0) {
+    const avg = summary.avgBuildMs ? `平均 ${formatActivityDuration(summary.avgBuildMs)}` : '无用时数据'
+    parts.push(`建库 ${summary.builds} 次（${avg}）`)
+  }
+  if (summary.imports > 0) {
+    const rows = summary.rows > 0 ? `，${summary.rows.toLocaleString('zh-CN')} 条` : ''
+    parts.push(`MYOS 导入 ${summary.imports} 次${rows}`)
+  }
+  return `近 ${summary.days} 天：${parts.join(' · ')}`
+}

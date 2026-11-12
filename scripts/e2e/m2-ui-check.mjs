@@ -185,7 +185,9 @@ await sleep(700)
   report.activityVisible = /最近活动/.test(t)
   report.activityRows = await ev("document.querySelectorAll('[data-activity-kind]').length")
   report.activityEmptyHint = /还没有活动记录/.test(t) || /建库或从 MYOS 导入后/.test(t)
-  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true)
+  report.activitySummaryPresent = await ev("document.querySelectorAll('[data-activity-summary]').length")
+  report.activitySummaryText = await ev("(() => { const el = document.querySelector('[data-activity-summary]'); return el ? el.textContent.trim() : '' })()")
+  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true) && report.activitySummaryPresent === 1
 }
 report.idxFilterOk = report.idxFilterChips === 4 && report.idxFilterClickMyos === true && report.idxFilterEmpty === true && report.idxFilterClickAll === true && report.idxFilterRestore === true
 report.rootText = text.slice(text.indexOf('取证案件索引'), text.indexOf('取证案件索引') + 900)

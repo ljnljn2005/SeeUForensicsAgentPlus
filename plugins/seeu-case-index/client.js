@@ -1510,6 +1510,7 @@ window.__ModuleLoader__.load({
       const [treeFilter, setTreeFilter] = useState('');
       // 最近活动（建库 / MYOS 导入），来自插件 /activity
       const [activity, setActivity] = useState([]);
+      const [activitySummary, setActivitySummary] = useState('');
       useEffect(() => {
         let alive = true;
         if (!db) { setEvList([]); return undefined; }
@@ -1535,7 +1536,10 @@ window.__ModuleLoader__.load({
         (async () => {
           try {
             const body = await api('/activity');
-            if (alive) setActivity(Array.isArray(body?.entries) ? body.entries : []);
+            if (alive) {
+              setActivity(Array.isArray(body?.entries) ? body.entries : []);
+              setActivitySummary(typeof body?.summaryText === 'string' ? body.summaryText : '');
+            }
           } catch {
             if (alive) setActivity([]);
           }
@@ -2097,13 +2101,14 @@ window.__ModuleLoader__.load({
           h('div', { style: { ...S.row, gap: 8 } },
             h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, '最近活动'),
             h('span', { style: S.muted }, activity.length ? `共 ${activity.length} 条 · 点一行打开对应索引` : '还没有活动记录'),
+            h('span', { 'data-activity-summary': '1', title: activitySummary || '', style: { ...S.muted, marginLeft: 6 } }, activitySummary),
             h('div', { style: { flex: 1 } }),
             activity.length ? h('button', {
               type: 'button',
               className: 'seeu-btn',
               style: { fontSize: 11, padding: '3px 8px' },
               onClick: async () => {
-                try { await post('/activity/clear', {}); setActivity([]); } catch { /* 忽略 */ }
+                try { await post('/activity/clear', {}); setActivity([]); setActivitySummary(''); } catch { /* 忽略 */ }
               },
             }, '清空') : null),
           activity.length

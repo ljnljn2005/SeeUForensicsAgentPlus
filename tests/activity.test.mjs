@@ -7,8 +7,11 @@ import {
   ACTIVITY_MAX,
   activityFile,
   clearActivity,
+  formatActivityDuration,
+  formatActivitySummary,
   readActivity,
   recordActivity,
+  summarizeActivity,
 } from '../tools/ges-index/activity.mjs'
 
 const tempEnv = () => {
@@ -63,4 +66,37 @@ test('不存在的文件返回空数组且不创建目录', () => {
   } finally {
     cleanup()
   }
+})
+
+test('summarizeActivity：窗口内统计建库平均用时与导入条数，窗口外忽略', () => {
+  const now = Date.parse('2026-11-13T00:00:00Z')
+  const entries = [
+    { kind: 'build', at: '2026-11-12T20:00:00Z', durationMs: 120000 },
+    { kind: 'build', at: '2026-11-11T20:00:00Z', durationMs: 60000 },
+    { kind: 'myos-import', at: '2026-11-12T21:00:00Z', rows: 1234 },
+    { kind: 'myos-import', at: '2026-10-01T00:00:00Z', rows: 9999 },
+    { kind: 'build', at: 'not-a-date', durationMs: 1 },
+  ]
+  const summary = summarizeActivity(entries, now)
+  assert.equal(summary.builds, 2)
+  assert.equal(summary.imports, 1)
+  assert.equal(summary.avgBuildMs, 90000)
+  assert.equal(summary.rows, 1234)
+  assert.equal(summary.total, 3)
+  const text = formatActivitySummary(summary)
+  assert.match(text, /近 7 天/)
+  assert.match(text, /建库 2 次（平均 1 分 30 秒）/)
+  assert.match(text, /MYOS 导入 1 次，1,234 条/)
+})
+
+test('summarizeActivity：空列表/坏输入返回 0，文案为空串', () => {
+  const summary = summarizeActivity(undefined, Date.now())
+  assert.equal(summary.total, 0)
+  assert.equal(summary.avgBuildMs, null)
+  assert.equal(formatActivitySummary(summary), '')
+  assert.equal(formatActivitySummary(null), '')
+  assert.equal(formatActivityDuration(0), '0 秒')
+  assert.equal(formatActivityDuration(5000), '5 秒')
+  assert.equal(formatActivityDuration(125000), '2 分 5 秒')
+  assert.equal(formatActivityDuration(3725000), '1 小时 2 分')
 })
