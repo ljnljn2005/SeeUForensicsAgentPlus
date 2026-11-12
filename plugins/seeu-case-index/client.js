@@ -1513,6 +1513,7 @@ window.__ModuleLoader__.load({
       const [activitySummary, setActivitySummary] = useState('');
       const [activityBuckets, setActivityBuckets] = useState([]);
       const [activityDay, setActivityDay] = useState('');
+      const [activityNote, setActivityNote] = useState('');
       useEffect(() => {
         let alive = true;
         if (!db) { setEvList([]); return undefined; }
@@ -2152,8 +2153,27 @@ window.__ModuleLoader__.load({
               style: { ...S.row, gap: 8, padding: '4px 2px', borderTop: '1px solid rgba(148,163,184,0.18)', cursor: item.caseDir ? 'pointer' : 'default' },
               onClick: async () => {
                 if (!item.caseDir) return;
-                await scan(item.caseDir);
-                if (item.dbFile) { setDb(item.dbFile); loadNode(item.dbFile, 'root'); }
+                setActivityNote('');
+                try {
+                  const body = await api('/list', {});
+                  const list = (body && body.indexes) || [];
+                  const wantedDir = item.caseDir ? String(item.caseDir).split('\\').join('/').toLowerCase() : '';
+                  const target = list.find((ix) => {
+                    if (item.dbFile && ix.dbPath === item.dbFile) return true;
+                    const dir = ix.caseDir ? String(ix.caseDir).split('\\').join('/').toLowerCase() : '';
+                    return Boolean(wantedDir) && dir === wantedDir;
+                  });
+                  if (!target) {
+                    setActivityNote('打不开该活动：索引已不存在（' + (item.dbFile || item.caseDir) + '），可能被删除或移动。');
+                    return;
+                  }
+                  setIndexes(list);
+                  setDb(target.dbPath);
+                  if (target.caseDir) setDir(target.caseDir);
+                  loadNode(target.dbPath, 'root');
+                } catch (error) {
+                  setActivityNote('打不开该活动：' + (error && error.message ? error.message : error));
+                }
               },
             },
             h('span', { style: { fontSize: 10.5, padding: '1px 6px', borderRadius: 4, background: item.kind === 'build' ? 'rgba(34,211,238,0.14)' : 'rgba(168,85,247,0.14)', color: item.kind === 'build' ? '#67E8F9' : '#C4B5FD' } }, item.kind === 'build' ? '建库' : 'MYOS'),
@@ -2161,7 +2181,11 @@ window.__ModuleLoader__.load({
             h('span', { style: S.muted }, item.detail ?? ''),
             h('div', { style: { flex: 1 } }),
             h('span', { style: S.muted }, item.at ? new Date(item.at).toLocaleTimeString('zh-CN', { hour12: false }) : '')))
-            : h('div', { style: S.muted }, '建库或从 MYOS 导入后，这里会按时间列出最近的工作，点一行可直接打开对应索引。')),
+            : h('div', { style: S.muted }, '建库或从 MYOS 导入后，这里会按时间列出最近的工作，点一行可直接打开对应索引。'),
+          activityNote ? h('div', {
+            'data-activity-note': '1',
+            style: { ...S.muted, color: C_WARN, fontSize: 12 },
+          }, activityNote) : null),
         onboarding,
         myosOpen ? h(MyosDialog, {
           initialDir: dir.trim(),

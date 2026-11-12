@@ -2,6 +2,7 @@
 // 启动 → 等侧栏出现「取证索引」→ 点开 → 自动扫描索引 → 打开案件 → 树导航 → 关键词检索。
 import { spawn, execFileSync } from 'node:child_process'
 import { request } from 'node:http'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const root = process.cwd()
@@ -32,6 +33,29 @@ if (process.env.SEEU_NO_KILL !== '1') {
   try {
     execFileSync('taskkill', ['/F', '/IM', exeOverride ? 'SeeUForensicsAgentPlus.exe' : 'electron.exe', '/T'], { stdio: 'ignore' })
   } catch { /* 无残留 */ }
+}
+
+// 第 37~39 轮：活动卡片需要可复现的历史（今天 1 条 + 昨天 1 条）。
+// SEEU_DSH_HOME 必须是绝对路径（相对路径会被插件按 dsh 进程 cwd 解析，读不到）。
+const dshHome = process.env.SEEU_DSH_HOME
+if (dshHome && /^[A-Za-z]:[\/]/.test(dshHome)) {
+  try {
+    mkdirSync(dshHome, { recursive: true })
+    const now = new Date()
+    writeFileSync(
+      join(dshHome, 'index-activity.json'),
+      JSON.stringify({
+        updatedAt: now.toISOString(),
+        entries: [
+          { kind: 'build', at: now.toISOString(), title: '今日建库样例', detail: '2 条', durationMs: 60000, caseDir: 'E:/seeu-missing-today', dbFile: 'E:/seeu-missing-today/.seeu-index/case-index.db' },
+          { kind: 'myos-import', at: new Date(now.getTime() - 86400000).toISOString(), title: '昨日导入样例', detail: '1 条', rows: 1, caseDir: 'E:/seeu-missing-yesterday' },
+        ],
+      }, null, 2) + String.fromCharCode(10),
+      'utf8',
+    )
+  } catch (error) {
+    console.error('seed activity failed:', String(error && error.message ? error.message : error))
+  }
 }
 
 const args = exeOverride ? [`--remote-debugging-port=${port}`] : ['.', `--remote-debugging-port=${port}`]
@@ -201,10 +225,20 @@ await sleep(700)
     await sleep(350)
     report.activityFilterCleared = await ev("document.querySelectorAll('[data-activity-filter]').length === 0")
     report.activityDayFilterOk = /只看/.test(String(report.activityFilterText)) && report.activityFilterHint === true && report.activityFilterCleared === true
+    // 第 39 轮：点一条指向已不存在目录的活动 → 给出可读提示，不静默失败。
+    report.activityRowCount = await ev("document.querySelectorAll('[data-activity-kind]').length")
+    report.activityRowText = await ev("(document.querySelector('[data-activity-kind]') || {}).textContent || ''")
+    await ev("(document.querySelector('[data-activity-kind]') || {click(){}}).click(), true")
+    await sleep(1200)
+    report.activityNoteEls = await ev("document.querySelectorAll('[data-activity-note]').length")
+    report.activityOpenNote = await ev("(document.querySelector('[data-activity-note]') || {}).textContent || ''")
+    report.activityOpenNoteOk = /打不开该活动/.test(String(report.activityOpenNote))
+    if (!report.activityOpenNoteOk) throw new Error('活动行打开失败时没有提示：' + JSON.stringify({ note: report.activityOpenNote, rows: report.activityRowCount, rowText: report.activityRowText, noteEls: report.activityNoteEls, firstRows: report.activityRows, visible: report.activityVisible, emptyHint: report.activityEmptyHint, bars: report.activityBars, filterText: report.activityFilterText }))
+    console.log('活动打开失败提示:', String(report.activityOpenNote).slice(0, 60))
   }
 
   report.activitySummaryText = await ev("(() => { const el = document.querySelector('[data-activity-summary]'); return el ? el.textContent.trim() : '' })()")
-  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true) && report.activitySummaryPresent === 1 && report.activityBars === 7 && report.activityDayFilterOk === true
+  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true) && report.activitySummaryPresent === 1 && report.activityBars === 7 && report.activityDayFilterOk === true && report.activityOpenNoteOk === true
 }
 report.idxFilterOk = report.idxFilterChips === 4 && report.idxFilterClickMyos === true && report.idxFilterEmpty === true && report.idxFilterClickAll === true && report.idxFilterRestore === true
 report.rootText = text.slice(text.indexOf('取证案件索引'), text.indexOf('取证案件索引') + 900)

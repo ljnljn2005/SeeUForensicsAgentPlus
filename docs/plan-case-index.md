@@ -2508,3 +2508,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：`tests/env-report.test.mjs` +1 例（标题、表头、合计、表格行数 = items 数、提示为空）；坑：统计行时要把 Markdown 分隔行 `| --- |` 排除，否则比 items 多 1。
 - e2e：`settings-check` 设置 `SEEU_EXPORT_DIR=.dev/settings-exports`，体检后点【导出 .md】，读最新 .md 断言首行、表头、合计 → `envExportOk:true`，文件名 `SeeU-环境体检-2026-11-12-22-02-32.md`。
 - 坑：`runEnvCheck()` 里 `renderEnvReport({ ...res.report, text: res.text })` 漏传 `markdown` → 按钮始终 disabled、e2e 无文件；必须把 `res.markdown` 一起并进对象。
+
+### 20.118 活动行打开失败提示（第 39 轮）
+
+- 问题：活动记录只是 JSON 快照；目录被删/索引被移走后，点行调用 `scan(caseDir)` 会按默认目录兜底，看起来「什么都没发生」。
+- `plugins/seeu-case-index/client.js`：活动行点击不再盲目 `scan`，而是先 `GET /list`（不带 dir，避免 `/list?dir=` 合并默认目录导致误判），按 `item.dbFile` 或规范化后的 `item.caseDir`（`split('\').join('/').toLowerCase()`）在返回索引里查找；找不到 → 新增 `activityNote`（muted 卡片底部、`data-activity-note`、琥珀色）「打不开该活动：索引已不存在（…），可能被删除或移动。」；找到 → 只把 `list` 设为索引列表并打开目标库/节点。
+- e2e 自包含：`m2-ui-check` 启动前若 `SEEU_DSH_HOME` 是绝对路径，就写入 `index-activity.json`（今天 build + 昨天 myos-import，`caseDir` 指向不存在的 `E:/seeu-missing-*`）；断言点击第一行后 `activityOpenNote` 含「打不开该活动」、`activityOpenNoteOk:true`。
+- 坑：① `replace(/\/g,'/')` 经 python heredoc 两次转义变成 `/\/g`（非法正则），整块插件面板 import 失败、`errors` 里只有 `Uncaught SyntaxError: missing ) after argument list`——改用 `split('\').join('/')`；② m2 脚本里 `log()` 不存在（那是别的脚本的 helper），用 `console.log`；③ e2e 自己写活动文件比外部 bash 预置更稳（外部预置会被前一次运行的清空/覆盖弄丢）。

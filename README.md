@@ -81,6 +81,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 ### v0.3.12 待发布（未打包）
 
+- **活动行打开失败有提示**（第 39 轮）：点活动行时先核对 `/list` 返回的索引（按 `dbFile` 或规范化 `caseDir` 匹配），找不到就在卡片底部显示「打不开该活动：索引已不存在（…），可能被删除或移动。」（琥珀色），不再静默失败；`m2-ui-check` 内置预置活动（今天/昨天各 1 条、指向不存在的目录），断言 `activityOpenNoteOk:true` 并纳入 `activityOk`。
 - **体检报告可导出 .md**（第 38 轮）：`envReportMarkdown()` 生成标准 Markdown（标题 + 检查时间 + 合计 + 四列表格 + 备注），设置页「导出 .md」按钮走 `save-export` IPC 落盘（目录同 CSV 导出，`SEEU_EXPORT_DIR` 可指定），e2e 读回落盘文件断言含 `| 项目 | 状态 | 详情 | 提示 |` 与 `合计：**6 项正常`。
 - **活动条形可点选当天**（第 37 轮）：点「最近活动」任一小条形即只看那一天（再点取消）；标题行显示「当天 1 条 · 共 2 条」，旁边出现「只看 2026-11-13 · 点条形取消」。`m2-ui-check` 预置「今天 1 条 / 昨天 1 条」后断言 `activityFilterText`、`activityHeaderText:"当天 1 条 · 共 2 条"`、`activityFilterCleared`、`activityDayFilterOk:true`。
 - **最近活动按天分布**（第 36 轮）：`summarizeActivity()` 额外返回 `buckets`（最近 7 天、每天 `{date,builds,imports,total}`，本地时区，窗口外不计）；面板「最近活动」标题右侧画 7 根小条形（建库/导入/两者都有分别着色，hover 显示「日期：建库 N 次 · MYOS 导入 M 次」）。`tests/activity.test.mjs` +1 例（分桶边界与窗口外排除）→ `npm test` 191/191；`m2-ui-check` 新增 `activityBars:7` 并纳入 `activityOk`。
