@@ -10,7 +10,7 @@
 
 import { TOOL_PATH_SPECS, saveToolPaths, toolPathsEnv, toolPathsFile, toolPathsView } from '../tools/tool-paths.mjs'
 
-export { TOOL_PATH_SPECS, saveToolPaths, toolPathsEnv, toolPathsFile, toolPathsView }
+export { TOOL_PATH_SPECS, findOnPath, saveToolPaths, toolPathsEnv, toolPathsFile, toolPathsView }
 
 export type ToolPathId =
   | 'ghidra'
@@ -33,10 +33,11 @@ export interface ToolPathState {
   readonly label: string
   readonly kind: ToolPathKind
   readonly env: string
+  readonly command: string
   readonly hint: string
   readonly defaultPath: string
   readonly path: string
-  readonly source: 'default' | 'config'
+  readonly source: 'config' | 'path' | 'default'
   readonly configured: boolean
   readonly exists: boolean
   readonly found: boolean

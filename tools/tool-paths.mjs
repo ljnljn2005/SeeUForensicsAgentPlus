@@ -23,16 +23,16 @@ export const TOOL_PATH_SPECS = [
     defaultPath: GHIDRA_DIR,
     hint: '安装/源码目录；批处理脚本在 Ghidra/RuntimeScripts/Windows/support/analyzeHeadless.bat',
   },
-  { id: 'ida', label: 'IDA (idat)', kind: 'file', env: 'SEEU_TOOL_IDA', defaultPath: 'D:/Programs/IDA Professional 9.4/idat.exe' },
-  { id: 'tshark', label: 'tshark', kind: 'file', env: 'SEEU_TOOL_TSHARK', defaultPath: WIRESHARK_DIR + '/tshark.exe' },
-  { id: 'capinfos', label: 'capinfos', kind: 'file', env: 'SEEU_TOOL_CAPINFOS', defaultPath: WIRESHARK_DIR + '/capinfos.exe' },
-  { id: 'editcap', label: 'editcap', kind: 'file', env: 'SEEU_TOOL_EDITCAP', defaultPath: WIRESHARK_DIR + '/editcap.exe' },
-  { id: 'python', label: 'Python', kind: 'file', env: 'SEEU_TOOL_PYTHON', defaultPath: 'D:/Programming/Python31314/python.exe' },
-  { id: 'jadx', label: 'jadx', kind: 'file', env: 'SEEU_TOOL_JADX', defaultPath: CTF + '/2-PhoneAnalysis/Android取证/jadx-1.1.0/bin/jadx.bat' },
+  { id: 'ida', label: 'IDA (idat)', kind: 'file', env: 'SEEU_TOOL_IDA', command: 'idat', defaultPath: 'D:/Programs/IDA Professional 9.4/idat.exe' },
+  { id: 'tshark', label: 'tshark', kind: 'file', env: 'SEEU_TOOL_TSHARK', command: 'tshark', defaultPath: WIRESHARK_DIR + '/tshark.exe' },
+  { id: 'capinfos', label: 'capinfos', kind: 'file', env: 'SEEU_TOOL_CAPINFOS', command: 'capinfos', defaultPath: WIRESHARK_DIR + '/capinfos.exe' },
+  { id: 'editcap', label: 'editcap', kind: 'file', env: 'SEEU_TOOL_EDITCAP', command: 'editcap', defaultPath: WIRESHARK_DIR + '/editcap.exe' },
+  { id: 'python', label: 'Python', kind: 'file', env: 'SEEU_TOOL_PYTHON', command: 'python', defaultPath: 'D:/Programming/Python31314/python.exe' },
+  { id: 'jadx', label: 'jadx', kind: 'file', env: 'SEEU_TOOL_JADX', command: 'jadx', defaultPath: CTF + '/2-PhoneAnalysis/Android取证/jadx-1.1.0/bin/jadx.bat' },
   { id: 'apktool', label: 'apktool.jar', kind: 'file', env: 'SEEU_TOOL_APKTOOL', defaultPath: CTF + '/2-PhoneAnalysis/Android取证/Apktool/tool/apktool.jar' },
-  { id: 'adb', label: 'adb', kind: 'file', env: 'SEEU_TOOL_ADB', defaultPath: CTF + '/2-PhoneAnalysis/Android取证/adb/bin/adb.exe' },
-  { id: 'sevenzip', label: '7-Zip', kind: 'file', env: 'SEEU_TOOL_SEVENZIP', defaultPath: CTF + '/4-其他工具/【8】解压工具/7z/7z.exe' },
-  { id: 'sqlite3', label: 'sqlite3', kind: 'file', env: 'SEEU_TOOL_SQLITE3', defaultPath: CTF + '/7-物联网取证/SQLite/sqlite3.exe' },
+  { id: 'adb', label: 'adb', kind: 'file', env: 'SEEU_TOOL_ADB', command: 'adb', defaultPath: CTF + '/2-PhoneAnalysis/Android取证/adb/bin/adb.exe' },
+  { id: 'sevenzip', label: '7-Zip', kind: 'file', env: 'SEEU_TOOL_SEVENZIP', command: '7z', defaultPath: CTF + '/4-其他工具/【8】解压工具/7z/7z.exe' },
+  { id: 'sqlite3', label: 'sqlite3', kind: 'file', env: 'SEEU_TOOL_SQLITE3', command: 'sqlite3', defaultPath: CTF + '/7-物联网取证/SQLite/sqlite3.exe' },
   {
     id: 'volatility',
     label: 'Volatility 目录',
@@ -42,6 +42,55 @@ export const TOOL_PATH_SPECS = [
     hint: 'lovelymem 不可用时的兜底；默认指向 Volatility 2.6 / Workbench 所在目录',
   },
 ]
+
+/** PATH 里能直接跑的命令名（用于「优先环境变量 PATH」的解析）。 */
+function fileExists(p) {
+  try {
+    return statSync(p).isFile()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 在 PATH 环境变量里查找命令（Windows 按 PATHEXT 补全扩展名）。
+ * @param {string} command
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string} 命中返回绝对路径，否则空串
+ */
+export function findOnPath(command, env = process.env) {
+  if (!command) return ''
+  const dirs = String(env.PATH || env.Path || env.path || '')
+    .split(';')
+    .map((dir) => dir.trim())
+    .filter(Boolean)
+  const exts = String(env.PATHEXT || '.EXE;.CMD;.BAT;.COM')
+    .split(';')
+    .map((ext) => ext.trim())
+    .filter(Boolean)
+  for (const dir of dirs) {
+    const base = join(dir, command)
+    if (fileExists(base)) return base
+    for (const ext of exts) {
+      if (fileExists(base + ext)) return base + ext
+    }
+  }
+  return ''
+}
+
+/**
+ * 单个工具的最终路径：设置里显式指定 → PATH 环境变量 → 默认实测路径。
+ * @param {typeof TOOL_PATH_SPECS[number]} spec
+ * @param {Record<string,string>} saved
+ * @param {NodeJS.ProcessEnv} env
+ */
+function resolveToolPath(spec, saved, env) {
+  const configured = saved[spec.id]
+  if (configured) return { path: configured, source: 'config' }
+  const onPath = spec.command ? findOnPath(spec.command, env) : ''
+  if (onPath) return { path: onPath, source: 'path' }
+  return { path: spec.defaultPath, source: 'default' }
+}
 
 /** @param {NodeJS.ProcessEnv} [env] */
 function resolveHome(env = process.env) {
@@ -103,19 +152,19 @@ export function toolPathsView(env = process.env) {
     error = err instanceof Error ? err.message : String(err)
   }
   const tools = TOOL_PATH_SPECS.map((spec) => {
-    const configured = saved[spec.id]
-    const path = configured || spec.defaultPath
-    const state = pathState(path, spec.kind)
+    const resolved = resolveToolPath(spec, saved, env)
+    const state = pathState(resolved.path, spec.kind)
     return {
       id: spec.id,
       label: spec.label,
       kind: spec.kind,
       env: spec.env,
+      command: spec.command ?? '',
       hint: spec.hint ?? '',
       defaultPath: spec.defaultPath,
-      configured: Boolean(configured),
-      source: configured ? 'config' : 'default',
-      path,
+      configured: Boolean(saved[spec.id]),
+      source: resolved.source,
+      path: resolved.path,
       exists: state.exists,
       found: state.found,
     }
@@ -176,10 +225,10 @@ export function toolPathsEnv(env = process.env) {
     saved = {}
   }
   for (const spec of TOOL_PATH_SPECS) {
-    const path = saved[spec.id] || spec.defaultPath
-    if (!path) continue
-    const state = pathState(path, spec.kind)
-    if (state.found) out[spec.env] = path
+    const resolved = resolveToolPath(spec, saved, env)
+    if (!resolved.path) continue
+    const state = pathState(resolved.path, spec.kind)
+    if (state.found) out[spec.env] = resolved.path
   }
   return out
 }

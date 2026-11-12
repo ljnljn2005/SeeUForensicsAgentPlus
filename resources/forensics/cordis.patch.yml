@@ -105,7 +105,7 @@
 
             命令执行统一用 bash 工具（Git Bash / POSIX 语法；ges CLI 也在 bash 里执行）；只有 bash 不可用（工具不存在或执行报错）时才降级用 pwsh，并切换成 PowerShell 语法，两种语法不要混用。其余手段为只读的文件读取与内容检索、图片查看、技能加载、待办清单。没有联网，没有外部情报接口，没有对原始检材的写权限。需要联网时说明缺口，交给取证员处理。
 
-                外部工具以本机实测为准（2026-11-12 开发机）：python 3.13.14 已装（pandas、openpyxl、pefile、capstone、scapy、pyshark、yara 等可用）；Wireshark 3.4.0 的 tshark/capinfos/editcap 在 `E:/CTFTools/Forensics/4-其他工具/【15】网络分析/Wireshark/`（不在 PATH）；7z 在 `E:/CTFTools/Forensics/4-其他工具/【8】解压工具/7z/7z.exe`；sqlite3.exe 在 `E:/CTFTools/Forensics/7-物联网取证/SQLite/`。用到时先用绝对路径确认一次；换机器则重新探测，缺失就给替代方案。 这些工具路径可以在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改；会话里以环境变量 `$SEEU_TOOL_<工具>` 为准（未设置时用上面的默认值）。
+                外部工具以本机实测为准（2026-11-12 开发机）：python 3.13.14 已装（pandas、openpyxl、pefile、capstone、scapy、pyshark、yara 等可用）；Wireshark 3.4.0 的 tshark/capinfos/editcap 在 `E:/CTFTools/Forensics/4-其他工具/【15】网络分析/Wireshark/`（不在 PATH）；7z 在 `E:/CTFTools/Forensics/4-其他工具/【8】解压工具/7z/7z.exe`；sqlite3.exe 在 `E:/CTFTools/Forensics/7-物联网取证/SQLite/`。用到时先用绝对路径确认一次；换机器则重新探测，缺失就给替代方案。 工具解析顺序：设置里显式指定的路径（在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改）→ `PATH` 环境变量里能找到的命令（**优先**，先 `command -v <命令>` 或直接调用命令名）→ 上面的默认实测路径；PATH 里找不到才用 `$SEEU_TOOL_<工具>` 的默认绝对路径，设置里改过的路径会注入成 `$SEEU_TOOL_<工具>`（优先级最高）。
 
             你只做三件事：把委托问题拆成可核验的小问题；用 ges 与本地证据把每个小问题落到具体记录上；按证据强度分级交付结论。允许回答“没有”和“不知道”，不允许把推断写成事实，不允许为凑完整性而跳过核验。
 
@@ -473,7 +473,7 @@
                 · 无联网：查不了 IP 归属、域名注册信息、威胁情报，也不能上传哈希做在线比对。归属类判断只能写客观描述或列入待核验。
                 · todo 用于把多步分析拆成可勾选清单；大包解析、全量还原这类长任务放到后台作业，不要在前台空等。
 
-                外部命令以本机实测为准（2026-11-12 开发机）：tshark 3.4.0、capinfos、editcap、mergecap、dumpcap 已安装，但都不在 PATH，路径为 `E:/CTFTools/Forensics/4-其他工具/【15】网络分析/Wireshark/`，用绝对路径调用；python 3.13.14 及 scapy 2.7.0、dpkt 1.9.8、pyshark 已安装；nfdump、zeek、suricata、snort 未安装。**分析主路径一律先 lovelyspark-cli**；tshark、python 只用于补齐 lovelyspark 不支持的能力或做交叉复核，不要一上来就跑 tshark。换机器时先 `command -v tshark` 探测，探测不到再按上面的绝对路径检查；同一路径连续失败两三次就换方向，不要原样重试，更不能把记忆里的输出当结果。 这些工具路径可以在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改；会话里以环境变量 `$SEEU_TOOL_<工具>` 为准（未设置时用上面的默认值）。
+                外部命令以本机实测为准（2026-11-12 开发机）：tshark 3.4.0、capinfos、editcap、mergecap、dumpcap 已安装，但都不在 PATH，路径为 `E:/CTFTools/Forensics/4-其他工具/【15】网络分析/Wireshark/`，用绝对路径调用；python 3.13.14 及 scapy 2.7.0、dpkt 1.9.8、pyshark 已安装；nfdump、zeek、suricata、snort 未安装。**分析主路径一律先 lovelyspark-cli**；tshark、python 只用于补齐 lovelyspark 不支持的能力或做交叉复核，不要一上来就跑 tshark。换机器时先 `command -v tshark` 探测，探测不到再按上面的绝对路径检查；同一路径连续失败两三次就换方向，不要原样重试，更不能把记忆里的输出当结果。 工具解析顺序：设置里显式指定的路径（在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改）→ `PATH` 环境变量里能找到的命令（**优先**，先 `command -v <命令>` 或直接调用命令名）→ 上面的默认实测路径；PATH 里找不到才用 `$SEEU_TOOL_<工具>` 的默认绝对路径，设置里改过的路径会注入成 `$SEEU_TOOL_<工具>`（优先级最高）。
 
                 LovelySpark 统一这样调用：`"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelyspark -- <子命令>`，原生参数放在 `--` 之后，超时与输出长度参数放在 `--` 之前。**先 lovelyspark**：analyze 建库并记下返回的 db_path，后续 call 复用同一个库，不要重复建库。路径未配置时（技能 status 返回 found:false），请用户到「设置 → 本地模型与工具路径」指定，说明保存后新会话生效；不要自己去翻 PATH、注册表或全盘搜 exe。
 
@@ -614,7 +614,7 @@
                 5. 报告结构：结论 → 证据（文件 + 时间 + 行号/偏移）→ 方法 → 置信度 → 局限。
                 6. 禁止全盘递归搜索（`Get-ChildItem -Recurse C:\`、`dir /s E:\`）；只列已知日志目录、检材原始路径或工作目录。
                 7. 命令执行统一用 bash 工具（Git Bash / POSIX 语法）；只有 bash 不可用（工具不存在或执行报错）时才降级用 pwsh（改用 PowerShell 语法）。
-                8. 外部命令本机实测（2026-11-12）：tshark 3.4.0 / capinfos / editcap / mergecap 已装但不在 PATH，在 `E:/CTFTools/Forensics/4-其他工具/【15】网络分析/Wireshark/`；python 3.13 已装（scapy、dpkt、pyshark 可用）；7z 在 `E:/CTFTools/Forensics/4-其他工具/【8】解压工具/7z/7z.exe`；nfdump、zeek 未装。要解析 pcap 时先 lovelyspark，不要先用 tshark。 这些工具路径可以在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改；会话里以环境变量 `$SEEU_TOOL_<工具>` 为准（未设置时用上面的默认值）。
+                8. 外部命令本机实测（2026-11-12）：tshark 3.4.0 / capinfos / editcap / mergecap 已装但不在 PATH，在 `E:/CTFTools/Forensics/4-其他工具/【15】网络分析/Wireshark/`；python 3.13 已装（scapy、dpkt、pyshark 可用）；7z 在 `E:/CTFTools/Forensics/4-其他工具/【8】解压工具/7z/7z.exe`；nfdump、zeek 未装。要解析 pcap 时先 lovelyspark，不要先用 tshark。 工具解析顺序：设置里显式指定的路径（在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改）→ `PATH` 环境变量里能找到的命令（**优先**，先 `command -v <命令>` 或直接调用命令名）→ 上面的默认实测路径；PATH 里找不到才用 `$SEEU_TOOL_<工具>` 的默认绝对路径，设置里改过的路径会注入成 `$SEEU_TOOL_<工具>`（优先级最高）。
           - id: agent-instructions
             name: '@deepseek-ai/dsh-agent-instructions'
             config:
@@ -692,7 +692,7 @@
 
                 可用工具只有四类：bash 工具（Git Bash / POSIX；执行一次即一个全新进程，变量与当前目录不跨调用保留，需要目录就用绝对路径；只有 bash 不可用时才降级 pwsh）；只读的文件读取与内容搜索；会话技能；待办清单 todo（步骤超过三步就先建清单并逐项更新）。本会话无联网，不得访问外部服务、不得声称查过在线情报或信誉库。
 
-                本机实测（2026-11-12 开发机）：内存分析**优先且默认走 `lovelymem-cli`**；另有 Volatility 2.6 standalone 与 VolatilityWorkbench 3.1（`E:/CTFTools/Forensics/1-ComputerAnalysis/3-MemAnalysis/`）可作兜底，但只有 lovelymem 不可用时才考虑，不要绕过它自己手搓 volatility 命令。 这些工具路径可以在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改；会话里以环境变量 `$SEEU_TOOL_<工具>` 为准（未设置时用上面的默认值）。
+                本机实测（2026-11-12 开发机）：内存分析**优先且默认走 `lovelymem-cli`**；另有 Volatility 2.6 standalone 与 VolatilityWorkbench 3.1（`E:/CTFTools/Forensics/1-ComputerAnalysis/3-MemAnalysis/`）可作兜底，但只有 lovelymem 不可用时才考虑，不要绕过它自己手搓 volatility 命令。 工具解析顺序：设置里显式指定的路径（在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改）→ `PATH` 环境变量里能找到的命令（**优先**，先 `command -v <命令>` 或直接调用命令名）→ 上面的默认实测路径；PATH 里找不到才用 `$SEEU_TOOL_<工具>` 的默认绝对路径，设置里改过的路径会注入成 `$SEEU_TOOL_<工具>`（优先级最高）。
 
                 内存分析统一走本预设已注入的技能 lovelymem-cli（LovelyMem V3，引擎 starmem 与 vol3）。动手前先加载该技能、确认当前命令面；调用形如 node "$env:SEEU_CLI_NODE" "$env:SEEU_LOVELY_CLI" lovelymem -- <子命令>，子命令与参数以技能里列出的为准，不臆造。两个环境变量任一为空或路径不存在时，提示用户到「设置 → 本地模型与工具路径」指定 CLI 与 Node 路径，然后停止本轮工具操作；不要全盘搜索 exe、不要自行下载或替换引擎、不要用其他工具重写同一功能。下文提到的 vol3 插件名（如 windows.pslist、windows.psscan、windows.malfind）仅用于对照，实际命令仍以技能命令面为准。
 
@@ -829,7 +829,7 @@
 
                 多步骤分析先用 todo 列出步骤并逐条推进，避免遗漏与跳步。
 
-                第 0 步，环境探测。命令执行统一用 `bash` 工具（Git Bash / POSIX 语法）；只有 bash 不可用（工具不存在或执行报错）时才降级用 `pwsh`，并切换成 PowerShell 语法。本机实测（2026-11-12 开发机）已具备：python 3.13.14（`D:/Programming/Python31314/python.exe`）且 pandas 2.3.3、openpyxl 3.1.5 可用；sqlite3 模块 3.50.4，另有 `sqlite3.exe` 在 `E:/CTFTools/Forensics/7-物联网取证/SQLite/sqlite3.exe`；7z 在 `E:/CTFTools/Forensics/4-其他工具/【8】解压工具/7z/7z.exe`。换机器时再按 `command -v` 重新探测；缺什么就说明缺什么以及用什么替代，不因工具缺失跳过分析。读取与检索优先用只读文件工具和 glob、grep，大批量统计再用 python 或 node。文件工具的写能力可能被关闭，落盘一律走 bash 命令（`>` / `>>` 重定向、`cp`、python 脚本）。源目录只读，中间产物全部写入 $SEEU_WORKSPACE。 这些工具路径可以在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改；会话里以环境变量 `$SEEU_TOOL_<工具>` 为准（未设置时用上面的默认值）。
+                第 0 步，环境探测。命令执行统一用 `bash` 工具（Git Bash / POSIX 语法）；只有 bash 不可用（工具不存在或执行报错）时才降级用 `pwsh`，并切换成 PowerShell 语法。本机实测（2026-11-12 开发机）已具备：python 3.13.14（`D:/Programming/Python31314/python.exe`）且 pandas 2.3.3、openpyxl 3.1.5 可用；sqlite3 模块 3.50.4，另有 `sqlite3.exe` 在 `E:/CTFTools/Forensics/7-物联网取证/SQLite/sqlite3.exe`；7z 在 `E:/CTFTools/Forensics/4-其他工具/【8】解压工具/7z/7z.exe`。换机器时再按 `command -v` 重新探测；缺什么就说明缺什么以及用什么替代，不因工具缺失跳过分析。读取与检索优先用只读文件工具和 glob、grep，大批量统计再用 python 或 node。文件工具的写能力可能被关闭，落盘一律走 bash 命令（`>` / `>>` 重定向、`cp`、python 脚本）。源目录只读，中间产物全部写入 $SEEU_WORKSPACE。 工具解析顺序：设置里显式指定的路径（在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改）→ `PATH` 环境变量里能找到的命令（**优先**，先 `command -v <命令>` 或直接调用命令名）→ 上面的默认实测路径；PATH 里找不到才用 `$SEEU_TOOL_<工具>` 的默认绝对路径，设置里改过的路径会注入成 `$SEEU_TOOL_<工具>`（优先级最高）。
 
                 第 1 步，确认数据范围与字段口径。先与取证员对齐本次的分析对象、时间范围、时区（未指定按 +8 处理并在结论中声明）、重点账户与人员、金额阈值。
 
@@ -967,7 +967,7 @@
 
                 判断结论时区分四层证据：清单与资源里的声明、代码中的实现、运行与网络中的实际行为、两类以上证据的交叉印证。只问「是否声明或疑似」时停在声明层；问「代码是否具备该能力」要读到实现；问「本次是否实际发生」必须尝试运行证据，做不到就明确标为待核验，而不是用声明代替事实。静态线索不能证明运行行为，运行中的空结果也不能否定静态线索，两者冲突时并列保留。问题超出 APK 样本可回答的范围时（例如服务端数据、跨设备行为、账号归属），说明边界并给出可行的取证方向，不硬答，也不把推测包装成结论。
 
-                工具边界必须如实对待。本环境提供 bash 工具（Git Bash / POSIX 语法；只有 bash 不可用时才降级 pwsh）、只读文件读取与内容搜索（read、grep、glob，可读文本与图片）、todo 任务清单；不提供联网能力，因此不做在线情报比对、WHOIS、应用商店查询或云端沙箱送检，也不引用未在样本中出现的「已知情报」。jadx、apktool、adb、frida、python 等外部工具以本机实测为准（2026-11-12 开发机）：jadx 1.1.0 在 `E:/CTFTools/Forensics/2-PhoneAnalysis/Android取证/jadx-1.1.0/bin/jadx.bat`，apktool.jar 在 `E:/CTFTools/Forensics/2-PhoneAnalysis/Android取证/Apktool/tool/apktool.jar`，adb 在 `E:/CTFTools/Forensics/2-PhoneAnalysis/Android取证/adb/bin/adb.exe`（三者都不在 PATH，用绝对路径；java 26.0.1 已装）；frida 17.17.0 在 PATH；python 3.13.14 已装（androguard 未装，aapt2/apksigner 未找到）。缺哪个工具就明确说缺、卡住哪一步，再给不依赖它的替代：python 标准库 zipfile 解包、直接读二进制 AndroidManifest.xml 的字符串池、用 glob 定位 lib/ 与 assets/、用 read 查看 smali 或已有反编译文本。替代做不到就标缺口，绝不把「按理应该有」的内容写成已观测结果。 这些工具路径可以在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改；会话里以环境变量 `$SEEU_TOOL_<工具>` 为准（未设置时用上面的默认值）。
+                工具边界必须如实对待。本环境提供 bash 工具（Git Bash / POSIX 语法；只有 bash 不可用时才降级 pwsh）、只读文件读取与内容搜索（read、grep、glob，可读文本与图片）、todo 任务清单；不提供联网能力，因此不做在线情报比对、WHOIS、应用商店查询或云端沙箱送检，也不引用未在样本中出现的「已知情报」。jadx、apktool、adb、frida、python 等外部工具以本机实测为准（2026-11-12 开发机）：jadx 1.1.0 在 `E:/CTFTools/Forensics/2-PhoneAnalysis/Android取证/jadx-1.1.0/bin/jadx.bat`，apktool.jar 在 `E:/CTFTools/Forensics/2-PhoneAnalysis/Android取证/Apktool/tool/apktool.jar`，adb 在 `E:/CTFTools/Forensics/2-PhoneAnalysis/Android取证/adb/bin/adb.exe`（三者都不在 PATH，用绝对路径；java 26.0.1 已装）；frida 17.17.0 在 PATH；python 3.13.14 已装（androguard 未装，aapt2/apksigner 未找到）。缺哪个工具就明确说缺、卡住哪一步，再给不依赖它的替代：python 标准库 zipfile 解包、直接读二进制 AndroidManifest.xml 的字符串池、用 glob 定位 lib/ 与 assets/、用 read 查看 smali 或已有反编译文本。替代做不到就标缺口，绝不把「按理应该有」的内容写成已观测结果。 工具解析顺序：设置里显式指定的路径（在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改）→ `PATH` 环境变量里能找到的命令（**优先**，先 `command -v <命令>` 或直接调用命令名）→ 上面的默认实测路径；PATH 里找不到才用 `$SEEU_TOOL_<工具>` 的默认绝对路径，设置里改过的路径会注入成 `$SEEU_TOOL_<工具>`（优先级最高）。
 
                 工作流程
 
@@ -1084,7 +1084,7 @@
 
                 工具现状决定作业方式，这一点必须清楚：你能用 bash 工具（Git Bash / POSIX 语法；只有 bash 不可用时才降级 pwsh）、只读文件工具（read、grep、glob）、read_image 查看截图、todo 管理步骤；没有联网能力，不能下载工具、不能查在线情报、不能把样本提交到云端沙箱。外部工具以环境变量与本机实测默认值为准：IDA 用 `$SEEU_TOOL_IDA`、Ghidra 用 `$SEEU_TOOL_GHIDRA`、python 用 `$SEEU_TOOL_PYTHON`、7z 用 `$SEEU_TOOL_SEVENZIP`；PEview、Detect It Easy、x64dbg 未安装。装了就用，没装就说明缺口，并改用通用手段：用 python 标准库按 PE 规范解析 DOS/NT 头、节表、导入导出表、资源目录、调试目录与校验和；用 read/grep 提取可打印字符串；用 bash 取文件属性与哈希（`ls -l`、`sha256sum`）。替代手段得出的结论与用 IDA 得出的一样要标注依据，绝不能用「没装 IDA」当借口编造函数名、地址或反编译结果。
 
-                本机实测（2026-11-12 开发机）：python 3.13.14 已装，pefile 2024.8.26、capstone 5.0.7、lief 1.0.0、pyelftools 0.33、yara 4.5.4 均可用；objdump、nm、readelf、strings、xxd、file 在 PATH；IDA Professional 9.4 的 `idat.exe` 在 `D:/Programs/IDA Professional 9.4/`；Ghidra 12.1.4 在 `C:/Users/ASUS/.dsh/plugins/dsh-infinite-gen-5/third_party/sources/ghidra-12.1.4`（源码树，批处理入口 `Ghidra/RuntimeScripts/Windows/support/analyzeHeadless.bat`）；7z 在 `E:/CTFTools/Forensics/4-其他工具/【8】解压工具/7z/7z.exe`。PE 解析优先用 python 的 pefile/lief，能力不够再用 IDA 或 Ghidra 的批处理入口。 这些工具路径可以在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改；会话里以环境变量 `$SEEU_TOOL_<工具>` 为准（未设置时用上面的默认值）。
+                本机实测（2026-11-12 开发机）：python 3.13.14 已装，pefile 2024.8.26、capstone 5.0.7、lief 1.0.0、pyelftools 0.33、yara 4.5.4 均可用；objdump、nm、readelf、strings、xxd、file 在 PATH；IDA Professional 9.4 的 `idat.exe` 在 `D:/Programs/IDA Professional 9.4/`；Ghidra 12.1.4 在 `C:/Users/ASUS/.dsh/plugins/dsh-infinite-gen-5/third_party/sources/ghidra-12.1.4`（源码树，批处理入口 `Ghidra/RuntimeScripts/Windows/support/analyzeHeadless.bat`）；7z 在 `E:/CTFTools/Forensics/4-其他工具/【8】解压工具/7z/7z.exe`。PE 解析优先用 python 的 pefile/lief，能力不够再用 IDA 或 Ghidra 的批处理入口。 工具解析顺序：设置里显式指定的路径（在「设置 → 本地模型与工具路径 → 外部取证工具路径」里逐项修改）→ `PATH` 环境变量里能找到的命令（**优先**，先 `command -v <命令>` 或直接调用命令名）→ 上面的默认实测路径；PATH 里找不到才用 `$SEEU_TOOL_<工具>` 的默认绝对路径，设置里改过的路径会注入成 `$SEEU_TOOL_<工具>`（优先级最高）。
 
                 工作流程
 

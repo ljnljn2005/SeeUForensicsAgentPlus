@@ -6,6 +6,7 @@ import test from 'node:test'
 import {
   TOOL_PATH_SPECS,
   readToolPaths,
+  findOnPath,
   saveToolPaths,
   toolPathsEnv,
   toolPathsFile,
@@ -84,4 +85,31 @@ test('toolPathsEnv 只注入存在的工具，环境变量名为 SEEU_TOOL_<ID>'
     const value = map[spec.env]
     if (value) assert.equal(existsSync(value), true)
   }
+})
+
+test('PATH 优先：命令在 PATH 里就用 PATH 的，没有才退回默认路径', () => {
+  const home = mkdtempSync(join(tmpdir(), 'seeu-tool-paths-path-'))
+  const bin = join(home, 'bin')
+  mkdirSync(bin)
+  const fake = join(bin, 'tshark.EXE')
+  writeFileSync(fake, 'x')
+  const env = { SEEU_DSH_HOME: home, PATH: bin, PATHEXT: '.EXE;.CMD;.BAT' }
+  assert.equal(findOnPath('tshark', env), fake)
+  const view = toolPathsView(env)
+  const tshark = view.tools.find((tool) => tool.id === 'tshark')
+  assert.equal(tshark.source, 'path')
+  assert.equal(tshark.path, fake)
+  assert.equal(tshark.found, true)
+  const capinfos = view.tools.find((tool) => tool.id === 'capinfos')
+  assert.equal(capinfos.source, 'default', 'PATH 里没有时应退回默认路径')
+  const env2 = toolPathsEnv(env)
+  assert.equal(env2.SEEU_TOOL_TSHARK, fake)
+  // 设置里显式指定时优先级最高（压过 PATH）
+  const other = join(home, 'other.exe')
+  writeFileSync(other, 'x')
+  assert.equal(saveToolPaths({ tshark: other }, env).ok, true)
+  const view2 = toolPathsView(env)
+  const pinned = view2.tools.find((tool) => tool.id === 'tshark')
+  assert.equal(pinned.source, 'config')
+  assert.equal(pinned.path, other)
 })

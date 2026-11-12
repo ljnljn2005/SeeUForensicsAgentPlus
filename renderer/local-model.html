@@ -294,7 +294,7 @@
   <div class="field tools">
     <label>外部取证工具路径（可选，可改；留空用默认实测值）</label>
     <div id="tool-paths-rows"></div>
-    <div class="hint">Ghidra / IDA / tshark / jadx / python / 7-Zip / sqlite3 等外部工具。程序不会自动发现：这里显示的是本机默认路径，可逐项改。会话里以环境变量 <code>$SEEU_TOOL_GHIDRA</code>、<code>$SEEU_TOOL_TSHARK</code>、<code>$SEEU_TOOL_PYTHON</code> 等读取。</div>
+    <div class="hint">Ghidra / IDA / tshark / jadx / python / 7-Zip / sqlite3 等外部工具。解析顺序：<strong>设置里显式指定的路径 → PATH 环境变量里能找到的命令（优先）→ 本机默认实测路径</strong>。这里显示的是最终会用的路径，可逐项改；会话里以环境变量 <code>$SEEU_TOOL_GHIDRA</code>、<code>$SEEU_TOOL_TSHARK</code>、<code>$SEEU_TOOL_PYTHON</code> 等读取。</div>
     <div class="actions" style="margin:10px 0 6px"><button id="btn-tool-paths-save">保存外部工具路径</button></div>
     <div id="tool-paths-status" class="hint"></div>
     <div id="tool-paths-config" class="hint"></div>
