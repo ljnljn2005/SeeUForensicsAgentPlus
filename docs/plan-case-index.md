@@ -2299,3 +2299,14 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 产物：NSIS 281,879,944 B、portable 236,575,720 B、app.asar 426,495,680 B（34,220 entries）、目录版 1,110,846,908 B；asar-038 自检 `missing:[]` 全 true；目录版冷启动 6180 ms、portable 48,782 ms。
 - 打包态 e2e：m2（`myosImportOk:true`）、settings（13 行工具路径、五项自检、思考流）、plugins（175 包、无激活失败）、skills（Qiko 43）、hero（13/13 工具）、mount（154 ms）全绿。
 - 待用户验收；真实 MYOS 端到端与真实网关 Spark 单机/双机联调仍需用户环境。
+
+### 20.95 真实 MYOS 端到端（第 17 轮）
+
+- 启动 `D:/Programs/MYOS/Client/bin/ForensicDesktop.exe -WindowStyle Minimized` 后 `health_check_dbus` 返回 `ready:true`；`npm run myos:import -- cases` 列出真实 4 案（`M盘`、`案件20261015145357`、`案件20261012160440`、`李自勇`、`案件20260923163545`）。
+- 真机暴露并修复三个问题：
+  1. 结果概览同时返回绝对路径（`D:\…\x.mfs`）、相对路径（`\data\…`）与模板串（`{插件名}.mfs`）→ `collectMfsPaths` 只收绝对路径（盘符/UNC）并按 `replace(/\/g,'/').toLowerCase()` 去重；
+  2. `myos-forensics.sqlite_query` 返回「按 `columns` 顺序的数组行」而不是对象 → `readMyosRows` 统一转对象，否则 `mapMyosRow` 取不到列、导入正文为空；
+  3. 表名提示之前没被解析 → 新增 `walkHints`：从 `sqliteQueryHints[{dbPath,sql}]` 的 SQL（`from/join` 后的表名）与 `mfsStats.{mappsDbPath,indexTable}` 建立「库 → 表」提示，`MApps.mfs` 现在能直接提示 `TBL_APPDATA_MANAGER`。
+- 真实导入：`MApps.mfs` 的 `TBL_APPDATA_MANAGER` → 5 条；`AndroidBrowser{…}.mfs` 的 `TBL_PR_ANDROIDBROWSER_BROWSE_HISTORY` → 2 条、2 个实体（`URL` 被识别为 url）；`findIndexes` 能发现 `.dev/myos-real*`。`M盘` 案件 `LEUNG_YL_mobile.zip` 的 MApps 导入 10 条。
+- 新增 `scripts/e2e/myos-real-import.mjs`（`npm run test:e2e:myos`）：自动选案件/检材/结果库/表 → 导入 → 断言记录数与 `findIndexes` 发现；MYOS 未运行时 `skipped:true` 且 ok（不阻断回归）。
+- `npm test` **162/162**、`check:overlay` OK、build OK。

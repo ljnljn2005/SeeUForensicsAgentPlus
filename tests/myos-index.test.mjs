@@ -60,7 +60,26 @@ test('readMyosRows 返回列、行与截断标记', withClient(async (client) =>
   assert.deepEqual(result.columns, ['appName', 'time', 'content', 'uin'])
   assert.equal(result.rows.length, 3)
   assert.equal(result.truncated, true)
+  // 行必须是对象，列名映射才能用。
+  assert.equal(result.rows[0].appName !== undefined, true)
 }))
+
+test('readMyosRows：数组行按 columns 转成对象（真实 MYOS sqlite_query 的行为）', async () => {
+  const fake = {
+    call: async () => ({
+      columns: ['name', 'value'],
+      rows: [['TBL_PR_URL_INFO', 7], ['TBL_PR_DOWNLOAD_LIST_INFO', 3]],
+      truncated: false,
+      rowCount: 2,
+    }),
+  }
+  const result = await readMyosRows(fake, { dbPath: 'D:/x.mfs', sql: 'select 1' })
+  assert.deepEqual(result.rows, [
+    { name: 'TBL_PR_URL_INFO', value: 7 },
+    { name: 'TBL_PR_DOWNLOAD_LIST_INFO', value: 3 },
+  ])
+  assert.equal(result.rowCount, 2)
+})
 
 test('mapMyosRow：应用/时间/账号识别，正文包含主列与其余列', () => {
   const columns = ['appName', 'time', 'content', 'uin']

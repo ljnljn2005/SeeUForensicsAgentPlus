@@ -272,8 +272,21 @@ export async function listMyosMaterials(client, caseId) {
 /** 通过 MCP 只读查询一个 MYOS 结果库，返回归一后的列与行。 */
 export async function readMyosRows(client, { dbPath, sql, maxRows = 2000 }) {
   const payload = await client.call('myos-forensics.sqlite_query', { dbPath, sql, maxRows })
-  const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.rows) ? payload.rows : []
-  const columns = Array.isArray(payload?.columns) && payload.columns.length > 0 ? payload.columns.map(String) : Object.keys(rows[0] ?? {})
+  const rawRows = Array.isArray(payload) ? payload : Array.isArray(payload?.rows) ? payload.rows : []
+  const columns =
+    Array.isArray(payload?.columns) && payload.columns.length > 0
+      ? payload.columns.map(String)
+      : Object.keys(rawRows[0] ?? {})
+  // MYOS 的 sqlite_query 有时返回「按 columns 顺序的数组行」，这里统一转成对象，
+  // 后面的列名映射（mapMyosRow）才能按名字取值。
+  const rows = rawRows.map((row) => {
+    if (!Array.isArray(row)) return row
+    const obj = {}
+    columns.forEach((column, index) => {
+      obj[column] = row[index]
+    })
+    return obj
+  })
   return { columns, rows, truncated: Boolean(payload?.truncated), rowCount: payload?.rowCount ?? rows.length }
 }
 
@@ -289,10 +302,54 @@ export async function readMyosRows(client, { dbPath, sql, maxRows = 2000 }) {
 export function collectMfsPaths(payload) {
   const paths = new Set()
   const hints = new Map()
+  // 只收绝对路径：MYOS 概览里同时给「D:\…\x.mfs」与「\data\x.mfs」两种写法，
+  // 还有 `{插件名}.mfs` 这样的模板串，都要过滤。
+  const addPath = (text) => {
+    if (!/\.mfs$/i.test(text) || text.length <= 4) return
+    if (!/^[A-Za-z]:[\\/]/.test(text) && !text.startsWith('\\\\')) return
+    paths.add(text)
+  }
+  const TABLE_RE = /(?:from|join)\s+["'`]?([A-Za-z0-9_$]+)/gi
+  const tablesInSql = (sql) => {
+    const out = []
+    if (typeof sql !== 'string') return out
+    let match
+    TABLE_RE.lastIndex = 0
+    while ((match = TABLE_RE.exec(sql))) {
+      const name = match[1]
+      if (/^(select|where|group|order|limit|as|on|and|or)$/i.test(name)) continue
+      if (!out.includes(name)) out.push(name)
+    }
+    return out
+  }
+  const addHint = (dbPath, tables) => {
+    if (typeof dbPath !== 'string' || !/\.mfs$/i.test(dbPath.trim())) return
+    const full = dbPath.trim()
+    addPath(full)
+    const key = normalizeBase(full)
+    const merged = new Set([...(hints.get(key) ?? []), ...tables])
+    if (merged.size) hints.set(key, [...merged])
+  }
+  const walkHints = (node) => {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) {
+      for (const item of node) walkHints(item)
+      return
+    }
+    const dbPath = node.dbPath ?? node.mfsPath ?? node.path
+    if (typeof dbPath === 'string' && /\.mfs$/i.test(dbPath)) {
+      addHint(dbPath, tablesInSql(node.sql ?? ''))
+      if (Array.isArray(node.tables)) addHint(dbPath, node.tables.filter((item) => typeof item === 'string'))
+    }
+    // `mfsStats`：{ mappsDbPath, indexTable, apps:[{ appMfsPath }] }
+    if (typeof node.mappsDbPath === 'string') {
+      addHint(node.mappsDbPath, typeof node.indexTable === 'string' ? [node.indexTable] : [])
+    }
+    for (const value of Object.values(node)) walkHints(value)
+  }
   const walk = (node) => {
     if (typeof node === 'string') {
-      const text = node.trim()
-      if (/\.mfs$/i.test(text) && text.length > 4) paths.add(text)
+      addPath(node.trim())
       return
     }
     if (node === null || typeof node !== 'object') return
@@ -302,8 +359,7 @@ export function collectMfsPaths(payload) {
     }
     for (const [key, value] of Object.entries(node)) {
       if (typeof value === 'string') {
-        const text = value.trim()
-        if (/\.mfs$/i.test(text) && text.length > 4) paths.add(text)
+        addPath(value.trim())
         continue
       }
       if (Array.isArray(value) && /\.mfs$/i.test(key)) {
@@ -315,15 +371,22 @@ export function collectMfsPaths(payload) {
     }
   }
   walk(payload)
+  walkHints(payload)
   const byBase = new Map([...hints.entries()])
-  return [...paths].map((path) => ({
+  // 同一路径的正/反斜杠与大小写不同算同一个。
+  const unique = new Map()
+  for (const path of paths) {
+    const key = path.replace(/\\/g, '/').toLowerCase()
+    if (!unique.has(key)) unique.set(key, path)
+  }
+  return [...unique.values()].map((path) => ({
     path,
     tables: byBase.get(normalizeBase(path)) ?? [],
   }))
 }
 
 function normalizeBase(path) {
-  return String(path).split(/[\/]/).pop()?.toLowerCase() ?? ''
+  return String(path).replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''
 }
 
 /**
