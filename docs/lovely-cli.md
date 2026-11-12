@@ -61,4 +61,22 @@ CLI 脚本通过 `asarUnpack` 使用真实路径，可用随包 Electron Node �
 已确认 CLI 与两份技能进入打包产物；随包 Electron Node 模式成功调用本机 LovelySpark。
 本机 LovelySpark 0.3.20 已通过版本、单工具 schema、合成 ARP 抓包 analyze → 复用 db_path 调用 module_list；
 17,200 / 24,314 字节原始结果均完整落盘，预览按设置截断。
-本机只找到 LovelyMem Lite/Luxe，未发现可验证的 V3 CLI；LovelyMem 的调用契约、partial、参数与产物目录目前由子进程夹具验证，仍需配置实际 V3 路径进行实机验证。
+
+2026-11-12 补充实机验证：核对 C/D/E/F 盘、Everything 索引及现有程序的版本信息后，
+原有安装仅确认到 Lite/Luxe 2.5.0；旧项目记录中的 `E:\CTFTools\…\lovelymem.v3.exe` 当前不存在。
+根据 LovelyMem 官方仓库 README 提供的 V3 下载地址，另行保存 V3 3.1.11 到
+`D:\Programs\Lovelymem\V3\lovelymem.v3.exe`，原有 Lite/Luxe 保持原样。
+
+本机独立命令行、开发预览和桌面版的 `lovely-cli.json` 均已配置：
+
+| 工具 | 本机程序 |
+| --- | --- |
+| LovelyMem 3.1.11 | `D:\Programs\Lovelymem\V3\lovelymem.v3.exe` |
+| LovelySpark 0.3.20 | `D:\Programs\LovelySpark\lovelyspark.exe` |
+
+LovelyMem 的 `version` 和 `help` 已经由真实程序成功返回，原生参数契约与接入层一致；
+随包 Electron Node 模式也已成功调用 LovelyMem 并验证版本返回值。
+`doctor` 确认 StarMem 内置可用，并找到本机 Python/Volatility3 配置；
+但授权检查返回退出码 3：`授权中心尚未收录当前授权，请在桌面端完成账号认领`。
+`plugins` / `describe` 同样返回 `license_rejected`；调用器保留原始原因及退出码并正确标记失败。
+需要在 LovelyMem 桌面端完成账号认领后才能执行内存分析；本次未把插件查询或内存分析记为成功。
