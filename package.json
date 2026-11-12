@@ -18,6 +18,8 @@
     "start": "node scripts/build.mjs && electron .",
     "verify": "node scripts/verify-launch.mjs",
     "check:overlay": "node scripts/check-overlay.mjs",
+    "test:lovely": "node --test tools/lovely-cli/test/*.test.mjs",
+    "lovely": "node tools/lovely-cli/cli.mjs",
     "prepackage:dir": "node scripts/check-overlay.mjs",
     "prepackage:win": "node scripts/check-overlay.mjs",
     "package:dir": "node scripts/build.mjs && electron-builder --win --x64 --dir",
