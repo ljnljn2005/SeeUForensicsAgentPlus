@@ -62,22 +62,24 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.4**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.3.5**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,109,631,285 B ≈ 1.03 GiB，含随包 dsh 插件） |
-| `release/win-unpacked/resources/app.asar` | 425,280,057 B（34,095 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的三预设 + MYOS MCP 行） |
-| `release/SeeUForensicsAgentPlus-0.3.4-x64.exe`（NSIS 安装包） | 281,533,139 B（blockmap 293,403 B） |
-| `release/SeeUForensicsAgentPlus-0.3.4-x64-portable.exe` | 236,256,556 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,752,752 B ≈ 1.03 GiB，含随包 dsh 插件与技能库） |
+| `release/win-unpacked/resources/app.asar` | 426,401,524 B（34,213 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory,qiko}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的十个预设 + MYOS MCP 行） |
+| `release/SeeUForensicsAgentPlus-0.3.5-x64.exe`（NSIS 安装包） | 281,858,620 B（blockmap 293,867 B） |
+| `release/SeeUForensicsAgentPlus-0.3.5-x64-portable.exe` | 236,534,010 B |
 
-实测冷启动到 dsh UI：目录版 **7343 ms**；portable 首次 60.0s（先要把 ~1.0GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **6192 ms**；portable 首次 50.8s（先要把 ~1.1GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-### v0.3.5 待发布（未打包）
+### v0.3.5 改了什么
+
+- **打包与打包态回归（v0.3.5）**：NSIS `281,858,620 B`（blockmap 293,867 B）、portable `236,534,010 B`、`app.asar` `426,401,524 B`（34,213 entries）、目录版总计 `1,110,752,752 B`；`.probe/asar-035-check.mjs` **76 项全 true**（新增 `presetSplit`/`qikoSkillSet`/`qikoTrimmed`/`skillPrune`/`starMemTool`/`starMemSkill`/`skillSetQikoEnv`/`version035`）；打包态 `m2-ui-check`（`m2ok:true`）、`settings-check --exe`（`ok:true`：外部工具路径 13 行含 StarMem、Ghidra 默认路径、12 项保存落盘）、`plugins-check --exe`（`ok:true`：175 个插件包、`activationFailures:[]`）、`skills-check --exe`（`ok:true`：Qiko 技能组 43 个、`leaked:[]`）；目录版冷启动 **6192 ms**、portable **50.8 s**；`npm test` **122/122**、`npm run check:overlay` OK。
 
 - **融合 Qiko 专家（7 份提示词 + 75 个技能库）并进现有预设**（用户要求「并进现有预设、改成比赛式」）：
   - `preset-standard`（取证分析）← 火眼 + 弘连服务器 + **Qiko 服务器/计算机专家**（画像与题型分流、时间锚点法、可疑文件分级、Windows 痕迹矩阵、断网降级与加密恢复）；

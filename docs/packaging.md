@@ -912,3 +912,30 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 
 - 外部工具路径解析顺序为「设置里显式指定 → PATH 命中的命令 → 默认实测路径」；打包态 `SEEU_TOOL_*` 由外壳注入，dev 预览由 `scripts/dev-web.mjs` 注入（日志「外部工具：12 个已注入」）。
 - 0.3.3 的三件产物已在本次打包后删除；`release/` 只保留 0.3.4。
+
+### v0.3.5 回归验证
+
+产物（2026-11-12）：
+
+| 文件 | 大小 |
+| --- | --- |
+| `win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,752,752 B） |
+| `win-unpacked/resources/app.asar` | 426,401,524 B（34,213 entries） |
+| `SeeUForensicsAgentPlus-0.3.5-x64.exe` | 281,858,620 B（blockmap 293,867 B） |
+| `SeeUForensicsAgentPlus-0.3.5-x64-portable.exe` | 236,534,010 B |
+
+验证：
+
+- `.probe/asar-035-check.mjs`：**76 项全 `true`**、`missing: []`、`entries: 34213`。新增检查：`presetSplit`（`APK 分析` + `手机取证（Mobile）` + `preset-mobile`）、`qikoSkillSet`（Qiko 技能组含「SeeU 环境适配」、条目 ≥100、SKILL.md ≥40）、`qikoTrimmed`（不含 `forensic-report`/`whodb`）、`skillPrune`（`dist/main.cjs` 含 `pruned`/`wanted.has`）、`starMemTool`/`starMemSkill`、`skillSetQikoEnv`、`version035`。
+- 启动：`node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9496` → `ok:true, elapsedMs:6192`；portable `--port 9497` → `ok:true, elapsedMs:50833`。
+- 打包态 `m2-ui-check` → `m2ok:true`。
+- 打包态 `settings-check --exe` → `ok:true`：`toolPathsRows:13`（含 `starmem`）、`toolPathsStarmem` 指向 `…/starmem-v0.2.2-windows-x64-upx/starmem.exe`、Ghidra 默认路径、`toolPathsFileOk:true`、`toolsRows:3`。
+- 打包态 `plugins-check --exe` → `ok:true`：175 个插件包、`activationFailures:[]`。
+- 打包态 `skills-check --exe` → `ok:true`：`qikoSet` 43 个技能、`leaked:[]`。
+- `npm test` → **122/122**；`npm run check:overlay` → OK。
+
+注意：
+
+- StarMem 设为内存预设默认引擎（lovelymem / Volatility 兜底）；外部工具路径设置现有 13 行（Ghidra 为目录型，其余为可执行文件）。
+- 0.3.4 的三件产物已在本次打包后删除；`release/` 只保留 0.3.5。
+

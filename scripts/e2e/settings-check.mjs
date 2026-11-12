@@ -385,7 +385,7 @@ try {
   if (!report.toolsClearOk) throw new Error('清除工具路径后配置不符：' + JSON.stringify(clearedWritten))
   log('工具路径', '分区可见，保存/清除后 ' + TOOLS_CONFIG)
 
-  // 外部取证工具路径（Ghidra/IDA/tshark/jadx/python/7z/sqlite3/starmem…）：13 行默认值 + 可改 + 写 tool-paths.json
+  // 外部取证工具路径（Ghidra/IDA/tshark/jadx/python/7z/sqlite3/starmem/volatility）：13 行默认值 + 可改 + 写 tool-paths.json
   const TOOL_PATHS_CONFIG = join(HOME, 'tool-paths.json')
   const toolPathsView = await evaluate(client, 'window.seeu.toolPaths.get()')
   report.toolPathsConfigFile = toolPathsView?.configFile ?? null
@@ -423,7 +423,7 @@ try {
   const toolPathsWritten = JSON.parse(readFileSync(TOOL_PATHS_CONFIG, 'utf8'))
   report.toolPathsFileOk = toolPathsWritten.ghidra === ghidraDir
   if (!report.toolPathsFileOk) throw new Error('外部工具路径配置内容不符：' + JSON.stringify(toolPathsWritten))
-  log('外部工具路径', '12 行默认值，保存后 ' + TOOL_PATHS_CONFIG)
+  log('外部工具路径', '13 行默认值，保存后 ' + TOOL_PATHS_CONFIG)
 
   // 真实点「从网关拉取模型列表」按钮：应把 /v1/models 的 id 填进 textarea（保留已有显示名）
   await evaluate(client, `document.getElementById('btn-models').click(), true`)
