@@ -198,6 +198,14 @@
     <span class="hint">一键填「上下文窗口 / 输出上限」，再按模型实测调整。</span>
   </div>
 
+  <div class="presets" id="deploy-presets">
+    <span class="presets-label">本机部署：</span>
+    <button type="button" data-deploy="spark-single">Spark 单机 · qwen3.8-flash-next</button>
+    <button type="button" data-deploy="spark-dual">Spark 双机 · dsv4.1-flash</button>
+    <span class="hint">一键填模型、窗口、超时与开关（网关地址/Key 仍用自己的），保存后重启。</span>
+  </div>
+  <div id="deploy-note" class="hint" hidden></div>
+
   <div id="warnings" class="warns" hidden></div>
   <details class="adv">
     <summary>高级：超时与重试（低并发本地网关）</summary>
@@ -356,6 +364,9 @@
       const mismatch = probe.mismatch && probe.mismatch.gateway > 0 ? probe.mismatch : null
       const k = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n))
       const notes = []
+      // 本机部署识别：Spark 单机跑 qwen3.8-flash-next，Spark 双机跑 dsv4.1-flash
+      if (models.includes('qwen3.8-flash-next')) notes.push('检测到 qwen3.8-flash-next（Spark 单机部署）')
+      if (models.some((id) => /dsv4\.1|deepseek-flash/i.test(String(id)))) notes.push('检测到 dsv4.1-flash（Spark 双机部署）')
       if (missing.length > 0) notes.push(`配置的模型 ${missing.join(', ')} 不在网关列表`)
       if (mismatch) notes.push(`配置窗口 ${k(mismatch.configured)} 超过网关自报的 ${k(mismatch.gateway)}，超出部分请求会被拒`)
       if (probe.noContextWindow) notes.push(`网关没有自报上下文窗口，当前按表单里的 ${k(Number(document.getElementById('contextWindow').value) || 0)} 使用；模型实际窗口更小会报 400，请按模型文档手填`)
@@ -805,6 +816,57 @@
     '128k': { contextWindow: 131072, maxTokens: 8192 },
     '256k': { contextWindow: 262144, maxTokens: 8192 },
   }
+  /** 本机部署预设：Spark 单机（qwen3.8-flash-next）与 Spark 双机（dsv4.1-flash）。 */
+  const DEPLOY_PRESETS = {
+    'spark-single': {
+      label: 'Spark 单机 · qwen3.8-flash-next',
+      models: 'qwen3.8-flash-next | Qwen3.8-Flash-Next（Spark 单机）',
+      contextWindow: 131072,
+      maxTokens: 8192,
+      timeoutSec: 900,
+      streamIdleSec: 300,
+      retryMaxRetries: 3,
+      litePreset: true,
+      usageInStreaming: true,
+      titleGen: false,
+      note: '单机建议保持「精简工具集」：工具表约 10 个、固定开销小，128k 窗口够用；网关模型 id 不一致时点【从网关拉取模型列表】再确认。',
+    },
+    'spark-dual': {
+      label: 'Spark 双机 · dsv4.1-flash',
+      modelId: 'dsv4.1-flash',
+      models: 'dsv4.1-flash | dsv4.1-flash（Spark 双机）',
+      contextWindow: 262144,
+      maxTokens: 8192,
+      timeoutSec: 900,
+      streamIdleSec: 300,
+      retryMaxRetries: 2,
+      litePreset: false,
+      usageInStreaming: true,
+      titleGen: false,
+      note: '双机算力足：默认关掉「精简工具集」，用完整取证预设（27 个工具、子代理/工作流全开）；网关实际模型 id 不一致时点【从网关拉取模型列表】再确认。',
+    },
+  }
+  for (const btn of document.querySelectorAll('#deploy-presets button[data-deploy]')) {
+    btn.addEventListener('click', () => {
+      const preset = DEPLOY_PRESETS[btn.dataset.deploy]
+      if (!preset) return
+      $('models').value = preset.models
+      $('contextWindow').value = String(preset.contextWindow)
+      $('maxTokens').value = String(preset.maxTokens)
+      $('timeoutSec').value = String(preset.timeoutSec)
+      $('streamIdleSec').value = String(preset.streamIdleSec)
+      $('retryMaxRetries').value = String(preset.retryMaxRetries)
+      $('litePreset').checked = preset.litePreset
+      $('usageInStreaming').checked = preset.usageInStreaming
+      $('titleGen').checked = preset.titleGen
+      const note = $('deploy-note')
+      note.hidden = false
+      note.textContent = preset.note
+      setStatus('已套用「' + preset.label + '」，填好网关地址后点保存。', 'ok')
+      void renderPreview()
+    })
+  }
+
   for (const btn of document.querySelectorAll('#presets button[data-preset]')) {
     btn.addEventListener('click', () => {
       const preset = PRESETS[btn.dataset.preset]

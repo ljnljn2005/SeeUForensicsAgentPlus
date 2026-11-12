@@ -550,6 +550,39 @@ try {
   writeFileSync(OUT, Buffer.from(shot.data, 'base64'))
   log('截图', OUT)
 
+  // 本机部署预设：Spark 单机（qwen3.8-flash-next）/ Spark 双机（dsv4.1-flash）
+  const deploySingle = await evaluate(client, `(() => {
+    document.querySelector('#deploy-presets button[data-deploy="spark-single"]').click()
+    return {
+      models: document.getElementById('models').value,
+      context: document.getElementById('contextWindow').value,
+      maxTokens: document.getElementById('maxTokens').value,
+      lite: document.getElementById('litePreset').checked,
+      usage: document.getElementById('usageInStreaming').checked,
+      title: document.getElementById('titleGen').checked,
+      note: document.getElementById('deploy-note').textContent,
+    }
+  })()`)
+  report.deploySingle = deploySingle
+  if (!deploySingle.models.includes('qwen3.8-flash-next')) throw new Error('Spark 单机预设没填模型：' + JSON.stringify(deploySingle))
+  if (deploySingle.context !== '131072' || deploySingle.lite !== true || deploySingle.usage !== true) {
+    throw new Error('Spark 单机预设字段不符：' + JSON.stringify(deploySingle))
+  }
+  const deployDual = await evaluate(client, `(() => {
+    document.querySelector('#deploy-presets button[data-deploy="spark-dual"]').click()
+    return {
+      models: document.getElementById('models').value,
+      context: document.getElementById('contextWindow').value,
+      lite: document.getElementById('litePreset').checked,
+      note: document.getElementById('deploy-note').textContent,
+    }
+  })()`)
+  report.deployDual = deployDual
+  if (!deployDual.models.includes('dsv4.1-flash') || deployDual.context !== '262144' || deployDual.lite !== false) {
+    throw new Error('Spark 双机预设字段不符：' + JSON.stringify(deployDual))
+  }
+  log('本机部署预设', `单机 ${deploySingle.context} / 双机 ${deployDual.context}`)
+
   client.close()
   report.ok = true
 } catch (error) {
