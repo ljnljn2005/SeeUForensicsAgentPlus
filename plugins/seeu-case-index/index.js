@@ -5,6 +5,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
 import { describeBuildProgress, findRunningBuild } from '../../tools/ges-index/progress.mjs';
+import { indexSummary } from '../../tools/ges-index/index-meta.mjs';
 import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records, evidences, facets } from '../../tools/ges-index/query.mjs';
 import { genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
 import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.mjs';
@@ -397,7 +398,10 @@ function briefText(indexes, mounts = []) {
     }
     lines.push('### ' + (ix.caseName || ix.caseDir || ix.dbPath), '');
     lines.push('- 索引库：' + ix.dbPath);
-    lines.push('- 规模：检材 ' + evs.length + ' 个' + (totals ? ' · 记录 ' + totals.records + ' 条 · 实体 ' + totals.entities + ' 个' : '') + (ix.builtAt ? ' · 生成 ' + ix.builtAt : ''));
+    lines.push('- 规模：检材 ' + evs.length + ' 个' + (totals ? ' · 记录 ' + totals.records + ' 条 · 实体 ' + totals.entities + ' 个' : ''));
+    const summary = indexSummary(ix);
+    lines.push('- ' + summary.text);
+    if (summary.warn) lines.push('⚠ ' + summary.warn);
     if (timeRange?.f) lines.push('- 数据时间范围：' + timeRange.f + ' → ' + timeRange.t);
     if (evs.length) {
       lines.push(

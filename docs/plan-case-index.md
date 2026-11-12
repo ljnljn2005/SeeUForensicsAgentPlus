@@ -2154,3 +2154,22 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 **验证**：dev 预览直连 `POST /seeu-index/build` + 轮询 `GET /build`：阶段中文名/实时已用/百分比/ETA 连续可见；真实案件全量重建约 4–5 分钟；单测 6/6、`npm test` **132/132**、build OK。
 
 **遗留**：完成后摘要仅在面板进度卡显示，未写入案件概览；`rebuild` 期间的取消能力尚未提供。
+
+### 20.87 索引规模/新鲜度写进会话概览（第 9 轮）
+
+**需求**：AI 会话只看到检材表，不知道索引规模、建库时间、是否完整；用户问「数据齐不齐」时模型无法判断。
+
+**实现**
+- `tools/ges-index/query.mjs` 的 `findIndexes()` 额外读取 `manifest.json`，带回 `durationMs/counts/leaves/coverageOk/integrityOk`（manifest 缺失时全为 null）。
+- 新增 `tools/ges-index/index-meta.mjs`：`formatBytes`、`formatBuiltAt`（本地时区 `YYYY-MM-DD HH:mm`）、`indexSummary(index, now, staleDays=7)` → `{text, warn, stale, ageDays}`。
+- `plugins/seeu-case-index/index.js` 的 `briefText()` 在「规模」行后插入 `- 索引：…`，有告警时再插一行 `⚠ …`。
+- 单测 `tests/index-meta.test.mjs` 5 例。
+
+**坑**
+1. `formatBytes` 对 2 KiB 这类小值不能用 `toFixed(1)` 直接拼（会显示 `0.0 MiB`）→ 小于 0.1 MiB 直接写 `0 MiB`，单测按此断言。
+2. 概览里 `builtAt` 原本只有 ISO 字符串，直接给模型 2026-11-12T15:55:xxZ 不如本地时间直观 → 统一 `formatBuiltAt` 转本地时区。
+3. `durationMs` 在 manifest 里是毫秒、可能缺省 → 小于 1 分钟四舍五入到「N 秒」，至少 1 秒，避免 `0 秒`。
+
+**验证**：dev 预览 `POST /seeu-index/brief` 后 `.dev/dsh-home/AGENTS.md`（2,728 字符）出现「索引：22,776 条记录 · 8,191 个实体 · 360 个检材文件 · 建库 2026-11-12 23:55（用时 3 分 3 秒） · 库 63.0 MiB」；`npm test` **136/136**。
+
+**遗留**：概览只列前 5 个案件（既有逻辑）；「索引过旧」阈值暂固定 7 天，未做设置项。

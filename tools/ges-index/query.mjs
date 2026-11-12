@@ -63,9 +63,13 @@ export function findIndexes(dirs = []) {
         d.close();
       } catch { /* 坏库跳过 meta */ }
       let builtAt = null;
+      let manifest = null;
       try {
         const manifestPath = join(abs, '.seeu-index', 'manifest.json');
-        if (existsSync(manifestPath)) builtAt = JSON.parse(readFileSync(manifestPath, 'utf8')).builtAt ?? null;
+        if (existsSync(manifestPath)) {
+          manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+          builtAt = manifest.builtAt ?? null;
+        }
       } catch { /* manifest 坏了不影响列出 */ }
       found.push({
         caseDir: abs,
@@ -74,6 +78,12 @@ export function findIndexes(dirs = []) {
         caseName: meta?.case_name ?? null,
         builtAt,
         sizeBytes: statSync(db).size,
+        // 规模 / 新鲜度摘要用（manifest 可能缺失，调用方要容错）
+        durationMs: manifest?.durationMs ?? null,
+        counts: manifest?.counts ?? null,
+        leaves: manifest?.leaves ?? null,
+        coverageOk: manifest?.coverageOk ?? null,
+        integrityOk: manifest?.integrityOk ?? null,
       });
     }
   }
