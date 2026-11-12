@@ -2475,3 +2475,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `src/preload.ts` 类型加 `text?`；`renderer/local-model.html` 体检卡片加【复制结果】按钮（无报告时 disabled）与 `#env-copy-status` 状态行，走已有的 `window.seeu.writeClipboard()`。
 - e2e：`settings-check` 在体检断言后点【复制结果】，用 PowerShell `Get-Clipboard -Raw` 读回，断言含「SeeU 环境体检」「合计：」「外部工具路径」→ `envClipboardChars:380`、`envCopyOk:true`、`ok:true`。
 - 坑：页面里 `renderEnvReport()` 只吃 `report` 对象，复制文本要单独经 `res.text` 传进来（不要从 DOM 反解析，条目里的提示文案会丢）。
+
+### 20.114 v0.3.11 打包与回归（第 35 轮）
+
+- 打包内容：第 32 轮「运行环境体检」+ 第 33 轮「最近活动统计」+ 第 34 轮「复制体检结果」。
+- 版本 `0.3.11`；`npm test` 189/189、`check:overlay` OK；`release-0311` 打包约 16 分钟。
+- 产物：NSIS 281,893,366 B（blockmap 293,297 B）、portable 236,555,068 B、`app.asar` 426,562,813 B（34,224 entries）、目录版 1,110,914,041 B。
+- `.probe/asar-0311-check.mjs`（由 0310 复制）：新增 `envReportModule`/`envReportIpc`/`envReportSettings`/`envCopyButton`/`activitySummary`、`version0311` → 110 项全 true、`missing: []`。
+- 打包态：`m2-ui-check`（activity summary）、`settings-check`（体检 + 复制剪贴板回读 380 字符）、`plugins-check`、`skills-check`、`hero-check`、`mount-check`、`myos-real-import` 全绿；目录版冷启动 6107 ms（首跑 33.9 s 是杀毒扫描）、portable 58.5 s。
+- 坑：① `tools/env-report.mjs` 被 esbuild 内联进 `dist/main.cjs`，asar 中没有独立文件，自检要求改为查 mainJs 符号；② `version0311` 的断言值在复制脚本时残留成 `0.3.10`，导致唯一 false —— 版本号这类断言复制后必须逐条改值。

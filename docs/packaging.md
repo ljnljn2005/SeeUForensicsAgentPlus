@@ -993,3 +993,19 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - `mount-check --exe` → `ok:true`（inspect 267 ms、mount 332 ms、unmount 3 ms）；
   - 真实 MYOS 导入 `node scripts/e2e/myos-real-import.mjs` → `ok:true, skipped:false`。
 - 说明：`scripts/bench/local-gateway-bench.mjs`（第 29 轮）是开发期基准工具，不随安装包分发（`electron-builder.yml` 未包含 `scripts/**`），源码在仓库根 `scripts/bench/` 下。
+
+### v0.3.11 回归验证
+
+- 版本：`0.3.11`（`npm version 0.3.11 --no-git-tag-version`）；打包命令 `npx electron-builder --win --x64 -c.directories.output=release-0311`（无签名，约 16 分钟）。
+- 产物（已搬进 `release/`）：`release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B、`app.asar` **426,562,813 B（34,224 entries）**、NSIS **281,893,366 B**（blockmap 293,297 B）、portable **236,555,068 B**、`win-unpacked` 总计 1,110,914,041 B。
+- asar 自检：`.probe/asar-0311-check.mjs`（由 0310 复制，新增 `envReportModule`/`envReportIpc`/`envReportSettings`/`envCopyButton`/`activitySummary`、`version0311`）→ `entries: 34,224`、`missing: []`、**110 项全 true**。
+- 启动：`verify-launch` 目录版 `ok:true, elapsedMs:6107`（首次运行曾被杀毒扫描拖到 33.9 s，重跑即恢复）；portable `ok:true, elapsedMs:58,514`。
+- 打包态 e2e（`SEEU_UI_EXE` 用 Windows 正斜杠、隔离 home；先清 stale electron）：
+  - `m2-ui-check` → `m2ok:true`、`activitySummaryPresent:1`、`activityOk:true`、`myosImportOk:true`、`errors:[]`；
+  - `settings-check --exe` → `ok:true`，`envReportOk:true`、`envSummary:"体检结果：6 项正常 · 1 项注意 · 0 项不可用"`、`envCopyOk:true`（剪贴板回读 380 字符）、`toolPathsRows:13`、`diagOk:true`、`errors:[]`；
+  - `plugins-check --exe` → `ok:true`（`packagesOk:true`、`activationOk:true`）；
+  - `skills-check --exe` → `ok:true`（6 个随包技能含 `myos-import`、Qiko 43 个、`leaked:[]`）；
+  - `hero-check --exe` → `ok:true`（入口 5 个、本机工具 13/13）；
+  - `mount-check --exe` → `ok:true`（inspect 169 ms、mount 338 ms、unmount 2 ms）；
+  - `myos-real-import` → `ok:true, skipped:false`。
+- 说明：`tools/env-report.mjs` 被 esbuild 打包进 `dist/main.cjs`（与 `tools/lovely-tools.mjs` 同），asar 里没有独立文件——自检脚本不要把它列进必需路径，改用 `mainJs.includes(...)` 校验。
