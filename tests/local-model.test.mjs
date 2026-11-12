@@ -320,3 +320,29 @@ test('detectLocalDeploy：按网关模型 id 识别 Spark 单机/双机部署', 
   assert.equal(LOCAL_DEPLOY_LABELS['spark-single'], 'Spark 单机')
   assert.equal(LOCAL_DEPLOY_LABELS['spark-dual'], 'Spark 双机')
 })
+
+test('思考流格式：合法值写进 compat，auto 不写，kwargs 透传', () => {
+  const auto = localModelPatch(base)
+  assert.ok(!/thinkingFormat/.test(auto), 'auto 不应写 thinkingFormat')
+
+  const rowsOf = (text) => {
+    const doc = YAML.parse(text)
+    return Array.isArray(doc) ? doc : [doc]
+  }
+  const route = normalizeLocalModel(base).route
+
+  const deepseekProvider = rowsOf(localModelPatch({ ...base, thinkingFormat: 'deepseek' }))[0].config.providers[route]
+  assert.equal(deepseekProvider.compat.thinkingFormat, 'deepseek')
+
+  const qwenProvider = rowsOf(localModelPatch({
+    ...base,
+    thinkingFormat: 'qwen-chat-template',
+    chatTemplateKwargs: { enable_thinking: true, temperature: 0.6 },
+  }))[0].config.providers[route]
+  assert.equal(qwenProvider.compat.thinkingFormat, 'qwen-chat-template')
+  assert.equal(qwenProvider.compat.chatTemplateKwargs.enable_thinking, true)
+  assert.equal(qwenProvider.compat.chatTemplateKwargs.temperature, 0.6)
+
+  assert.equal(normalizeLocalModel({ ...base, thinkingFormat: 'nonsense' }).thinkingFormat, 'auto')
+  assert.deepEqual(normalizeLocalModel({ ...base, chatTemplateKwargs: [1, 2] }).chatTemplateKwargs, {})
+})

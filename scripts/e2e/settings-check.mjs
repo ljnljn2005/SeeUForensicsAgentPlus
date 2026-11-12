@@ -315,7 +315,9 @@ try {
     useAsDefault: true,
     litePreset: true,
     usageInStreaming: true,
-    titleGeneration: true
+    titleGeneration: true,
+    thinkingFormat: 'deepseek',
+    chatTemplateKwargs: { enable_thinking: true }
   })`)
   if (saved?.ok !== true) throw new Error(`保存失败：${JSON.stringify(saved)}`)
   if (!existsSync(CONFIG)) throw new Error(`保存后配置文件不存在：${CONFIG}`)
@@ -327,6 +329,10 @@ try {
   if (!report.titleGenSaved) throw new Error('保存的配置里 titleGeneration 不是 true')
   report.usageSaved = written.usageInStreaming === true
   if (!report.usageSaved) throw new Error('保存的配置里 usageInStreaming 不是 true')
+  report.thinkingSaved = written.thinkingFormat === 'deepseek' && written.chatTemplateKwargs?.enable_thinking === true
+  if (!report.thinkingSaved) {
+    throw new Error('保存的配置里 thinkingFormat/chatTemplateKwargs 不符：' + JSON.stringify({ f: written.thinkingFormat, k: written.chatTemplateKwargs }))
+  }
   log('保存', `写入 ${CONFIG}，模型 ${report.savedModels.join(',')}`)
 
   const reread = await evaluate(client, 'window.seeu.localModel.get()')
@@ -560,6 +566,8 @@ try {
       lite: document.getElementById('litePreset').checked,
       usage: document.getElementById('usageInStreaming').checked,
       title: document.getElementById('titleGen').checked,
+      thinkingFormat: document.getElementById('thinkingFormat').value,
+      kwargs: document.getElementById('thinkingFormatKwargs').value,
       note: document.getElementById('deploy-note').textContent,
     }
   })()`)
@@ -568,12 +576,16 @@ try {
   if (deploySingle.context !== '131072' || deploySingle.lite !== true || deploySingle.usage !== true) {
     throw new Error('Spark 单机预设字段不符：' + JSON.stringify(deploySingle))
   }
+  if (deploySingle.thinkingFormat !== 'qwen-chat-template' || !/enable_thinking/.test(deploySingle.kwargs)) {
+    throw new Error('Spark 单机预设没打开 Qwen 思考流：' + JSON.stringify(deploySingle))
+  }
   const deployDual = await evaluate(client, `(() => {
     document.querySelector('#deploy-presets button[data-deploy="spark-dual"]').click()
     return {
       models: document.getElementById('models').value,
       context: document.getElementById('contextWindow').value,
       lite: document.getElementById('litePreset').checked,
+      thinkingFormat: document.getElementById('thinkingFormat').value,
       note: document.getElementById('deploy-note').textContent,
     }
   })()`)
@@ -581,7 +593,10 @@ try {
   if (!deployDual.models.includes('dsv4.1-flash') || deployDual.context !== '262144' || deployDual.lite !== false) {
     throw new Error('Spark 双机预设字段不符：' + JSON.stringify(deployDual))
   }
-  log('本机部署预设', `单机 ${deploySingle.context} / 双机 ${deployDual.context}`)
+  if (deployDual.thinkingFormat !== 'deepseek') {
+    throw new Error('Spark 双机预设没切 reasoning_content：' + JSON.stringify(deployDual))
+  }
+  log('本机部署预设', `单机 ${deploySingle.context}+${deploySingle.thinkingFormat} / 双机 ${deployDual.context}+${deployDual.thinkingFormat}`)
 
   const lmView = await evaluate(client, 'window.seeu.localModel.get()')
   report.probeLatencyMs = lmView?.probe?.latencyMs ?? null

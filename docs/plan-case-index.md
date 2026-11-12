@@ -2103,3 +2103,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 实现 `plugins/seeu-theme/client.js` 的 `HeroActions`：新增 `tools` 状态（`shell.toolPaths.get()` → `ready/total`，`shell.mounts.get()` → `mounts.length`），只在外壳 API 存在时渲染；`data-seeu-tools="13/13"`、`data-seeu-mounts="0"`，文案「本机工具：13/13 就绪 · 镜像挂载 0」，全部就绪绿点、否则琥珀点，点击打开设置窗口。
 - e2e `scripts/e2e/hero-check.mjs` 新增 `toolsText/toolsChip/toolsOk` 断言；实测 `toolsOk:true`、文本「本机工具：13/13 就绪 · 镜像挂载 0」，其余 chip/入口/窗口/面板断言不变。
 - 验证：`node scripts/build.mjs` OK、`hero-check` `ok:true`、`npm test` 125/125；未改后端，无打包影响。
+
+### 20.83 思考流（reasoning）格式可配：Spark 单机 Qwen enable_thinking / 双机 dsv4.1 reasoning_content（第 5 轮）
+
+- 问题：两种本机部署的思考流暴露方式不同 —— qwen3.8-flash-next 需要 `chat_template_kwargs.enable_thinking=true` 才吐思考；dsv4.1-flash 走流式 `reasoning_content`。之前统一 `auto`，Qwen 系「看不到思考」、推理模型的长思考也可能被当成普通文本。
+- `tools/local-model.mjs`：新增 `THINKING_FORMAT_OPTIONS`（auto / deepseek / qwen-chat-template / qwen / chat-template / string-thinking）；`normalizeLocalModel` 增加 `thinkingFormat`（非法值回 auto）与 `chatTemplateKwargs`（只接受普通对象）；`localModelPatch` 在 `compat` 里写 `thinkingFormat`（auto 不写）与嵌套 `chatTemplateKwargs`。
+- 设置页 `renderer/local-model.html`：高级区新增「思考流格式」下拉与「chat_template_kwargs（JSON，可选）」文本框；保存/回填/预览联动，JSON 非法时静默按空处理；Spark 单机预设自动 `qwen-chat-template` + `{"enable_thinking":true}`，双机预设 `deepseek`。
+- 测试：`tests/local-model.test.mjs` 新增「思考流格式」用例（auto 不写、deepseek/qwen-chat-template 写进 provider compat、kwargs 键值透传、非法值回 auto、数组 kwargs 被忽略）；`scripts/e2e/settings-check.mjs` 的 `deploySingle/deployDual` 断言格式与 kwargs、保存后 `written.thinkingFormat === 'deepseek'`。
+- 坑：`str()` 对 undefined 返回 undefined → `(str(...) || 'auto').toLowerCase()`；把 patch 文本 `YAML.parse` 得到的是数组，取 `rows[0].config.providers[route]` 才能看到 compat。
+- 验证：`npm test` 126/126、`check:overlay` OK、`build` OK、`settings-check` 全绿（含 `thinkingSaved:true`、单机 `qwen-chat-template` / 双机 `deepseek`）。

@@ -233,6 +233,25 @@
         <div class="hint">会话标题用的小请求，默认 512，省本地算力。</div>
       </div>
     </div>
+    <div class="row2">
+      <div class="field">
+        <label for="thinkingFormat">思考流（reasoning）格式</label>
+        <select id="thinkingFormat">
+          <option value="auto">自动（推荐，交给运行时判断）</option>
+          <option value="deepseek">DeepSeek reasoning_content（dsv4.1-flash）</option>
+          <option value="qwen-chat-template">Qwen chat template（enable_thinking）</option>
+          <option value="qwen">Qwen 私有思考字段</option>
+          <option value="chat-template">通用 chat template</option>
+          <option value="string-thinking">模型输出 &lt;thinking&gt; 文本</option>
+        </select>
+        <div class="hint">Spark 单机（Qwen 系）选 chat template 才能看到思考过程；dsv4.1-flash 用 reasoning_content。</div>
+      </div>
+      <div class="field">
+        <label for="thinkingFormatKwargs">chat_template_kwargs（JSON，可选）</label>
+        <textarea id="thinkingFormatKwargs" rows="2" placeholder='{"enable_thinking": true}'></textarea>
+        <div class="hint">仅 chat-template 类格式会带进请求；写成 JSON 对象，留空不带。</div>
+      </div>
+    </div>
     <div class="hint">留空即用默认值；改完记得保存并重启应用。</div>
   </details>
 
@@ -407,6 +426,8 @@
       streamIdleTimeoutMs: secToMs($('streamIdleSec').value),
       retryMaxRetries: numOrUndef($('retryMaxRetries').value),
       titleMaxOutputTokens: numOrUndef($('titleMaxOutputTokens').value),
+      thinkingFormat: $('thinkingFormat').value || 'auto',
+      chatTemplateKwargs: parseJsonObject($('thinkingFormatKwargs').value),
     }
   }
 
@@ -419,6 +440,18 @@
   function numOrUndef(value) {
     const n = Number(value)
     return Number.isFinite(n) && n >= 0 ? Math.round(n) : undefined
+  }
+
+  /** 解析 JSON 对象（失败/空返回 undefined，交给默认值）。 */
+  function parseJsonObject(value) {
+    const text = String(value ?? '').trim()
+    if (!text) return undefined
+    try {
+      const parsed = JSON.parse(text)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : undefined
+    } catch {
+      return undefined
+    }
   }
 
   function fillForm(config) {
@@ -442,6 +475,9 @@
     $('streamIdleSec').value = c.streamIdleTimeoutMs ? Math.round(c.streamIdleTimeoutMs / 1000) : 600
     $('retryMaxRetries').value = Number.isFinite(c.retryMaxRetries) ? c.retryMaxRetries : 3
     $('titleMaxOutputTokens').value = c.titleMaxOutputTokens || 512
+    $('thinkingFormat').value = c.thinkingFormat && c.thinkingFormat !== 'auto' ? c.thinkingFormat : 'auto'
+    const kwargs = c.chatTemplateKwargs && Object.keys(c.chatTemplateKwargs).length ? c.chatTemplateKwargs : null
+    $('thinkingFormatKwargs').value = kwargs ? JSON.stringify(kwargs) : ''
   }
 
   /** 能力自检结果：模型列表 / 基础对话 / 工具调用逐项展示。 */
@@ -829,6 +865,8 @@
       litePreset: true,
       usageInStreaming: true,
       titleGen: false,
+      thinkingFormat: 'qwen-chat-template',
+      kwargs: '{"enable_thinking": true}',
       note: '单机建议保持「精简工具集」：工具表约 10 个、固定开销小，128k 窗口够用；网关模型 id 不一致时点【从网关拉取模型列表】再确认。',
     },
     'spark-dual': {
@@ -843,6 +881,8 @@
       litePreset: false,
       usageInStreaming: true,
       titleGen: false,
+      thinkingFormat: 'deepseek',
+      kwargs: '',
       note: '双机算力足：默认关掉「精简工具集」，用完整取证预设（27 个工具、子代理/工作流全开）；网关实际模型 id 不一致时点【从网关拉取模型列表】再确认。',
     },
   }
@@ -859,6 +899,8 @@
       $('litePreset').checked = preset.litePreset
       $('usageInStreaming').checked = preset.usageInStreaming
       $('titleGen').checked = preset.titleGen
+      $('thinkingFormat').value = preset.thinkingFormat || 'auto'
+      $('thinkingFormatKwargs').value = preset.kwargs || ''
       const note = $('deploy-note')
       note.hidden = false
       note.textContent = preset.note

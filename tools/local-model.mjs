@@ -42,6 +42,24 @@ const DEFAULTS = {
 /** 本机部署类型：Spark 单机跑 qwen3.8-flash-next，Spark 双机跑 dsv4.1-flash。 */
 export const LOCAL_DEPLOY_LABELS = { 'spark-single': 'Spark 单机', 'spark-dual': 'Spark 双机' }
 
+/**
+ * 思考流（reasoning）的线格式。本地网关对 reasoning 的暴露方式差异很大：
+ * - deepseek：流式 delta 里带 `reasoning_content`（dsv4.1-flash 这类推理模型）
+ * - qwen-chat-template / chat-template：通过 `chat_template_kwargs` 打开思考（Qwen 系）
+ * - qwen：Qwen 私有字段
+ * - string-thinking：模型把思考写进 `<thinking>` 文本块
+ * auto 表示不显式指定，交给 dsh/pi-ai 按 baseURL 与模型目录自动判断。
+ */
+export const THINKING_FORMAT_OPTIONS = [
+  { value: 'auto', label: '自动（推荐，交给运行时判断）' },
+  { value: 'deepseek', label: 'DeepSeek reasoning_content（dsv4.1-flash）' },
+  { value: 'qwen-chat-template', label: 'Qwen chat template（enable_thinking）' },
+  { value: 'qwen', label: 'Qwen 私有思考字段' },
+  { value: 'chat-template', label: '通用 chat template' },
+  { value: 'string-thinking', label: '模型输出 <thinking> 文本' },
+]
+const THINKING_FORMAT_VALUES = new Set(THINKING_FORMAT_OPTIONS.map((item) => item.value))
+
 /** 由网关模型 id 推断部署类型；识别不了返回 undefined。 */
 export function detectLocalDeploy(models) {
   const ids = (Array.isArray(models) ? models : [])
@@ -138,6 +156,13 @@ export function normalizeLocalModel(input = {}) {
     litePreset: input.litePreset !== false,
     usageInStreaming: input.usageInStreaming === true || input.usageInStreaming === 'true',
     titleGeneration: !(input.titleGeneration === false || input.titleGeneration === 'false'),
+    thinkingFormat: (() => {
+      const value = (str(input.thinkingFormat) || 'auto').toLowerCase()
+      return THINKING_FORMAT_VALUES.has(value) ? value : 'auto'
+    })(),
+    chatTemplateKwargs: input.chatTemplateKwargs && typeof input.chatTemplateKwargs === 'object' && !Array.isArray(input.chatTemplateKwargs)
+      ? input.chatTemplateKwargs
+      : {},
     compat: input.compat !== null && typeof input.compat === 'object' ? input.compat : {},
     models: models.map((m) => ({
       id: m.id,
@@ -190,9 +215,17 @@ export function localModelPatch(cfg) {
     supportsDeveloperRole: false,
     ...c.compat,
   }
+  if (c.thinkingFormat !== 'auto') compat.thinkingFormat = c.thinkingFormat
   lines.push('        compat:')
   for (const [k, v] of Object.entries(compat)) {
     lines.push(`          ${k}: ${typeof v === 'boolean' || typeof v === 'number' ? String(v) : q(v)}`)
+  }
+  const kwargs = Object.entries(c.chatTemplateKwargs)
+  if (kwargs.length) {
+    lines.push('          chatTemplateKwargs:')
+    for (const [k, v] of kwargs) {
+      lines.push(`            ${q(k)}: ${typeof v === 'boolean' || typeof v === 'number' ? String(v) : q(v)}`)
+    }
   }
   lines.push('        models:')
   for (const m of c.models) {
