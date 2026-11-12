@@ -50,3 +50,5 @@ starmem.exe [全局选项] <命令> [命令选项] <镜像文件>
 - 每个结论对应具体命令与字段；`--json` 里 `partial`/缺页/警告要保留，不能当成完整结果。
 - 进程差异（`pslist` vs `psscan`）、网络端点、注入区必须回查原始对象，命中只是线索。
 - 采不到（缺页、符号不匹配）就写「采不到」，不要用推断填空。
+
+耗时实测（2026-11-12，StarMem 0.2.2）：`--json info <镜像>` 约 0.5 s；采集类命令（`pslist`/`netscan`/`collect`）需要**完整内存镜像**，本机流量工具自带的 raw 进程转储会失败（`no decoded physical KDBG was found`）或超时；真实镜像请让用户提供 `.raw/.dmp/.vmem`（整机内存）。

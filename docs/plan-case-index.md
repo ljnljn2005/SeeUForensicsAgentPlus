@@ -2087,3 +2087,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 文档：新增 `docs/benchmarks.md`（机器/版本、三条结果表、复现命令、对产品的直接影响：挂载亚秒级、LovelySpark 10 秒级、内存采集依赖完整镜像）；README 新增「### v0.3.6 待发布（未打包）」段并在 §10「镜像挂载」补「真机验证（2026-11-12）」与实现细节；`package.json` 加 `test:e2e:real-tools`。
 - 验证：`node scripts/e2e/real-tools-bench.mjs` → `ok:true`（lovelycarve/lovelyspark/starmem 三段均 ok）；`npm test` 全绿（image-mount 4/4 假 CLI 全链路）；`node scripts/build.mjs` OK。
 - 遗留：StarMem 采集类命令待完整内存镜像；LovelySpark 分析库写在检材目录（只读介质需先复制 pcap）；真实挂载依赖 Dokan（本机可用，普通用户权限下已验证）。
+
+### 20.81 挂载窗口可读性 + 实测数字写进技能（第 3 轮继续）
+
+- 背景：第 3 轮真实基准发现「挂载能成功但窗口只给一行原始错误、也看不到耗时」，且技能里没有真实耗时概念，模型容易重复 analyze/反复挂载。
+- 后端 `tools/image-mount.mjs`：`inspect`/`mount`/`unmount` 返回值加 `ms`（`Date.now()` 差值，失败也返回）；新增导出 `mountErrorHint(message)`（Dokan/管理员 → 提权提示；案件锁/already contains a case → 关桌面端；检材已打开 → 直接挂/刷新；ENOENT/不存在 → 重选镜像；盘符占用 → 换盘符；其余 undefined）；`status()` 的 `cli` 增加 `version`（`cliVersionOf` 用 `spawnSync --version` 取一次并按 CLI 路径缓存，失败不影响主流程）。
+- 界面 `renderer/mounts.html`：CLI 卡片显示「已找到 · 1.3.0」；新增 `#timing` 行显示「最近操作：解析 162 ms · 挂载 266 ms」（`fmtMs`/`noteTiming`，超过 1 s 用秒）；解析/挂载失败时把 `hint` 拼在错误后面；卸载成功 toast 带耗时。
+- 技能（让模型知道真实节奏）：`lovelycarve-forensics` 加「附录 · SeeU 外壳里的挂载」（入口、真机耗时 160/270/150 ms、`$SEEU_MOUNTS_FILE` 先看已挂载、`--case` 与 `mounts delete --force` 两个坑）；`skill-sets/{traffic,log}/lovelyspark-cli` 加「耗时实测」段（冷启动 ~11 s、analyze 约 9–13 s、分析库在检材同目录、`investigate` 复用 8–9 s、别重复 analyze）；`skill-sets/memory/starmem-cli` 加「耗时实测」段（`info` ~0.5 s、采集类命令需完整内存镜像、raw 进程转储会报 no decoded physical KDBG）。
+- 测试/回归：`tests/image-mount.test.mjs` 增 `mountErrorHint` 用例并断言 inspect/mount/unmount 的 `ms`（5/5）；`scripts/e2e/mount-check.mjs` 断言 `inspect.ms`/`mount.ms`/`unmountMs` 且页面接线存在（`timingWired`，UI 直接调用 API 时不会触发 `noteTiming`，所以断言元素与 `noteTiming` 逻辑而非文案）；`npm test` **125/125**、`check:overlay` OK、`build` OK、`mount-check` 全绿（inspect 217 ms / mount 588 ms / unmount 1 ms）。
+- 坑：inspect 的「文件不存在」早返回原来不带 `hint`，导致单测拿不到提示 —— 三个早返回统一补 `hint`/`ms`。
+

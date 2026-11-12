@@ -98,6 +98,7 @@
       <button id="btnRefresh">刷新</button>
     </div>
     <div id="cliHint" class="hint"></div>
+    <div id="timing" class="hint"></div>
   </div>
 
   <div class="card">
@@ -134,6 +135,7 @@
     cliState: document.getElementById('cliState'),
     cliPath: document.getElementById('cliPath'),
     cliHint: document.getElementById('cliHint'),
+    timing: document.getElementById('timing'),
     imagePath: document.getElementById('imagePath'),
     inspectHint: document.getElementById('inspectHint'),
     partitions: document.getElementById('partitions'),
@@ -148,6 +150,20 @@
   var status = null;
   var inspect = null;
   var busy = false;
+  var lastTiming = '';
+
+  function fmtMs(n) {
+    var v = Number(n);
+    if (!isFinite(v) || v <= 0) return '';
+    return v >= 1000 ? (v / 1000).toFixed(2) + ' s' : Math.round(v) + ' ms';
+  }
+
+  function noteTiming(label, ms) {
+    var text = fmtMs(ms);
+    if (!text) return;
+    lastTiming = label + ' ' + text + (lastTiming ? ' · ' + lastTiming : '');
+    els.timing.textContent = '最近操作：' + lastTiming;
+  }
 
   function toast(msg, kind) {
     els.toast.textContent = msg;
@@ -185,7 +201,7 @@
     if (!view) return;
     var cli = view.cli || {};
     els.cliState.className = 'pill ' + (cli.path ? 'ok' : 'bad');
-    els.cliState.textContent = cli.path ? '已找到' : '未配置';
+    els.cliState.textContent = cli.path ? ('已找到' + (cli.version ? ' · ' + cli.version : '')) : '未配置';
     els.cliPath.textContent = cli.path || '';
     if (cli.error) {
       els.cliHint.className = 'hint err';
@@ -279,7 +295,10 @@
     els.inspectHint.className = 'hint';
     els.inspectHint.textContent = '正在解析镜像分区…（首次读取元数据可能几秒）';
     try {
-      renderInspect(await api.inspect(imagePath));
+      var res = await api.inspect(imagePath);
+      if (res && res.ms) noteTiming('解析', res.ms);
+      if (res && !res.ok && res.hint) els.inspectHint.textContent = '解析失败：' + (res.error || '') + '。' + res.hint;
+      renderInspect(res);
     } finally {
       setBusy(false);
     }
@@ -298,11 +317,12 @@
       var res = await api.mount({ imagePath: imagePath, partition: partition, mountPoint: mountPoint });
       if (!res.ok) {
         els.mountHint.className = 'hint err';
-        els.mountHint.textContent = '挂载失败：' + (res.error || '未知错误');
+        els.mountHint.textContent = '挂载失败：' + (res.error || '未知错误') + (res.hint ? '。' + res.hint : '');
         return;
       }
+      if (res.ms) noteTiming('挂载', res.ms);
       els.mountHint.className = 'hint ok';
-      els.mountHint.textContent = '✓ 已挂载到 ' + res.mount.mountPoint + '（只读），可在会话里直接按该盘符访问。';
+      els.mountHint.textContent = '✓ 已挂载到 ' + res.mount.mountPoint + '（只读，' + (fmtMs(res.ms) || '已完成') + '），可在会话里直接按该盘符访问。';
       await refresh();
     } finally {
       setBusy(false);
@@ -314,8 +334,11 @@
     setBusy(true);
     try {
       var res = await api.unmount(id);
-      if (!res.ok) toast('卸载失败：' + (res.error || '未知错误'), 'err');
-      else toast('✓ 已卸载', 'ok');
+      if (!res.ok) toast('卸载失败：' + (res.error || '未知错误') + (res.hint ? '。' + res.hint : ''), 'err');
+      else {
+        if (res.ms) noteTiming('卸载', res.ms);
+        toast('✓ 已卸载' + (res.ms ? '（' + fmtMs(res.ms) + '）' : ''), 'ok');
+      }
       await refresh();
     } finally {
       setBusy(false);

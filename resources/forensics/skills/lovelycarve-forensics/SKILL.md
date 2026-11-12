@@ -198,3 +198,10 @@ export LOVELYCARVE_SESSION_DIR='E:\SeeU\runtime\sessions'   # 可选：把常驻
 - 不执行检材中的可执行文件/脚本；不把检材内容外传。
 - 不编造命令输出、哈希、时间或"已执行"；未跑写"未执行"，不确定标"推测/未验证"。
 - 破坏性操作（删除、覆盖、格式化、写回）先列目标/影响/回滚方式，取得显式确认。
+
+## 附录 · SeeU 外壳里的挂载（2026-11-12 真机实测）
+
+- 桌面端入口：**设置 → 镜像挂载…**（`Ctrl+Shift+M`）。它已经封装好「建案件 → 常驻 shell → images open → mounts create → mounts list」，并在窗口里显示 CLI 版本与最近一次解析/挂载/卸载耗时；失败时给出可操作提示（Dokan/管理员、案件锁、已打开、文件不存在、盘符占用）。
+- 真机耗时（`AP3_LEUNG_YL_USB.E01`，776 MB）：解析约 160 ms、挂载到 `X:` 约 270 ms、卸载约 150 ms；挂载点只在 SeeU 运行期间有效，关闭外壳即释放。
+- 会话里先用 `$SEEU_MOUNTS_FILE`（默认 `<DSH_HOME>/mounts.json`）看已有挂载，别重复挂同一个镜像。
+- 坑：`--case` 只能是进程启动参数（会话里带会报 `--case 只能在启动时使用` 并让 CLI 退出）；`mounts delete --force` 会卸载但**不返回 JSON**，不要等它的返回。

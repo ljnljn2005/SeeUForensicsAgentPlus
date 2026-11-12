@@ -153,7 +153,8 @@ try {
   log('CLI 状态', `${status.cli.path}（${status.cli.source}），默认挂载点 ${status.defaultMountPoint}`)
 
   const inspected = await evaluate(client, `window.seeu.mounts.inspect(${JSON.stringify(IMAGE)})`)
-  report.inspect = { ok: inspected?.ok, partitions: inspected?.image?.partitions?.length ?? 0, name: inspected?.image?.name }
+  report.inspect = { ok: inspected?.ok, partitions: inspected?.image?.partitions?.length ?? 0, name: inspected?.image?.name, ms: inspected?.ms }
+  if (!(Number(inspected?.ms) > 0)) throw new Error(`解析应返回耗时 ms，实际 ${JSON.stringify(inspected?.ms)}`)
   if (inspected?.ok !== true) throw new Error(`解析镜像失败：${JSON.stringify(inspected)}`)
   if (report.inspect.partitions !== 2) throw new Error(`分区数应为 2，实际 ${report.inspect.partitions}`)
   log('解析镜像', `${report.inspect.name} · ${report.inspect.partitions} 个分区`)
@@ -163,7 +164,8 @@ try {
     client,
     `window.seeu.mounts.mount({ imagePath: ${JSON.stringify(IMAGE)}, partition: 0, mountPoint: ${JSON.stringify(mountPoint)} })`,
   )
-  report.mount = mounted?.ok === true ? { mountPoint: mounted.mount?.mountPoint, id: mounted.mount?.id } : mounted
+  report.mount = mounted?.ok === true ? { mountPoint: mounted.mount?.mountPoint, id: mounted.mount?.id, ms: mounted.ms } : mounted
+  if (mounted?.ok === true && !(Number(mounted.ms) > 0)) throw new Error(`挂载应返回耗时 ms，实际 ${JSON.stringify(mounted.ms)}`)
   if (mounted?.ok !== true) throw new Error(`挂载失败：${JSON.stringify(mounted)}`)
   if (mounted.mount?.mountPoint !== mountPoint) throw new Error(`挂载点不符：${mounted.mount?.mountPoint}`)
   if (!existsSync(MOUNTS_FILE)) throw new Error('mounts.json 没有写出')
@@ -171,7 +173,13 @@ try {
   report.state = { count: state.mounts?.length ?? 0, imagePath: state.mounts?.[0]?.imagePath, note: state.note }
   if (report.state.count !== 1) throw new Error(`mounts.json 应有 1 条，实际 ${report.state.count}`)
   if (state.mounts[0].imagePath !== IMAGE) throw new Error('mounts.json 里的镜像路径不符')
-  log('挂载', `${mountPoint} → ${state.mounts[0].imagePath}`)
+  log('挂载', `${mountPoint} → ${state.mounts[0].imagePath}（${report.mount.ms} ms）`)
+  const timingWired = await evaluate(
+    client,
+    "Boolean(document.getElementById('timing')) && /noteTiming/.test(String(document.querySelector('script').textContent))",
+  )
+  report.timingWired = timingWired
+  if (!timingWired) throw new Error('界面缺少耗时展示元素或 noteTiming 逻辑')
 
   // 页面重新加载后应看到活动挂载卡片
   await client.send('Page.reload')
@@ -183,6 +191,8 @@ try {
 
   const unmounted = await evaluate(client, `window.seeu.mounts.unmount(${JSON.stringify(mounted.mount.id)})`)
   report.unmount = unmounted?.ok
+  report.unmountMs = unmounted?.ms
+  if (unmounted?.ok === true && !(Number(unmounted.ms) > 0)) throw new Error(`卸载应返回耗时 ms，实际 ${JSON.stringify(unmounted.ms)}`)
   if (unmounted?.ok !== true) throw new Error(`卸载失败：${JSON.stringify(unmounted)}`)
   const after = JSON.parse(readFileSync(MOUNTS_FILE, 'utf8'))
   report.stateAfter = after.mounts?.length ?? 0

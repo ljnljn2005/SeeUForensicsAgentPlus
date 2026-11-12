@@ -81,7 +81,9 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 - **真实工具基准（第 3 轮）**：新增 `scripts/e2e/real-tools-bench.mjs`（`npm run test:e2e:real-tools`）与 `docs/benchmarks.md`，在本机真实素材上实测三套工具：LovelyCarve 1.3.0 解析 `W:/AP3_LEUNG_YL_USB.E01`（776 MB EWF）**162 ms**、挂载 part 0 到 `X:` **266 ms**、卸载 **154 ms**（`X:\` 可见 `WEPE`、`Sunny.zip`、`vera_key` 等）；LovelySpark 0.3.20 首次冷启动 11.3 s、`analyze` 86 KB 的 `L1-6.pcapng` **9–13 s**（27 个模块，分析库落在检材同目录 `<pcap>.db.generations/`）、`investigate` 复用分析库 8.8 s；StarMem 0.2.2 `--json info` **525 ms**（本机唯一内存样本是流量工具自带的 raw 进程转储，`windows-info` 报「未找到 KDBG」、`pslist/netscan` 超时——采集类命令需用户提供完整内存镜像）。
 - **修复 LovelyCarve 挂载链路（真实 CLI 才暴露的两个坑）**：① `--case` 只能作为进程启动参数，会话里再带会被 CLI 拒绝并让进程退出 → 改为「一次性 `cases create` 建案件 → 常驻 `lovelycarve-cli -q --case <dir> shell` → `images open` → `mounts create`」；② LovelyCarve 1.3.0 的 `mounts delete --force` **会卸载但不返回 JSON**，等响应会挂住 → 改为「写命令 + 轮询盘符是否消失（12 s）」，必要时兜底停进程释放挂载；③ 进程异常退出后残留在 `mounts.json` 的记录，会在下次 `status()` 按盘符存在性自动清理。
-- 验证：`npm test`（含假 CLI 的 inspect→mount→unmount 全链路）与 `npm run test:e2e:real-tools` 通过；`docs/benchmarks.md` 记录复现命令、版本与数字。
+- **镜像挂载窗口可读性（第 3 轮 UI）**：`inspect`/`mount`/`unmount` 现在返回 `ms`，窗口顶部显示「CLI 版本 · 最近操作耗时」（如「解析 162 ms · 挂载 266 ms」），挂载成功提示里带耗时；失败时按错误类型给可操作提示（Dokan/管理员、案件锁、检材已打开、文件不存在、盘符占用），不再只给一行原始错误。
+- **把实测数字写进技能**：`lovelycarve-forensics` 增加「SeeU 外壳里的挂载」附录（入口、耗时、`$SEEU_MOUNTS_FILE`、`--case`/`mounts delete` 两个坑）；`lovelyspark-cli`（流量/日志）注明 analyze 约 9–13 s、分析库落在检材同目录；`starmem-cli` 注明 `info` 约 0.5 s、采集类命令需要完整内存镜像。
+- 验证：`npm test` **125/125**（新增 `mountErrorHint` 与耗时断言）、`npm run check:overlay` OK、`node scripts/build.mjs` OK、`node scripts/e2e/mount-check.mjs` 通过（`timingWired:true`、`inspect.ms:217`、`mount.ms:588`、`unmountMs:1`、`timingWired/listVisible` 均 true）；`docs/benchmarks.md` 记录复现命令、版本与数字。
 
 ### v0.3.5 改了什么
 

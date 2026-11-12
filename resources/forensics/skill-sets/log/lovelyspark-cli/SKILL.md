@@ -25,3 +25,5 @@ JSON 参数优先用 `--args-file` 避免 Windows 引号转义；路径使用绝
 
 路径只来自用户手动指定（桌面端「设置 → 本机取证工具路径」写入 `<DSH_HOME>/lovely-cli.json`），**不要自己去找 exe**。`status` 的 `found:false` 表示未配置：请用户去设置窗口指定路径，不要尝试自动发现或 `configure auto`。脚本里临时指定用 `configure lovelyspark '<exe绝对路径>'`，`configure lovelyspark clear` 清除。
 使用现有许可证；不默认导入授权或执行网络回放。结论引用源抓包、db_path 与具体记录位置。
+
+耗时实测（2026-11-12，LovelySpark 0.3.20）：首次冷启动约 11 s；`analyze` 一个 86 KB 的 pcapng 约 9–13 s（27 个模块），大流量包按模块耗时会更长；分析库写在**检材同目录**的 `<pcap>.db.generations/` 下（只读介质请先把 pcap 复制到 `$SEEU_WORKSPACE`）；`investigate --focus overview` 复用分析库约 8–9 s。等待期间不要重复 `analyze` 同一文件。

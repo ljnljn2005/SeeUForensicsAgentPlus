@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
   createMountManager,
   defaultMountPoint,
+  mountErrorHint,
   mountCaseDir,
   mountsFile,
   resolveLovelyCarveCli,
@@ -102,9 +103,12 @@ test('MountManager：inspect → mount（写 mounts.json） → unmount', async 
   const bad = await manager.inspect(join(root, 'missing.E01'))
   assert.equal(bad.ok, false)
   assert.match(String(bad.error), /不存在/)
+  assert.match(String(bad.hint), /重新选择镜像/)
+  assert.equal(Number(bad.ms) >= 0, true)
 
   const mounted = await manager.mount({ imagePath, partition: 0 })
   assert.equal(mounted.ok, true, mounted.error)
+  assert.equal(Number(mounted.ms) > 0, true, 'mount 应返回耗时')
   assert.match(String(mounted.mount.point ?? mounted.mount.mountPoint), /^[A-Z]:$/)
   const stateFile = join(home, 'mounts.json')
   assert.equal(existsSync(stateFile), true)
@@ -120,6 +124,7 @@ test('MountManager：inspect → mount（写 mounts.json） → unmount', async 
 
   const unmounted = await manager.unmount(mounted.mount.id)
   assert.equal(unmounted.ok, true, unmounted.error)
+  assert.equal(Number(unmounted.ms) > 0, true, 'unmount 应返回耗时')
   assert.deepEqual(JSON.parse(readFileSync(stateFile, 'utf8')).mounts, [])
 
   const missingMount = await manager.unmount(mounted.mount.id)
@@ -127,4 +132,14 @@ test('MountManager：inspect → mount（写 mounts.json） → unmount', async 
 
   await manager.dispose()
   assert.equal(manager.debugHost().running, false)
+})
+
+test('mountErrorHint 把常见失败翻译成可操作提示', () => {
+  assert.match(String(mountErrorHint('Dokan driver not installed')), /管理员权限与 Dokan/)
+  assert.match(String(mountErrorHint('Access is denied')), /管理员权限与 Dokan/)
+  assert.match(String(mountErrorHint('directory already contains a case: X')), /案件锁/)
+  assert.match(String(mountErrorHint('image is already open')), /已经.*打开/)
+  assert.match(String(mountErrorHint('ENOENT: no such file')), /重新选择镜像/)
+  assert.match(String(mountErrorHint('盘符 X: 已被占用')), /换一个盘符/)
+  assert.equal(mountErrorHint('something odd happened'), undefined)
 })

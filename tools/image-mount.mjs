@@ -316,7 +316,30 @@ function pickMountId(result, mountPoint) {
 }
 
 /**
- * 管理器：解析 CLI、按需拉起常驻 shell、维护挂载表并写入 mounts.json。
+ * 把 LovelyCarve/系统的常见失败翻译成用户能照做的提示。
+ * 返回 undefined 表示没有更具体的信息，前端直接显示原始错误。
+ */
+export function mountErrorHint(message) {
+  const text = String(message ?? '')
+  if (/Dokan|管理员|拒绝访问|access is denied|AccessDenied|elevat/i.test(text)) {
+    return '挂载需要管理员权限与 Dokan 驱动：请以管理员身份重新启动 SeeU 后再试。'
+  }
+  if (/already contains a case|case.*lock|locked|已被.*打开|alreadyOpen/i.test(text)) {
+    return '该案件已被 LovelyCarve 桌面端打开（案件锁）：请先关闭桌面端，或改用另一个查看器。'
+  }
+  if (/already open|isOpen|alreadyExists.*image|检材.*已打开/i.test(text)) {
+    return '检材已经在当前会话里打开过：直接点「挂载为只读盘」或「刷新」即可。'
+  }
+  if (/ENOENT|does not exist|不存在|not found/i.test(text)) {
+    return '镜像文件不存在或路径已变化：请重新选择镜像。'
+  }
+  if (/盘符.*占|already.*drive|in use/i.test(text)) {
+    return '盘符已被占用：换一个盘符（如 Y:、Z:）再挂载。'
+  }
+  return undefined
+}
+
+/** 管理器：解析 CLI、按需拉起常驻 shell、维护挂载表并写入 mounts.json。
  * `env` 每次操作时读取，便于测试/环境变量在进程内变化。
  */
 export function createMountManager({ env = () => process.env, log = () => {} } = {}) {
@@ -395,6 +418,32 @@ ${out.stderr ?? ''}`
     }
   }
 
+  let cliVersionCache
+  /** CLI 版本号（只取一次；失败返回 undefined，不影响主流程）。 */
+  function cliVersionOf(cli) {
+    if (!cli) return undefined
+    if (!cliVersionCache) cliVersionCache = new Map()
+    if (cliVersionCache.has(cli)) return cliVersionCache.get(cli)
+    let version
+    try {
+      const lower = cli.toLowerCase()
+      const isScript = lower.endsWith('.mjs') || lower.endsWith('.cjs') || lower.endsWith('.js')
+      const node = currentEnv().SEEU_MOUNT_NODE
+        || (process.execPath.toLowerCase().endsWith('electron.exe') ? 'node' : process.execPath)
+      const out = spawnSync(isScript ? node : cli, isScript ? [cli, '--version'] : ['--version'], {
+        encoding: 'utf8',
+        timeout: 20_000,
+        windowsHide: true,
+      })
+      const match = String(out.stdout || '').match(/(\d+\.\d+\.\d+)/)
+      if (match) version = match[1]
+    } catch {
+      version = undefined
+    }
+    cliVersionCache.set(cli, version)
+    return version
+  }
+
   function ensureHost(caseDir) {
     const cli = cliOrThrow()
     const wantCase = caseDir ? resolve(caseDir) : undefined
@@ -440,7 +489,7 @@ ${out.stderr ?? ''}`
     if (!live && mounts.length !== all.length) writeMountState(current, mounts)
     return {
       ok: true,
-      cli: { path: resolved.path, source: resolved.source, error: resolved.path ? undefined : resolved.error },
+      cli: { path: resolved.path, source: resolved.source, version: cliVersionOf(resolved.path), error: resolved.path ? undefined : resolved.error },
       stateFile: mountsFile(current),
       caseDir: mountCaseDir(current),
       hostRunning: host !== undefined && host.running,
@@ -450,10 +499,14 @@ ${out.stderr ?? ''}`
   }
 
   async function inspect(imagePath) {
+    const startedAt = Date.now()
     const path = String(imagePath ?? '').trim()
-    if (!path) return { ok: false, error: '请先选择镜像文件' }
-    if (!isAbsolute(path)) return { ok: false, error: `镜像路径必须是绝对路径：${path}` }
-    if (!existsSync(path)) return { ok: false, error: `镜像文件不存在：${path}` }
+    if (!path) return { ok: false, error: '请先选择镜像文件', ms: 0 }
+    if (!isAbsolute(path)) return { ok: false, error: `镜像路径必须是绝对路径：${path}`, ms: Date.now() - startedAt }
+    if (!existsSync(path)) {
+      const message = `镜像文件不存在：${path}`
+      return { ok: false, error: message, ms: Date.now() - startedAt, hint: mountErrorHint(message) }
+    }
     const cli = cliOrThrow()
     const sizeBytes = (() => {
       try {
@@ -472,6 +525,7 @@ ${out.stderr ?? ''}`
       const partitions = Array.isArray(image.partitions) ? image.partitions : Array.isArray(result?.partitions) ? result.partitions : []
       return {
         ok: true,
+        ms: Date.now() - startedAt,
         image: {
           path,
           name: basename(path),
@@ -487,17 +541,22 @@ ${out.stderr ?? ''}`
         },
       }
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      const message = error instanceof Error ? error.message : String(error)
+      return { ok: false, error: message, ms: Date.now() - startedAt, hint: mountErrorHint(message) }
     } finally {
       await host.stop()
     }
   }
 
   async function mount({ imagePath, partition = 0, mountPoint } = {}) {
+    const startedAt = Date.now()
     const path = String(imagePath ?? '').trim()
-    if (!path) return { ok: false, error: '请先选择镜像文件' }
-    if (!isAbsolute(path)) return { ok: false, error: `镜像路径必须是绝对路径：${path}` }
-    if (!existsSync(path)) return { ok: false, error: `镜像文件不存在：${path}` }
+    if (!path) return { ok: false, error: '请先选择镜像文件', ms: 0 }
+    if (!isAbsolute(path)) return { ok: false, error: `镜像路径必须是绝对路径：${path}`, ms: Date.now() - startedAt }
+    if (!existsSync(path)) {
+      const message = `镜像文件不存在：${path}`
+      return { ok: false, error: message, ms: Date.now() - startedAt, hint: mountErrorHint(message) }
+    }
     const index = Number(partition)
     if (!Number.isInteger(index) || index < 0) return { ok: false, error: `分区序号不合法：${String(partition)}` }
     const state = readMountState(currentEnv())
@@ -535,13 +594,15 @@ ${out.stderr ?? ''}`
       }
       const mounts = state.mounts.filter((item) => String(item.mountPoint).toUpperCase() !== point).concat(record)
       writeMountState(currentEnv(), mounts)
-      return { ok: true, mount: record, mounts }
+      return { ok: true, mount: record, mounts, ms: Date.now() - startedAt }
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      const message = error instanceof Error ? error.message : String(error)
+      return { ok: false, error: message, ms: Date.now() - startedAt, hint: mountErrorHint(message) }
     }
   }
 
   async function unmount(id) {
+    const startedAt = Date.now()
     const key = String(id ?? '').trim()
     if (!key) return { ok: false, error: '缺少挂载 ID' }
     const state = readMountState(currentEnv())
@@ -577,7 +638,7 @@ ${out.stderr ?? ''}`
       }
       const mounts = state.mounts.filter((item) => String(item.id) !== key)
       writeMountState(currentEnv(), mounts)
-      return { ok: true, mounts, released, fallback }
+      return { ok: true, mounts, released, fallback, ms: Date.now() - startedAt }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
