@@ -100,3 +100,20 @@ test('summarizeActivity：空列表/坏输入返回 0，文案为空串', () => 
   assert.equal(formatActivityDuration(125000), '2 分 5 秒')
   assert.equal(formatActivityDuration(3725000), '1 小时 2 分')
 })
+
+test('summarizeActivity：按天分桶（最近 N 天，最后一天是今天，窗口外不计）', () => {
+  const now = Date.parse('2026-11-13T05:00:00+08:00')
+  const entries = [
+    { kind: 'build', at: '2026-11-13T04:00:00+08:00', durationMs: 120000 },
+    { kind: 'myos-import', at: '2026-11-12T10:00:00+08:00', rows: 10 },
+    { kind: 'build', at: '2026-11-11T09:00:00+08:00', durationMs: 60000 },
+    { kind: 'build', at: '2026-11-01T09:00:00+08:00', durationMs: 60000 },
+  ]
+  const summary = summarizeActivity(entries, now)
+  assert.equal(summary.buckets.length, 7)
+  assert.deepEqual(summary.buckets[6], { date: '2026-11-13', builds: 1, imports: 0, total: 1 })
+  assert.deepEqual(summary.buckets[5], { date: '2026-11-12', builds: 0, imports: 1, total: 1 })
+  assert.deepEqual(summary.buckets[4], { date: '2026-11-11', builds: 1, imports: 0, total: 1 })
+  assert.equal(summary.buckets.reduce((sum, item) => sum + item.total, 0), 3)
+  assert.equal(summary.builds, 2)
+})

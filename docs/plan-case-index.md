@@ -2484,3 +2484,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `.probe/asar-0311-check.mjs`（由 0310 复制）：新增 `envReportModule`/`envReportIpc`/`envReportSettings`/`envCopyButton`/`activitySummary`、`version0311` → 110 项全 true、`missing: []`。
 - 打包态：`m2-ui-check`（activity summary）、`settings-check`（体检 + 复制剪贴板回读 380 字符）、`plugins-check`、`skills-check`、`hero-check`、`mount-check`、`myos-real-import` 全绿；目录版冷启动 6107 ms（首跑 33.9 s 是杀毒扫描）、portable 58.5 s。
 - 坑：① `tools/env-report.mjs` 被 esbuild 内联进 `dist/main.cjs`，asar 中没有独立文件，自检要求改为查 mainJs 符号；② `version0311` 的断言值在复制脚本时残留成 `0.3.10`，导致唯一 false —— 版本号这类断言复制后必须逐条改值。
+
+### 20.115 最近活动按天分布（第 36 轮）
+
+- 动机：活动摘要只有「近 7 天共 X 次」，看不出哪天集中。
+- `tools/ges-index/activity.mjs` 的 `summarizeActivity()` 增加 `buckets`：从今天往前 7 天（本地时区），每天 `{date:'YYYY-MM-DD', builds, imports, total}`；条目按 `Date.parse(at)` 落到今天零点算出的桶，窗口外不计入任何桶；坏时间戳仍不影响主统计。
+- `plugins/seeu-case-index/client.js`：新增 `activityBuckets` state（加载 `/activity` 时读 `body.summary.buckets`，清空活动时清空）；标题行右侧渲染 `[data-activity-bars]`，7 根 5px 宽小条形，高度按当天总数归一（峰值 16px），建库/导入/两者分别用 `C_ACC`/`C_WARN`/`C_OK`，空桶 35% 透明度；每根 `title` 为「日期：建库 N 次 · MYOS 导入 M 次」。
+- 测试：`tests/activity.test.mjs` +1 例（7 桶、最后一天是今天、昨天/前天对齐、窗口外排除、总数 3、builds 2）→ `npm test` **191/191**；`m2-ui-check` 加 `report.activityBars`（`[data-activity-bars] > div` 数量必须 7）并纳入 `activityOk` → `m2ok:true`。
+- 坑：颜色常量实际叫 `C_ACC`/`C_OK`/`C_WARN`/`C_L2`，不是 `C_ACCENT`/`C_BLUE`/`C_BORDER`（写错不报错，只是 `undefined` 颜色条不可见）；`esbuild transformSync(loader:'jsx')` 只能校验语法，颜色这类运行期错误要靠 e2e 兜。

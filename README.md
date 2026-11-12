@@ -79,6 +79,10 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
+### v0.3.12 待发布（未打包）
+
+- **最近活动按天分布**（第 36 轮）：`summarizeActivity()` 额外返回 `buckets`（最近 7 天、每天 `{date,builds,imports,total}`，本地时区，窗口外不计）；面板「最近活动」标题右侧画 7 根小条形（建库/导入/两者都有分别着色，hover 显示「日期：建库 N 次 · MYOS 导入 M 次」）。`tests/activity.test.mjs` +1 例（分桶边界与窗口外排除）→ `npm test` 191/191；`m2-ui-check` 新增 `activityBars:7` 并纳入 `activityOk`。
+
 ### v0.3.11 改了什么
 
 - **打包与打包态回归（第 35 轮）**：v0.3.11 已出 NSIS `281,893,366 B`（blockmap `293,297 B`）、portable `236,555,068 B`、`app.asar` `426,562,813 B`（34,224 entries）、目录版总计 `1,110,914,041 B`；`.probe/asar-0311-check.mjs` **110 项全 true、`missing: []`**（新增 `tools/env-report.mjs` 随包校验、`envReportModule`/`envReportIpc`/`envReportSettings`/`envCopyButton`/`activitySummary`/`version0311`）；打包态 `m2-ui-check`（`m2ok:true`、`activitySummaryPresent:1`、`activityOk:true`）、`settings-check --exe`（`ok:true`：`envReportOk:true`、`envCopyOk:true`（380 字符回读）、13 行工具路径、五项自检）、`plugins-check --exe`（175 包、`activationFailures:[]`）、`skills-check --exe`（6 个随包技能 + Qiko 43 个）、`hero-check --exe`（本机工具 13/13）、`mount-check --exe`（inspect 169 ms / mount 338 ms）、真实 MYOS 导入（`skipped:false`）全绿；目录版冷启动 **6107 ms**、portable 58.5 s。

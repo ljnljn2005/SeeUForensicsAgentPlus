@@ -1511,6 +1511,7 @@ window.__ModuleLoader__.load({
       // 最近活动（建库 / MYOS 导入），来自插件 /activity
       const [activity, setActivity] = useState([]);
       const [activitySummary, setActivitySummary] = useState('');
+      const [activityBuckets, setActivityBuckets] = useState([]);
       useEffect(() => {
         let alive = true;
         if (!db) { setEvList([]); return undefined; }
@@ -1539,6 +1540,7 @@ window.__ModuleLoader__.load({
             if (alive) {
               setActivity(Array.isArray(body?.entries) ? body.entries : []);
               setActivitySummary(typeof body?.summaryText === 'string' ? body.summaryText : '');
+              setActivityBuckets(Array.isArray(body?.summary?.buckets) ? body.summary.buckets : []);
             }
           } catch {
             if (alive) setActivity([]);
@@ -2102,13 +2104,27 @@ window.__ModuleLoader__.load({
             h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, '最近活动'),
             h('span', { style: S.muted }, activity.length ? `共 ${activity.length} 条 · 点一行打开对应索引` : '还没有活动记录'),
             h('span', { 'data-activity-summary': '1', title: activitySummary || '', style: { ...S.muted, marginLeft: 6 } }, activitySummary),
+            activityBuckets.length ? h('div', {
+              'data-activity-bars': '1',
+              title: '最近 ' + activityBuckets.length + ' 天活动分布（按天）',
+              style: { display: 'flex', alignItems: 'flex-end', gap: 2, height: 16, marginLeft: 8 },
+            }, activityBuckets.map((bucket, index) => {
+              const peak = Math.max(1, ...activityBuckets.map((item) => Number(item.total) || 0));
+              const height = bucket.total ? Math.max(3, Math.round((Number(bucket.total) / peak) * 16)) : 2;
+              const color = bucket.builds && bucket.imports ? C_OK : (bucket.builds ? C_ACC : (bucket.imports ? C_WARN : C_L2));
+              return h('div', {
+                key: bucket.date || index,
+                title: `${bucket.date}：建库 ${bucket.builds || 0} 次 · MYOS 导入 ${bucket.imports || 0} 次`,
+                style: { width: 5, height, borderRadius: 1, background: color, opacity: bucket.total ? 0.9 : 0.35 },
+              });
+            })) : null,
             h('div', { style: { flex: 1 } }),
             activity.length ? h('button', {
               type: 'button',
               className: 'seeu-btn',
               style: { fontSize: 11, padding: '3px 8px' },
               onClick: async () => {
-                try { await post('/activity/clear', {}); setActivity([]); setActivitySummary(''); } catch { /* 忽略 */ }
+                try { await post('/activity/clear', {}); setActivity([]); setActivitySummary(''); setActivityBuckets([]); } catch { /* 忽略 */ }
               },
             }, '清空') : null),
           activity.length

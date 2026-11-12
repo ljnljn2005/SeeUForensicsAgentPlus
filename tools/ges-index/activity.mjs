@@ -81,10 +81,28 @@ export function summarizeActivity(entries, now = Date.now(), days = ACTIVITY_SUM
   let buildMsCount = 0
   let rows = 0
   let lastAt = ''
+  // 按天分桶（本地时区，最近 N 天，最后一天=今天），用于面板画小条形。
+  const dayMs = 24 * 60 * 60 * 1000
+  const todayStart = new Date(now)
+  todayStart.setHours(0, 0, 0, 0)
+  const buckets = []
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const d = new Date(todayStart.getTime() - i * dayMs)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    buckets.push({ date: key, builds: 0, imports: 0, total: 0 })
+  }
   for (const entry of list) {
     const at = Date.parse(String(entry.at ?? ''))
     if (!Number.isFinite(at) || at < since) continue
     if (!lastAt || at > Date.parse(lastAt)) lastAt = String(entry.at ?? '')
+    const entryDay = new Date(at)
+    entryDay.setHours(0, 0, 0, 0)
+    const bucket = buckets[days - 1 - Math.round((todayStart.getTime() - entryDay.getTime()) / dayMs)]
+    if (bucket) {
+      bucket.total += 1
+      if (entry.kind === 'build') bucket.builds += 1
+      else if (entry.kind === 'myos-import') bucket.imports += 1
+    }
     if (entry.kind === 'build') {
       builds += 1
       const duration = Number(entry.durationMs)
@@ -102,6 +120,7 @@ export function summarizeActivity(entries, now = Date.now(), days = ACTIVITY_SUM
     days: Math.max(1, Number(days) || ACTIVITY_SUMMARY_DAYS),
     builds,
     imports,
+    buckets,
     avgBuildMs: buildMsCount > 0 ? Math.round(buildMsTotal / buildMsCount) : null,
     rows,
     lastAt,

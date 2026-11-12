@@ -186,8 +186,11 @@ await sleep(700)
   report.activityRows = await ev("document.querySelectorAll('[data-activity-kind]').length")
   report.activityEmptyHint = /还没有活动记录/.test(t) || /建库或从 MYOS 导入后/.test(t)
   report.activitySummaryPresent = await ev("document.querySelectorAll('[data-activity-summary]').length")
+  // 第 36 轮：最近活动按天分布小条形（7 根，无历史时也可能存在空桶）。
+  report.activityBars = await ev("document.querySelectorAll('[data-activity-bars] > div').length")
+  report.activityBarColors = await ev("Array.from(document.querySelectorAll('[data-activity-bars] > div')).slice(0,3).map(el => el.title)")
   report.activitySummaryText = await ev("(() => { const el = document.querySelector('[data-activity-summary]'); return el ? el.textContent.trim() : '' })()")
-  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true) && report.activitySummaryPresent === 1
+  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true) && report.activitySummaryPresent === 1 && report.activityBars === 7
 }
 report.idxFilterOk = report.idxFilterChips === 4 && report.idxFilterClickMyos === true && report.idxFilterEmpty === true && report.idxFilterClickAll === true && report.idxFilterRestore === true
 report.rootText = text.slice(text.indexOf('取证案件索引'), text.indexOf('取证案件索引') + 900)
