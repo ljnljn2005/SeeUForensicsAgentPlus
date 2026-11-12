@@ -255,6 +255,26 @@ window.__ModuleLoader__.load({
           },
         })
       }
+      if (shell && typeof shell.openMountsWindow === 'function') {
+        actions.push({
+          key: 'mounts',
+          label: '镜像挂载',
+          title: '把 E01/DD/VMDK 等取证镜像挂成只读盘符（LovelyCarve CLI，挂载点仅在外壳运行期间有效）',
+          run: () => {
+            void shell.openMountsWindow()
+          },
+        })
+      }
+      if (shell && typeof shell.openSkillsWindow === 'function') {
+        actions.push({
+          key: 'skills',
+          label: '技能管理器',
+          title: '查看随包技能，导入 ZIP/文件夹技能包',
+          run: () => {
+            void shell.openSkillsWindow()
+          },
+        })
+      }
       const fmtBytes = (n) => (n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MiB' : n >= 1024 ? Math.round(n / 1024) + ' KiB' : String(n ?? 0) + ' B')
       const fmtTime = (value) => {
         const ts = Date.parse(String(value ?? ''))

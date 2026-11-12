@@ -366,14 +366,35 @@ function briefText(indexes) {
     lines.push('- 规模：检材 ' + evs.length + ' 个' + (totals ? ' · 记录 ' + totals.records + ' 条 · 实体 ' + totals.entities + ' 个' : '') + (ix.builtAt ? ' · 生成 ' + ix.builtAt : ''));
     if (timeRange?.f) lines.push('- 数据时间范围：' + timeRange.f + ' → ' + timeRange.t);
     if (evs.length) {
-      lines.push('', '| eid | 检材 | 名称 | 平台 | 记录数 |', '| --- | --- | --- | --- | --- |');
+      lines.push(
+        '',
+        '| eid | 检材名称 | 类型 | 平台 | 入库记录 | 火眼统计 | 原始文件 | 备注 |',
+        '| --- | --- | --- | --- | --- | --- | --- | --- |',
+      );
       for (const ev of evs.slice(0, 50)) {
-        lines.push('| ' + ev.eid + ' | 检材 ' + ev.eid + ' | ' + String(ev.name ?? '') + ' | ' + String(ev.platform ?? '') + ' | ' + (ev.recordCount ?? '') + ' |');
+        const thin = Number(ev.reportedRecordCount) >= 20 && Number(ev.recordCount ?? 0) < Number(ev.reportedRecordCount) / 2;
+        lines.push('| ' + ev.eid + ' | ' + String(ev.name ?? '') + ' | ' + String(ev.type ?? '') + ' | ' + String(ev.platform ?? '') + ' | ' + (ev.recordCount ?? '') + (thin ? ' ⚠' : '') + ' | ' + (ev.reportedRecordCount ?? '') + ' | ' + String(ev.sourcePath ?? '') + ' | ' + String(ev.remark ?? '').replace(/\|/g, '/') + ' |');
       }
-      lines.push('', '（记录数按本索引实际解析入库的行数统计，与火眼界面上的「记录数」口径不同；各检材之和等于上面的记录总数。）');
+      lines.push(
+        '',
+        '（「入库记录」是本索引实际解析入库的行数，「火眼统计」是火眼界面上的记录数，口径不同；⚠ 表示索引里几乎只剩元数据。）',
+      );
+      const thinEvs = evs.filter((ev) => Number(ev.reportedRecordCount) >= 20 && Number(ev.recordCount ?? 0) < Number(ev.reportedRecordCount) / 2);
+      if (thinEvs.length) {
+        lines.push('⚠ 索引覆盖不足：' + thinEvs.map((ev) => String(ev.name ?? ('检材 ' + ev.eid)) + '（入库 ' + (ev.recordCount ?? 0) + ' / 火眼 ' + (ev.reportedRecordCount ?? '?') + '）').join('、') + '。这些检材（手机全量提取 `pf`、磁盘镜像 `image` 等）的内容不在索引里，需按下面「取证定位规则」第 2 条处理。');
+      }
     }
     lines.push('');
   }
+  lines.push(
+    '## 取证定位规则（必须遵守）',
+    '',
+    '1. **设备信息类问题**（操作系统版本、机型、IMEI/序列号）：先看上面每行「备注」列和火眼设备信息表，备注里常直接写着机型/系统版本——有就直接回答，不要去找原始文件。',
+    '2. **索引没有数据时**（「入库记录」很小、带 ⚠）：说明该检材是手机全量提取（`pf`）或磁盘镜像（`image`），索引用不上。按顺序：① 先看这行「原始文件」路径（检材盘）和火眼解析结果（`ges` 命令，见 ges-case-index 技能）；② 需要镜像内容时，用外壳「工具 → 镜像挂载…」（快捷键 Ctrl+Shift+M）把镜像挂载成只读盘符后再分析，挂载清单在环境变量 `$SEEU_MOUNTS_FILE`；③ 让用户把原始检材文件拷到工作目录。',
+    '3. **禁止全盘递归搜索**：不要执行 `Get-ChildItem -Recurse C:\\`、`dir /s E:\\`、`find / -name ...` 这类命令——会卡死、污染现场，也违反取证规范。只允许列检材表里「原始文件」所在目录、挂载出来的盘符，或用户明确指出的目录。',
+    '4. **只在必要时读原始文件**：检材文件可能几 GB，不要整份复制/解压到工作目录；优先只读挂载，或按需读取单个文件。',
+    '',
+  );
   lines.push(BRIEF_END);
   return lines.join('\n') + '\n';
 }

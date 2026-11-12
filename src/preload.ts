@@ -197,6 +197,8 @@ const api = {
   openLogs: (): void => { ipcRenderer.send('seeu:open-logs') },
   openWorkspace: (): void => { ipcRenderer.send('seeu:open-workspace') },
   openLocalModelSettings: (): void => { ipcRenderer.send('seeu:open-settings') },
+  openMountsWindow: (): void => { ipcRenderer.send('seeu:open-mounts') },
+  openSkillsWindow: (): void => { ipcRenderer.send('seeu:open-skills') },
   quit: (): void => { ipcRenderer.send('seeu:quit') },
   // ── 技能管理（技能管理器页面专用；导入由主进程弹原生选择框）──
   skillsList: (): Promise<SeeuSkillSummary[]> =>

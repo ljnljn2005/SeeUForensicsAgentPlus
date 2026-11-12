@@ -94,7 +94,7 @@ export function evidences(db) {
   let rows = [];
   try {
     rows = db.prepare(`select eid,name,holder,person_name,platform,type,timezone,remark,
-        evidence_number,record_count,size_bytes,sha256 from evidence order by eid`).all();
+        evidence_number,record_count,size_bytes,sha256,source_path,storage_path from evidence order by eid`).all();
   } catch {
     rows = db.prepare('select eid,name,holder,platform,type,timezone from evidence order by eid').all();
   }
@@ -117,6 +117,8 @@ export function evidences(db) {
     recordCount: counts.get(Number(r.eid)) ?? r.record_count ?? null,
     reportedRecordCount: r.record_count ?? null,
     sizeBytes: r.size_bytes ?? null,
+    sourcePath: r.source_path ?? '',
+    storagePath: r.storage_path ?? '',
     sha256: r.sha256 ?? null,
     label: [r.name, r.person_name || r.holder, r.platform].filter(Boolean).join(' · '),
   }));

@@ -101,6 +101,15 @@ curl -s -G "$SEEU_INDEX_API/cross/files" --data-urlencode "sha256=<64位十六�
 输出约定：`truncated: true` + `next` 表示还有下一页（把 `next` 作为下一次的 `node`/`offset` 继续）；
 `citable: 0` 的记录不要写进证据引用。
 
+## 索引里没有数据时（全量提取 / 镜像类检材）
+
+`/evidences` 里每行有 `recordCount`（本索引实际入库行数）与 `reportedRecordCount`（火眼统计）。**`recordCount` 远小于 `reportedRecordCount`（例如 1 / 3065）说明索引里几乎只有元数据**——这类检材通常是 `type='pf'`（手机全量提取）或 `type='image'`（磁盘镜像），火眼没有导出 `data.csv` / `chat.txt` 叶子，索引必然查不到内容。这时：
+
+1. **先看元数据**：`remark` 常直接写着机型/系统版本/解析方式（例：`iPhone D331pAP/iOS17.1.1 全量提取`），设备信息类问题（系统版本、机型、IMEI）先看 `evidences[].remark` 与 `table name=device_info` 一类的结构化表，**不要为了找设备信息去翻文件系统**；
+2. **看原始文件路径**：`/evidences` 返回的 `sourcePath` 是检材盘上的原始文件（如 `W:\CHAN_MH_mobile.zip`），`storagePath` 是火眼内部路径；只允许列这些已知目录；
+3. **镜像/全量提取内容要挂载后再分析**：让用户打开外壳「工具 → 镜像挂载…」（`Ctrl+Shift+M`）把镜像挂载成只读盘符，挂载清单在 `$SEEU_MOUNTS_FILE`；也可以请用户把原始检材拷进工作目录；
+4. **禁止全盘递归搜索**：不要执行 `Get-ChildItem -Recurse C:\`、`dir /s E:\`、`find / -name …` —— 会卡死、污染现场，也违反取证规范。找不到就明确告诉用户"索引里没有该检材内容，需要挂载镜像/提供原始文件"，并给出下一步操作建议。
+
 ## 工作方式建议
 
 1. 先跑 `/evidences`（或 `/tree root`）把**检材名称 ↔ eid** 对上；用户问"某检材"时按名称子串定位，再展开 `ev:<eid>` 看应用与记录。回答里提到检材时写名称（可附 eid），不要只写"检材 3"；

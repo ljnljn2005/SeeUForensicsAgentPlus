@@ -371,6 +371,8 @@ function createWindow(): BrowserWindow {
     show: false,
     backgroundColor: COLORS.background,
     title: PRODUCT_NAME,
+    // 菜单栏常显（设置/镜像挂载/技能都在里面），不要让用户记快捷键或按 Alt。
+    autoHideMenuBar: false,
     icon: existsSync(windowIconPath()) ? windowIconPath() : undefined,
     webPreferences: {
       preload: preloadFile(),
@@ -383,6 +385,7 @@ function createWindow(): BrowserWindow {
   })
 
   win.once('ready-to-show', () => win.show())
+  win.setMenuBarVisibility(true)
 
   // dsh Web UI 的 document.title 来自官方客户端包（"DeepSeek Harness"），页面加载后
   // 会把窗口标题改写掉。这里拦截标题变更，让任务栏/标题栏始终显示本产品名。
@@ -732,6 +735,21 @@ function buildMenu(): void {
       ],
     },
     {
+      // 一级「设置」菜单：设置/镜像/技能都在这里，不用记快捷键。
+      label: '设置',
+      submenu: [
+        { label: '本地模型与工具路径…', accelerator: 'Ctrl+,', click: () => openLocalModelSettings() },
+        { label: '镜像挂载…', accelerator: 'Ctrl+Shift+M', click: () => openMountsWindow() },
+        { label: '技能管理器…', accelerator: 'Ctrl+Shift+S', click: () => openSkillsWindow() },
+        { type: 'separator' },
+        { label: '本地模型状态…', click: () => showLocalModelStatus() },
+        { label: '重新探测本地网关', click: () => { void probeLocalModelGateway('manual').then(() => { showLocalModelStatus() }) } },
+        { type: 'separator' },
+        { label: '打开配置文件目录', click: () => void shell.openPath(userDataDir()) },
+        { label: '打开日志目录', click: () => void shell.openPath(logDir()) },
+      ],
+    },
+    {
       label: '帮助',
       submenu: [
         { label: `关于 ${PRODUCT_NAME}`, click: () => showAbout() },
@@ -835,6 +853,8 @@ function registerIpc(): void {
   ipcMain.on('seeu:skills:open-dir', () => { void shell.openPath(userSkillsDir()) })
 
   ipcMain.on('seeu:open-settings', () => { openLocalModelSettings() })
+  ipcMain.on('seeu:open-mounts', () => { openMountsWindow() })
+  ipcMain.on('seeu:open-skills', () => { openSkillsWindow() })
 
   // 本地模型设置窗口。配置文件存在时以文件为准（生产路径）；
   // 只在 SEEU_LOCAL_MODEL_JSON 注入、没有文件时（开发/联调）也返回生效配置，

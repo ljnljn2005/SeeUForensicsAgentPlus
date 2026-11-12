@@ -159,7 +159,7 @@ try {
   })()`)
   report.actions = actions
   log('快捷入口', JSON.stringify(actions))
-  for (const key of ['index', 'model', 'workspace']) {
+  for (const key of ['index', 'model', 'workspace', 'mounts', 'skills']) {
     if (!actions.includes(key)) throw new Error(`缺少快捷入口 ${key}`)
   }
 
