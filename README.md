@@ -83,7 +83,9 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 - **真机网关联调通过（首次接真实端点）**：`deepseek-flash`（`http://10.10.250.120:8080/v1`）实测 —— `/v1/models` 117 ms（只有 id，无窗口字段）；流式首字节 86 ms、纯文本 4.3 s / 105 分片约 17 tok/s；**推理模型**（delta 先 `reasoning_content` 再 `content`，dsh 会显示成思考块）；流式工具调用 1.8 s、并行 2 个工具调用 1.6 s；`include_usage` 有效（可开「流式 token 用量」）。headless 真机 e2e：案件概览注入后模型 **5/5 检材全部答对**（明确说「取自概览表格，未推断」），`pwsh node -v` 工具闭环返回 `v24.18.0`；首字 23.8 s、首步输入 9,145 tokens（精简预设 + 概览注入）。
 - **网关不自报上下文窗口时给提示**：`deepseek-flash` 的 `/models` 只回 id，设置页拉取模型不会自动填窗口 → 探测结果新增 `noContextWindow` 标记，界面黄字提示「按表单里的 128k 使用；模型实际窗口更小会报 400，请按模型文档手填」；
 - **记录数口径修复**：会话概览里「规模：记录 22777 条」与检材表各行相加对不上（表内取的是火眼 `evidence.record_count`，如 3065/13718）→ `evidences()` 改为按索引内 `record` 行数统计（`recordCount`，本案 1/1/8,443/1/14,331，合计 22,777），火眼原值保留在 `reportedRecordCount`；会话概览表格下方加注说明口径；
-- **测试**：`npm test` **56/56**；新增 `npm run test:e2e:real-gateway`（`scripts/e2e/real-gateway-headless.mjs`，凭据走 `GW_BASE/GW_KEY/GW_MODEL` 环境变量，不落盘）。
+- **接入本机 LovelyMem V3 / LovelySpark CLI**（合并 Gitea 分支 `feat/local-lovely-cli`）：会话按需加载 `lovelymem-cli` / `lovelyspark-cli` 技能，通过现有 shell 调用，不新增工具 schema/服务/依赖；自动发现本机 CLI（环境变量 → 配置 → PATH → 注册表/已运行进程/快捷方式 → 常见目录），完整 stdout/stderr 落盘 `<工作区>/lovely-runs/`、模型只收限长预览；打包版把 `tools/lovely-cli/*.mjs` 放进 `app.asar.unpacked` 供 shell 调用。本机实测：LovelyMem **3.1.11**（engines `starmem`/`vol3`）、LovelySpark **0.3.20** 均通过包装器成功执行；新增 `npm run test:lovely`（23 例，含 dev/asar 两种模式下 host→dsh→shell 的环境隔离）；
+- **测试**：`npm test` **80/80**（56 + 23 lovely CLI + host 集成）；新增 `npm run test:e2e:real-gateway`（`scripts/e2e/real-gateway-headless.mjs`，凭据走 `GW_BASE/GW_KEY/GW_MODEL` 环境变量，不落盘）。
+
 ### v0.2.7 改了什么
 
 > 以下改动已进入 v0.2.7 安装包（v0.2.6 `44808cb` 之后的 2 个提交），打包态回归见 `docs/packaging.md`。

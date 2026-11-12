@@ -1766,3 +1766,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
   - **记录数口径**：会话概览「规模：记录 22777 条」与表内各行相加不一致（模型当场指出）。根因是 `evidences()` 取火眼 `evidence.record_count`（3065/3/13718/68/25669）。改为按索引内 `record` 行数统计（1/1/8443/1/14331，合计 22,777），火眼原值保留为 `reportedRecordCount`；`briefText()` 表格下加注「记录数按本索引实际解析入库的行数统计…各检材之和等于记录总数」。
 - 验证：`npm test` 56/56、`node scripts/build.mjs` OK、`settings-check`（dev mock）`ok:true`（`probeNoContextWindow:false`、`probeMismatch{131072,32768}`、`warmupOk` 等全绿）。
 - 遗留：真机只有 `deepseek-flash` 一个模型跑过（`qwen3.8-flash-next` 未测）；推理模型的首字 23.8 s 主要是模型侧推理，外壳只能靠「精简预设 + 概览注入 + 可关标题生成」压输入；`noContextWindow` 目前只在设置页提示，未按模型 id 预置窗口表。
+
+---
+
+## 20.58 集成本机 LovelyMem / LovelySpark CLI（合并 Gitea 分支 `feat/local-lovely-cli`）
+
+- 来源：Gitea 上他人分支 `feat/local-lovely-cli`（4 个提交：`820d402` 接入、`6c499f0` 原生验证文档、`b1f6b9d` Luxe/V3 兼容说明、`0b331a0` 自动发现），与 main 无冲突合并（`git merge origin/feat/local-lovely-cli`，main 侧 `e822eb5`… 后续全部提交保留）。
+- 功能：新增 `tools/lovely-cli/cli.mjs`（纯 Node 薄层：原生 argv、`--cli` 前缀、磁盘输出、有界预览）与 `discovery.mjs`（环境变量 → 配置 → PATH → 本机缓存 → 注册表/运行进程/快捷方式 → 常见目录，最多 5 层 3000 目录 2 秒）；两个新技能 `resources/forensics/skills/lovelymem-cli/SKILL.md`、`lovelyspark-cli/SKILL.md`（按需加载，不增加工具 schema）；`src/host.ts` 注入 `SEEU_LOVELY_CLI` / `SEEU_CLI_NODE` / `SEEU_LOVELY_CONFIG`，`src/paths.ts` 的 `lovelyCliEntry()` 兼容 `app.asar.unpacked`；`electron-builder.yml` 把两个 `.mjs` 同时放入 `files` 与 `asarUnpack`；`scripts/dev-web.mjs` 提供同样的开发态环境；`.gitignore` 加 `lovely-runs/`。
+- 本机真实验证：
+  - `npm run lovely -- status` 通过快捷方式发现 `E:\CTFTools\Forensics\...\Lovelymem\lovelymem.v3.exe` 与 `E:\CTFTools\Misc\综合工具箱\lovelyspark.exe`；
+  - 包装器实跑：`lovelymem -- version` → `{"ok":true,"status":"completed","application":"Lovelymem","version":"3.1.11","engines":["starmem","vol3"]}`（10.0 s）；`lovelyspark -- --version` → `lovelyspark 0.3.20`（12.5 s）；产物落 `<工作区>/lovely-runs/<tool>-<uuid>/`（request.json/stdout.txt/stderr.txt/result.json）。
+  - 坑：MSYS 下传 `SEEU_WORKSPACE="$PWD/..."` 会得到 `D:\d\Coding\...`（`$PWD` 是 `/d/...`），本机验证时用 Windows 路径；应用内由 `src/host.ts` 直接传 Windows 路径，不受影响。
+- 回归：`npm run test:lovely` **23/23**（含 `host → dsh 环境过滤 → shell → CLI` 的 dev/asar 两种模式）；`npm test` **80/80**；`node scripts/build.mjs` OK；`npm run check:overlay` OK。
+- 文档：`docs/lovely-cli.md`（分支自带，含发现顺序/缓存/失败处理）；README §2 顶部加接入说明、v0.2.8 段加本项与测试数。
+- 遗留：本机未做真实内存镜像分析（`doctor`/`plugins` 会拉起 V3 进程，耗时与授权取决于本机），只验证到 `version`；Luxe 2.5.0 的 `--cli` 会启动 GUI，不视为 V3 兼容；模型侧「按技能主动调用」只验证了技能文件落盘与 shell 环境，未跑真实模型会话（留给下次真机联调）。
