@@ -841,3 +841,23 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - `skills-check --exe "<win-unpacked exe>"`（`SEEU_SKILLS_E2E_PORT=9498`）→ `ok:true`：preload 7 个技能方法齐全，`skillsList()` 返回 7 个随包技能，含 `lovelycarve-forensics`（4 个文件）。
 - 排障：打包过程中 `app.asar` 会被 electron-builder 重写，**在 NSIS/portable 阶段读 asar 可能抽到半成品**（`extractFile` 报 `was not found`；等 job 结束即正常）；`SEEU_UI_EXE` 必须 Windows 路径。
 - 遗留：真实 LovelyCarve + 真实镜像未跑（本机没装，挂载用假 CLI 验协议层）；打包态真机 UI 回归仍建议用 dev Electron。
+
+### v0.3.2 回归验证
+
+- 版本：`0.3.2`（随包 4 个 dsh 插件 + 流量/日志/内存三预设）。
+- 产物（Windows x64、无签名；`npx electron-builder --win --x64 -c.directories.output=release-032b`）：
+  - `release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B；目录版总计 **1,109,515,767 B**（≈1.03 GiB）
+  - `resources/app.asar` **425,164,539 B（34,094 entries）** —— 随包 billion-context / dsh-context / dsh-better-sidebar / dsh-gitbash-shell 让 asar 从 169MB 涨到 425MB
+  - NSIS **281,504,620 B**（blockmap 292,860 B）；portable **236,213,254 B**
+- asar 自检 `.probe/asar-032-check.mjs`：**58 项全 true、missing:[]**（含 bundledPlugins、pluginsWriteProfile、pluginsSkipSwitch、analysisPresets、skillSetInstall、hostSkillSetEnv、retiredSkills、fastctxUnpacked、skill-sets 三份 SKILL.md）。
+- 启动验证（`SEEU_DEV_MULTI=1`）：目录版 `verify-launch --port 9503` → `ok:true, elapsedMs:6130`；portable `--port 9504` → `ok:true, elapsedMs:49649`。
+- 打包态 e2e（`SEEU_UI_EXE` 用 Windows 路径、隔离 home/userData）：
+  - `m2-ui-check` → `m2ok:true, errors:[]`
+  - `settings-check --exe` → `ok:true`（`toolsRows:3`、`pulledContextWindow:"32768"`、`warmupOk:true`、`probeNoContextWindow:false`、`lightShell:true`、`errors:[]`）
+  - `plugins-check --exe` → `ok:true`（bundles 6 项、界面「上下文洞察 / 插件」、日志 `dsh plugins: 已补 …`）
+  - `skills-check --exe` → `ok:true`（5 个通用技能；`skill-sets/{traffic,log,memory}` 含 lovelyspark/lovelymem；`leaked:[]`）
+- 坑（本轮首次打包后又重打了一次）：
+  - overlay 三预设的 `customSkillDirs` 一开始误写成 `process.env.SEU_SKILL_SET_*`（少一个 E），而外壳注入的是 `SEEU_SKILL_SET_*`；旧 `check-overlay` 与 `tests/presets-config.test.mjs` 抄了同一个错名，所以两边都"通过"却运行时不生效。现三处统一为 `SEEU_SKILL_SET_*`（提交 `ffc7184`）。
+  - `.probe/asar-032-check.mjs` 的 `briefCountNote` 检查原先匹配旧文案，实际 bundle 文案是「（「入库记录」是本索引实际解析入库的行数…）」，改为匹配「本索引实际解析入库的行数」。
+  - 打包态读 asar 仍在 NSIS/portable 阶段失败（`was not found`），等 job 结束再验。
+- 遗留：`release/` 里 0.3.1 portable 因正在运行无法删除（`Device or resource busy`）；三预设的技能注入目前只有配置层校验（`dump-config` 打印 `!!js` 表达式字符串），运行时求值依赖 dsh loader 的 `with (ctx) eval`（已读源码确认 `process` 可达），但没有 UI 级断言 —— headless profile 无 `agentPresets` 服务。

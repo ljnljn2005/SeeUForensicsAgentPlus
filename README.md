@@ -62,23 +62,24 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.1**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.3.2**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,954,851 B ≈ 767 MiB） |
-| `release/win-unpacked/resources/app.asar` | 169,110,408 B（19,686 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的 MYOS MCP 行） |
-| `release/SeeUForensicsAgentPlus-0.3.1-x64.exe`（NSIS 安装包） | 212,015,610 B（blockmap 221,605 B） |
-| `release/SeeUForensicsAgentPlus-0.3.1-x64-portable.exe` | 189,611,751 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,109,515,767 B ≈ 1.03 GiB，含随包 dsh 插件） |
+| `release/win-unpacked/resources/app.asar` | 425,164,539 B（34,094 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的三预设 + MYOS MCP 行） |
+| `release/SeeUForensicsAgentPlus-0.3.2-x64.exe`（NSIS 安装包） | 281,504,620 B（blockmap 292,860 B） |
+| `release/SeeUForensicsAgentPlus-0.3.2-x64-portable.exe` | 236,213,254 B |
 
-实测冷启动到 dsh UI：目录版 6889 ms；portable 首次 37.9s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
+实测冷启动到 dsh UI：目录版 **6130 ms**；portable 首次 49.6s（先要把 ~1.0GB 解包到 `%TEMP%`，属于预期）。
+
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-> 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.2.9-x64-portable.exe` 与 `SeeUForensicsAgentPlus-0.3.0-x64-portable.exe`，因为打包时它们正在运行、文件被占用无法删除；不影响 0.3.1 的产物。
+> 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.3.1-x64-portable.exe`，因为打包时它正在运行、文件被占用无法删除；不影响 0.3.2 的产物。
 
-### v0.3.2 改了什么（未打包）
+### v0.3.2 改了什么
 
 - **随包 dsh 插件（预打包，离线可用）**：安装包现在自带并默认启用 4 个 dsh 插件 —— `billion-context`（上下文压缩/ACP）、`dsh-context`（上下文洞察面板）、`dsh-better-sidebar`（侧栏/任务卡等界面增强）、`dsh-gitbash-shell`（Windows 上的 bash 工具：`bash`/`gitbash_native`/`gitbash_to_native_path`）。启动时外壳会把这些插件写进 `<DSH_HOME>/profiles/web/package.json` 的 `dsh.profile.bundles`（保留用户已有 bundle 与依赖，幂等；`SEEU_DISABLE_DSH_PLUGINS=1` 可跳过），插件代码随 `node_modules` 进 `app.asar`，不需要联网安装。
 - **实现**：新增 `tools/dsh-plugins.mjs`（纯 JS：`BUNDLED_DSH_PLUGINS`、`mergePluginBundles`、`installBundledPluginBundles`，坏清单只报错不覆盖）与 `src/dsh-plugins.ts` 薄层；`src/main.ts` 在 `startHost()` 里写清单并记录日志 `dsh plugins: … → <manifestPath>`；`electron-builder.yml` 把 `node_modules/@dsh-ops/fastctx-win32-x64/**` 放进 `asarUnpack`（`bin/fastctx.exe` 需要真实路径）。
@@ -87,7 +88,8 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 - **已知提示**：`billion-context` 对 dsh `0.2.2-rc.1` 只打警告（其最新适配版本是 `0.2.0-rc.2`），功能实测正常；`dsh-context`/`dsh-better-sidebar` 的 peer 依赖要求 `0.2.2-rc.2`，安装时用了 `--legacy-peer-deps`（运行时未发现异常）。
 - **新增三套分析预设（按预设注入技能）**：会话预设新增「流量分析（Traffic）」「日志分析（Log）」「内存分析（Memory）」。前两个带 `lovelyspark-cli` 技能（抓包/网络/日志取证），内存分析带 `lovelymem-cli`（内存镜像、进程、服务、注册表等）；原「取证分析（Forensics）」与「获取分析（本地模型精简）」不再注入这两个 CLI 技能（`lovelycarve-forensics` 仍留在取证预设，供镜像挂载后的磁盘分析使用）。
 - **实现**：随包技能拆成 `resources/forensics/skills/`（通用：案例索引、证据链、LovelyCarve 等）与 `resources/forensics/skill-sets/{traffic,log,memory}/`；新增 `tools/skill-sets.mjs` —— `installSkillSet()` 把整组复制到 `<DSH_HOME>/skill-sets/<id>`（写 `.seeu-skill-set.json` 指纹，幂等），`removeRetiredSkills()` 从旧的 `<DSH_HOME>/skills` 里清走 `lovelymem-cli`/`lovelyspark-cli`（升级迁移）；`src/skills.ts` 安装随包技能时一并安装三组并执行迁移；`src/host.ts` 注入 `SEEU_SKILL_SET_TRAFFIC` / `SEEU_SKILL_SET_LOG` / `SEEU_SKILL_SET_MEMORY`；三个预设在 overlay 里各用独立的 `skill-filesystem` 实例（`includeDefaultRoots: false` + `customSkillDirs` 指向对应环境变量），因此每个预设只看到自己那组技能。
-- **测试**：`npm test` **99/99**（新增 `tests/skill-sets.test.mjs` 4 例、`tests/presets-config.test.mjs` 4 例：用 js-yaml 自定义 `!!js` 标量解析 overlay，断言三预设的 id/名称/顺序、技能根引用、取证预设不引用分组根、随包目录布局）；`check:overlay` 扩展为逐预设校验（名称、技能根、`customSkillDirs`、`tool-fs` 只读）；`skills-check` 断言 `skillsList` 只剩 5 个通用技能、三组技能各就位且没有泄漏进默认技能根。
+- **打包与打包态回归（v0.3.2）**：NSIS `281,504,620 B`、portable `236,213,254 B`、`app.asar` `425,164,539 B`（34,094 entries —— 随包 4 个 dsh 插件让 asar 从 169MB 涨到 425MB，属于预期）；`.probe/asar-032-check.mjs` **58 项全 true**（新增 `bundledPlugins` / `pluginsWriteProfile` / `analysisPresets` / `skillSetInstall` / `hostSkillSetEnv` / `retiredSkills` / `fastctxUnpacked`）；打包态 `m2-ui-check`（`m2ok:true, errors:[]`）、`settings-check`（`ok:true`：工具路径 3 行 + 预热 + 浅色）、`plugins-check`（`ok:true`：profile bundles 6 项、页面「上下文洞察 / 插件」）、`skills-check`（`ok:true`：5 个通用技能、三组技能就位、`leaked:[]`）全绿；目录版冷启动 **6130 ms**、portable **49.6 s**；`npm test` **100/100**、`npm run check:overlay` OK。
+- **测试**：`npm test` **100/100**（新增 `tests/skill-sets.test.mjs` 4 例、`tests/presets-config.test.mjs` 4 例：用 js-yaml 自定义 `!!js` 标量解析 overlay，断言三预设的 id/名称/顺序、技能根引用、取证预设不引用分组根、随包目录布局）；`check:overlay` 扩展为逐预设校验（名称、技能根、`customSkillDirs`、`tool-fs` 只读）；`skills-check` 断言 `skillsList` 只剩 5 个通用技能、三组技能各就位且没有泄漏进默认技能根。
 
 ### v0.3.1 改了什么
 

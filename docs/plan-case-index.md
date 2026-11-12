@@ -1940,3 +1940,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - **验证**：`node scripts/build.mjs` OK；`npm test` 99/99；`check:overlay` OK；`node scripts/e2e/skills-check.mjs` `ok:true`（三组技能目录与 `.seeu-skill-set.json` 均在，默认技能根无 lovelymem/lovelyspark）。
 - **坑与放弃的验证**：① headless profile 没有 `agentPresets` 服务，三预设都停在 `pending (waiting for service: agentPresets)`，所以删掉了 `scripts/e2e/presets-check.mjs`，改用「配置层测试 + check:overlay」；② Electron UI 探针（`.probe/ui-preset-probe.mjs`）在首次启动的「选择工作区」页停住（没有会话就没有预设选择器），且 `!` 需要约 27 s，放弃 UI 级验证；③ `check-overlay` 里截 preset 段的函数原本写死 `preset-standard`，扩展时漏改签名，导致三个新预设全部误报，已改为 `presetSection(dump, id)`。
 - 遗留：预设选择器只在「新建会话」时出现，打包后需要人工点一遍确认三个新预设可见可用；真实 LovelySpark/LovelyMem CLI 仍需用户手动指定路径。
+
+## 20.70 v0.3.2 打包：随包 4 插件 + 三分析预设（已交付）
+
+- 版本 `0.3.2`；提交 `e252569`（预设+插件）与 `ffc7184`（环境变量名修复）。
+- 打包两次：第一次产物 overlay 里技能根环境变量名是 `SEU_SKILL_SET_*`（少一个 E），与 `src/host.ts` 注入的 `SEEU_SKILL_SET_*` 不一致（旧 `check-overlay` 与 `tests/presets-config.test.mjs` 抄了同一个错名所以都通过），修正后重新打 `release-032b`。
+- 最终产物：目录版总计 1,109,515,767 B；`app.asar` 425,164,539 B / **34,094 entries**（169MB → 425MB，插件依赖闭包所致）；NSIS 281,504,620 B（blockmap 292,860 B）；portable 236,213,254 B。
+- 自检：`.probe/asar-032-check.mjs` 58 项全 true；启动 6130 ms / portable 49,649 ms。
+- 打包态 e2e：`m2-ui-check` `m2ok:true`；`settings-check` `ok:true`（toolsRows 3）；`plugins-check` `ok:true`（bundles 6、上下文洞察/插件 UI、日志 `dsh plugins:`）；`skills-check` `ok:true`（5 通用技能 + 三组技能 + `leaked:[]`）。
+- `npm test` 100/100、`check:overlay` OK。
+- 遗留：三预设技能注入只有配置层校验（`dump-config` 不展开 `!!js`；headless 无 `agentPresets`），运行时求值依赖 dsh loader 的 `with (ctx) eval`；真实 LovelyCarve/LovelySpark/LovelyMem 未跑真机分析；0.3.1 portable 被占用暂留 `release/`。
