@@ -114,12 +114,14 @@ function startBuild(args) {
   const running = findRunningBuild(jobs.values(), dir);
   if (running) return { jobId: running.id, dir, existing: true };
   const job = { id: randomUUID(), dir, status: 'running', phase: 'probe', completed: 0, total: 0, percent: 0, startedAt: Date.now() };
+  job.abort = new AbortController();
   jobs.set(job.id, job);
   while (jobs.size > MAX_JOBS) jobs.delete(jobs.keys().next().value);
   buildIndex({
     caseDir: dir,
     concurrency: Number(args.concurrency) || 3,
     rebuild: args.rebuild !== false,
+    signal: job.abort.signal,
     onProgress: (p) => {
       job.phase = p.phase ?? job.phase;
       if (typeof p.completed === 'number') job.completed = p.completed;
@@ -138,6 +140,12 @@ function startBuild(args) {
     job.brief = await refreshBrief();
     job.elapsedMs = Date.now() - job.startedAt;
   }).catch((error) => {
+    if (error?.code === 'E_CANCELLED') {
+      job.status = 'cancelled';
+      job.phase = 'cancelled';
+      job.elapsedMs = Date.now() - job.startedAt;
+      return;
+    }
     job.status = 'failed';
     job.code = error instanceof IndexBuildError ? error.code : (error?.code ?? 'E_UNKNOWN');
     job.error = error?.message ?? String(error);
@@ -153,11 +161,20 @@ async function handle(req, res) {
     if (req.method === 'POST' && path === '/build') {
       return send(res, 200, startBuild(await readBody(req)));
     }
+    if (req.method === 'POST' && path === '/build/cancel') {
+      const body = await readBody(req);
+      const job = jobs.get(String(body.job ?? ''));
+      if (!job) return send(res, 404, { error: 'job 不存在' });
+      if (job.status !== 'running') return send(res, 409, { error: `任务已结束（${job.status}）` });
+      job.abort.abort();
+      return send(res, 200, { ok: true, jobId: job.id });
+    }
     if (req.method === 'GET' && path === '/build') {
       const job = jobs.get(url.searchParams.get('job') ?? '');
       if (!job) return send(res, 404, { error: 'job 不存在' });
       // 运行中的任务没有落盘的 elapsedMs，这里补实时值；同时附带可直接渲染的中文进度。
-      return send(res, 200, { ...job, progress: describeBuildProgress(job) });
+      const { abort, ...rest } = job;
+      return send(res, 200, { ...rest, progress: describeBuildProgress(job) });
     }
     if (req.method === 'GET' && path === '/list') {
       const dirs = [

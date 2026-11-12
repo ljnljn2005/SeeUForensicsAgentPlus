@@ -13,7 +13,7 @@ test('buildPhaseLabel 覆盖各阶段并回退原文', () => {
   assert.equal(buildPhaseLabel('done'), '完成')
   assert.equal(buildPhaseLabel('custom-phase'), 'custom-phase')
   assert.equal(buildPhaseLabel(undefined), '建库')
-  assert.equal(Object.keys(BUILD_PHASE_LABELS).length, 6)
+  assert.equal(Object.keys(BUILD_PHASE_LABELS).length, 7)
 })
 
 test('formatDuration 输出紧凑中文时长', () => {
@@ -72,4 +72,13 @@ test('同一目录已有运行中任务时复用，不重复建库', async () =>
   assert.equal(findRunningBuild(jobs, dir)?.id, 'run-1')
   assert.equal(findRunningBuild(jobs, 'E:/cases/c'), null)
   assert.equal(findRunningBuild([], dir), null)
+})
+
+test('cancelled 任务给出「已取消，旧索引不变」摘要；running 才可取消', () => {
+  const running = describeBuildProgress({ status: 'running', phase: 'fetch', startedAt: 0, elapsedMs: 8000 })
+  assert.equal(running.cancellable, true)
+  const cancelled = describeBuildProgress({ status: 'cancelled', phase: 'cancelled', startedAt: 0, elapsedMs: 8000 })
+  assert.equal(cancelled.cancellable, false)
+  assert.equal(cancelled.hint, '')
+  assert.match(cancelled.summary, /^已取消建库（用时 8\.0 秒），旧索引保持不变$/)
 })

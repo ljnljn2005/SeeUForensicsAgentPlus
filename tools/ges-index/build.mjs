@@ -81,14 +81,18 @@ export async function buildIndex(opts = {}) {
   const {
     caseNumber = null, caseDir = null, out = null, concurrency = 3,
     rebuild = false, resume = false, limitLeaves = null,
-    onProgress = () => {}, log = () => {},
+    onProgress = () => {}, log = () => {}, signal = null,
   } = opts;
   const progress = (p) => { try { onProgress(p); } catch { /* 进度回调不应影响建库 */ } };
   const startedAt = Date.now();
   const t0 = Date.now();
   const nowIso = new Date().toISOString();
 
+  const assertNotAborted = () => {
+    if (signal?.aborted) throw new IndexBuildError('E_CANCELLED', '建库已取消');
+  };
   progress({ phase: 'probe', message: '探测案件', elapsedMs: 0 });
+  assertNotAborted();
   const cases = await listCases();
   if (!cases.length) throw new IndexBuildError('E_NO_CASE', '没有找到任何火眼案件（ges case ls 为空）');
   let target;
@@ -121,6 +125,7 @@ export async function buildIndex(opts = {}) {
   if (rebuild) rmSync(buildingPath, { force: true });
   const resuming = !!resume && existsSync(buildingPath);
 
+  assertNotAborted();
   progress({ phase: 'enumerate', message: '枚举叶子', elapsedMs: Date.now() - t0 });
   const csvLeaves = await globAll('**/data.csv', CASE_DATA_ROOT);
   const chatLeaves = await globAll('**/chat.txt', CASE_DATA_ROOT);
@@ -277,6 +282,7 @@ export async function buildIndex(opts = {}) {
 
   async function worker() {
     while (true) {
+      if (signal?.aborted) return;
       const idx = cursor++;
       if (idx >= todo.length) return;
       const leaf = todo[idx];
@@ -320,6 +326,12 @@ export async function buildIndex(opts = {}) {
   }
 
   await Promise.all(Array.from({ length: Math.max(1, Math.min(8, concurrency)) }, () => worker()));
+  if (signal?.aborted) {
+    // 取消：丢掉半成品库，旧索引（case-index.db）保持不动。
+    try { db.close(); } catch { /* 忽略 */ }
+    rmSync(buildingPath, { force: true });
+    throw new IndexBuildError('E_CANCELLED', '建库已取消');
+  }
   log(`[build] 抓取完成，用时 ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
   // 检材名称/持有人/备注/编号以火眼案件配置（<案件目录>/<案件名>.gec）为准；

@@ -302,7 +302,7 @@ window.__ModuleLoader__.load({
       return h('button', {
         type: 'button',
         className: buttonClass(o.primary) + (o.className ? ` ${o.className}` : ''),
-        style: { ...(o.primary ? S.btnPrimary : S.btn), ...(o.style ?? {}) },
+        style: { ...(o.primary ? S.btnPrimary : S.btn), ...(o.danger ? { color: '#F5A524' } : {}), ...(o.style ?? {}) },
         onClick,
         disabled: !!o.disabled,
         title: o.title,
@@ -1394,7 +1394,8 @@ window.__ModuleLoader__.load({
             if (job.status === 'done') {
               await scan(target);
               if (job.result?.db) { setDb(job.result.db); loadNode(job.result.db, 'root'); }
-            } else setError(`${job.code ?? 'E_UNKNOWN'}：${job.error ?? '建库失败'}`);
+            } else if (job.status === 'cancelled') setError('');
+            else setError(`${job.code ?? 'E_UNKNOWN'}：${job.error ?? '建库失败'}`);
           };
           poll();
         } catch (e) {
@@ -1732,7 +1733,14 @@ window.__ModuleLoader__.load({
               h('div', { style: { height: 6, borderRadius: 3, background: C_L2, overflow: 'hidden' } },
                 h('div', { style: { height: '100%', width: `${percent}%`, borderRadius: 3, background: C_ACC, transition: 'width .3s' } })),
               bp?.hint ? h('div', { style: { ...S.muted, fontSize: 11 } }, bp.hint) : null,
-              bp?.summary ? h('div', { style: { ...S.muted, fontSize: 11, color: C_ACC } }, bp.summary) : null);
+              bp?.summary ? h('div', { style: { ...S.muted, fontSize: 11, color: C_ACC } }, bp.summary) : null,
+              bp?.cancellable ? h('div', { style: S.row },
+                actionButton('取消建库', async () => {
+                  try {
+                    await post('/build/cancel', { job: progress.id });
+                    setProgress({ ...progress, message: '正在取消…' });
+                  } catch (e) { setError(String(e.message ?? e)); }
+                }, { danger: true })) : null);
           })() : null,
           indexes.length
             ? h('div', { style: { ...S.card, gap: 4 } },

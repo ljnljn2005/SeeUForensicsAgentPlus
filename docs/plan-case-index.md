@@ -2190,3 +2190,26 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 **验证**：`m2-ui-check`（dev，隔离 home）→ `indexMeta:true`、`indexMetaText:"索引：22,776 条记录 · 8,191 个实体 · 360 个检材文件 · 建库 2026-11-12 23:55（用时 3 分 3 秒） · 库 63.0 MiB"`、`m2ok:true`、`errors:[]`。
 
 **遗留**：卡片未提供「重建」快捷按钮（目前要先选中库再点建库）；过期阈值未做成设置项。
+
+### 20.89 建库可取消（第 11 轮）
+
+**需求**：真实案件全量重建 3–5 分钟，误点/等不及只能干等或杀进程。
+
+**实现**
+- `tools/ges-index/build.mjs`：`buildIndex({ ..., signal })`，内部 `assertNotAborted()`（探测后、枚举后、worker 每轮开头、抓取 Promise.all 之后）；取消时 `db.close()` + `rmSync(buildingPath)` + 抛 `IndexBuildError('E_CANCELLED')`（旧 `case-index.db` 不动）。
+- `plugins/seeu-case-index/index.js`：job 持 `AbortController`，`signal` 传入；新增 `POST /build/cancel`（404 无任务 / 409 已结束 / 200 已请求取消）；catch 里 `E_CANCELLED` → `status:'cancelled'`，`GET /build` 不再序列化 `abort`。
+- `plugins/seeu-case-index/client.js`：进度卡运行时显示「取消建库」（琥珀色），仍按 700 ms 轮询；`cancelled` 清空 busy 不报错。
+- `tools/ges-index/progress.mjs`：`BUILD_PHASE_LABELS.cancelled='已取消'`、`cancellable=running`、摘要「已取消建库（用时 X），旧索引保持不变」。
+- 单测 `tests/progress.test.mjs` +1 例（共 7 例）。
+
+**坑**
+1. `GET /build` 直接 `{...job}` 会把 `AbortController` 也塞进响应（序列化成 `{}`）→ 解构剔掉 `abort`。
+2. 取消不是抢占式：只有走到检查点才生效，若正卡在一次 `ges` 调用上，要等它返回（实测 25 秒才变成 `cancelled`）。
+3. 取消发生在建库中期时要清理 `.building`，否则下次「重跑」会 resume 到半成品；清理后旧库仍可查询。
+
+**验证**（dev 预览直连插件 API）：
+- `POST /build` → 9 秒后 `POST /build/cancel` → 轮询到 `status:"cancelled"`、`summary:"已取消建库（用时 25 秒），旧索引保持不变"`；
+- `.seeu-index/` 下无 `building` 文件；`case-index.db` 的 mtime/大小不变（1794498935 / 66,080,768 B）；
+- `npm test` 137/137。
+
+**遗留**：取消后没有「保留半成品以续跑」入口；取消按钮只在建库进度卡出现。

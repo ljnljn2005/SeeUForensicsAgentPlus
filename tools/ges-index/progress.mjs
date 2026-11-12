@@ -12,6 +12,7 @@ export const BUILD_PHASE_LABELS = {
   finalize: '校验与替换',
   done: '完成',
   failed: '失败',
+  cancelled: '已取消',
 };
 
 const RUNNING_HINT_MS = 90_000;
@@ -70,6 +71,8 @@ export function describeBuildProgress(job, now = Date.now()) {
     const sizeBytes = Number(job?.result?.manifest?.sizeBytes) || 0;
     summary = `建库完成：${groupDigits(counts.records)} 条记录 · ${groupDigits(counts.entities)} 个实体 · 用时 ${elapsedText}`;
     if (sizeBytes > 0) summary += ` · 索引 ${(sizeBytes / 1048576).toFixed(1)} MiB`;
+  } else if (status === 'cancelled') {
+    summary = `已取消建库（用时 ${elapsedText}），旧索引保持不变`;
   } else if (status === 'failed') {
     summary = `建库失败（${job?.code ?? 'E_UNKNOWN'}）：${job?.error ?? ''}`.trim();
   }
@@ -85,6 +88,7 @@ export function describeBuildProgress(job, now = Date.now()) {
     percent,
     hint,
     summary,
+    cancellable: running,
   };
 }
 
