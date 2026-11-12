@@ -108,9 +108,9 @@ function main() {
 
     // 新增的三个分析预设：各自只引用自己那组技能根，工具面保持只读取证。
     const analysisPresets = [
-      ['preset-traffic', '流量分析（Traffic）', 'SEU_SKILL_SET_TRAFFIC'],
-      ['preset-log', '日志分析（Log）', 'SEU_SKILL_SET_LOG'],
-      ['preset-memory', '内存分析（Memory）', 'SEU_SKILL_SET_MEMORY'],
+      ['preset-traffic', '流量分析（Traffic）', 'SEEU_SKILL_SET_TRAFFIC'],
+      ['preset-log', '日志分析（Log）', 'SEEU_SKILL_SET_LOG'],
+      ['preset-memory', '内存分析（Memory）', 'SEEU_SKILL_SET_MEMORY'],
     ]
     for (const [id, label, env] of analysisPresets) {
       const section = presetSection(dump, id)
@@ -126,7 +126,7 @@ function main() {
     }
     // 取证预设不应引用分组技能根（lovelyspark/lovelymem 只属于分析预设）。
     for (const id of ['preset-standard', 'preset-seeu-lite']) {
-      if (/SEU_SKILL_SET_/.test(presetSection(dump, id))) fail(`${id} 不应引用分组技能根`)
+      if (/SEEU_SKILL_SET_/.test(presetSection(dump, id))) fail(`${id} 不应引用分组技能根`)
     }
 
     const lineCount = dump.trimEnd().split(/\r?\n/).length

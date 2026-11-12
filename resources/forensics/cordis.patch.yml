@@ -405,7 +405,7 @@
           - id: skill-filesystem
             name: '@deepseek-ai/dsh-skill-filesystem'
             config:
-              customSkillDirs: !!js "(process.env.SEU_SKILL_SET_TRAFFIC ? [process.env.SEU_SKILL_SET_TRAFFIC] : [])"
+              customSkillDirs: !!js "(process.env.SEEU_SKILL_SET_TRAFFIC ? [process.env.SEEU_SKILL_SET_TRAFFIC] : [])"
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: tool-ask-user
@@ -481,7 +481,7 @@
           - id: skill-filesystem
             name: '@deepseek-ai/dsh-skill-filesystem'
             config:
-              customSkillDirs: !!js "(process.env.SEU_SKILL_SET_LOG ? [process.env.SEU_SKILL_SET_LOG] : [])"
+              customSkillDirs: !!js "(process.env.SEEU_SKILL_SET_LOG ? [process.env.SEEU_SKILL_SET_LOG] : [])"
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: tool-ask-user
@@ -557,7 +557,7 @@
           - id: skill-filesystem
             name: '@deepseek-ai/dsh-skill-filesystem'
             config:
-              customSkillDirs: !!js "(process.env.SEU_SKILL_SET_MEMORY ? [process.env.SEU_SKILL_SET_MEMORY] : [])"
+              customSkillDirs: !!js "(process.env.SEEU_SKILL_SET_MEMORY ? [process.env.SEEU_SKILL_SET_MEMORY] : [])"
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
           - id: tool-ask-user

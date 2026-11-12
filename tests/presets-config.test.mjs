@@ -55,9 +55,9 @@ test('新增三个分析预设，顺序与名称正确', () => {
 
 test('流量/日志预设注入 lovelyspark-cli 技能根，内存预设注入 lovelymem-cli', () => {
   const expect = {
-    'preset-traffic': 'SEU_SKILL_SET_TRAFFIC',
-    'preset-log': 'SEU_SKILL_SET_LOG',
-    'preset-memory': 'SEU_SKILL_SET_MEMORY',
+    'preset-traffic': 'SEEU_SKILL_SET_TRAFFIC',
+    'preset-log': 'SEEU_SKILL_SET_LOG',
+    'preset-memory': 'SEEU_SKILL_SET_MEMORY',
   }
   for (const [id, env] of Object.entries(expect)) {
     const dirs = skillPlugin(byId.get(id)).config.customSkillDirs
