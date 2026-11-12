@@ -341,9 +341,9 @@ try {
   report.toolsSectionVisible = await evaluate(client, `(() => {
     const rows = document.querySelectorAll('.tools .tool')
     const ids = [...rows].map((row) => row.getAttribute('data-tool'))
-    return rows.length === 2 && ids.join(',') === 'lovelymem,lovelyspark' && document.getElementById('btn-tools-save') !== null
+    return rows.length === 3 && ids.join(',') === 'lovelymem,lovelyspark,lovelycarve' && document.getElementById('btn-tools-save') !== null
   })()`)
-  if (report.toolsRows !== 2 || report.toolsSectionVisible !== true) {
+  if (report.toolsRows !== 3 || report.toolsSectionVisible !== true) {
     throw new Error('工具路径区渲染异常：rows=' + report.toolsRows + ' visible=' + report.toolsSectionVisible)
   }
   const memExe = join(HOME, 'fake-lovelymem.exe')

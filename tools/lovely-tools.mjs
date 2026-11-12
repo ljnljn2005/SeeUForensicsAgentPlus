@@ -29,6 +29,12 @@ export const LOVELY_TOOL_SPECS = [
     env: 'SEEU_LOVELYSPARK_EXE',
     hint: '选择 lovelyspark.exe（用于流量包分析）。',
   },
+  {
+    id: 'lovelycarve',
+    label: 'LovelyCarve CLI',
+    env: 'SEEU_LOVELYCARVE_CLI',
+    hint: '选择 lovelycarve-cli.exe（随 LovelyCarve 安装包提供，用于镜像挂载/分区解析；不是 GUI 的 LovelyCarve.exe）。',
+  },
 ]
 
 /** 与 cli.mjs 的 configPath() 保持一致的解析顺序。 */

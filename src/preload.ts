@@ -49,7 +49,7 @@ export interface SeeuSkillImportResult {
 }
 
 export interface LovelyToolState {
-  readonly id: 'lovelymem' | 'lovelyspark'
+  readonly id: 'lovelymem' | 'lovelyspark' | 'lovelycarve'
   readonly label: string
   readonly env: string
   readonly hint: string
@@ -68,9 +68,57 @@ export interface LovelyToolsView {
 export interface LovelyToolsSaveResult {
   readonly ok: boolean
   readonly error?: string
-  readonly saved?: { id: 'lovelymem' | 'lovelyspark'; action: 'set' | 'cleared' }[]
+  readonly saved?: { id: 'lovelymem' | 'lovelyspark' | 'lovelycarve'; action: 'set' | 'cleared' }[]
   readonly configFile?: string
   readonly tools?: LovelyToolState[]
+}
+
+export interface MountRecord {
+  readonly id: string
+  readonly imagePath: string
+  readonly imageName: string
+  readonly partition: number
+  readonly mountPoint: string
+  readonly mountedAt: string
+  readonly caseDir?: string
+  readonly exists?: boolean
+}
+
+export interface MountStatus {
+  readonly ok: boolean
+  readonly cli: { path: string | null; source: 'env' | 'config' | 'auto' | 'unset'; error?: string }
+  readonly stateFile: string
+  readonly caseDir: string
+  readonly hostRunning: boolean
+  readonly defaultMountPoint: string
+  readonly mounts: MountRecord[]
+}
+
+export interface MountPartition {
+  readonly index: number
+  readonly label?: string
+  readonly fileSystem?: string
+  readonly sizeBytes?: number
+  readonly offsetBytes?: number
+}
+
+export interface ImageInspectResult {
+  readonly ok: boolean
+  readonly error?: string
+  readonly image?: {
+    readonly path: string
+    readonly name: string
+    readonly sizeBytes?: number
+    readonly format?: string
+    readonly partitions: MountPartition[]
+  }
+}
+
+export interface MountResult {
+  readonly ok: boolean
+  readonly error?: string
+  readonly mount?: MountRecord
+  readonly mounts?: MountRecord[]
 }
 
 export interface LocalModelProbeState {
@@ -233,8 +281,22 @@ const api = {
     get: (): Promise<LovelyToolsView> => ipcRenderer.invoke('seeu:lovely-tools:get') as Promise<LovelyToolsView>,
     pick: (tool: 'lovelymem' | 'lovelyspark'): Promise<{ ok: boolean; path?: string; canceled?: boolean }> =>
       ipcRenderer.invoke('seeu:lovely-tools:pick', tool) as Promise<{ ok: boolean; path?: string; canceled?: boolean }>,
-    save: (paths: Partial<Record<'lovelymem' | 'lovelyspark', string>>): Promise<LovelyToolsSaveResult> =>
+    save: (paths: Partial<Record<'lovelymem' | 'lovelyspark' | 'lovelycarve', string>>): Promise<LovelyToolsSaveResult> =>
       ipcRenderer.invoke('seeu:lovely-tools:save', paths) as Promise<LovelyToolsSaveResult>,
+  },
+  // 镜像挂载：取证镜像 → 只读盘符（LovelyCarve CLI 常驻进程，关闭外壳释放）。
+  mounts: {
+    get: (): Promise<MountStatus> => ipcRenderer.invoke('seeu:mounts:get') as Promise<MountStatus>,
+    pickImage: (): Promise<{ ok: boolean; path?: string; canceled?: boolean }> =>
+      ipcRenderer.invoke('seeu:mounts:pick-image') as Promise<{ ok: boolean; path?: string; canceled?: boolean }>,
+    inspect: (imagePath: string): Promise<ImageInspectResult> =>
+      ipcRenderer.invoke('seeu:mounts:inspect', imagePath) as Promise<ImageInspectResult>,
+    mount: (input: { imagePath: string; partition?: number; mountPoint?: string }): Promise<MountResult> =>
+      ipcRenderer.invoke('seeu:mounts:mount', input) as Promise<MountResult>,
+    unmount: (id: string): Promise<{ ok: boolean; error?: string; mounts?: MountRecord[] }> =>
+      ipcRenderer.invoke('seeu:mounts:unmount', id) as Promise<{ ok: boolean; error?: string; mounts?: MountRecord[] }>,
+    open: (mountPoint: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke('seeu:mounts:open', mountPoint) as Promise<{ ok: boolean; error?: string }>,
   },
 }
 

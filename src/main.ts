@@ -34,7 +34,8 @@ import {
   gatewayContextReported,
   writeLocalModelConfig,
 } from './local-model.js'
-import { lovelyToolsView, saveLovelyToolPaths } from './lovely-tools.js'
+import { LOVELY_TOOL_SPECS, lovelyToolsView, saveLovelyToolPaths } from './lovely-tools.js'
+import { mountHostEnv, mountManager, setMountLogger } from './mounts.js'
 import { bundledSkillsDir, installBundledSkills, userSkillsDir } from './skills.js'
 import {
   bundledSkillNames,
@@ -71,6 +72,7 @@ interface StatusPayload {
 let mainWindow: BrowserWindow | undefined
 let skillsWindow: BrowserWindow | undefined
 let settingsWindow: BrowserWindow | undefined
+let mountsWindow: BrowserWindow | undefined
 let tray: Tray | undefined
 let host: DshHost | undefined
 let quitting = false
@@ -87,6 +89,9 @@ function logShell(message: string): void {
     // 日志失败不能影响主流程
   }
 }
+
+// 镜像挂载模块的日志走同一份 shell 日志。
+setMountLogger(logShell)
 
 function errorDetail(error: unknown): string | undefined {
   if (error === undefined || error === null) return undefined
@@ -300,7 +305,7 @@ async function startHost(): Promise<void> {
   logShell(`start host: runtime=${dshRuntimeDir()} home=${dshHome()} patch=${forensicsPatchPath()}`)
   void probeLocalModelGateway()
 
-  const next = new DshHost()
+  const next = new DshHost({ env: mountHostEnv() })
   host = next
   next.on('state', (state: HostState) => {
     if (state.phase === 'ready') {
@@ -341,6 +346,12 @@ async function requestQuit(): Promise<void> {
   if (quitting) return
   quitting = true
   logShell('quit requested')
+  try {
+    // 挂载点是 CLI 进程内的资源：先释放，再停 dsh。
+    await mountManager.dispose()
+  } catch (error) {
+    logShell(`mounts dispose failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
   try {
     if (host !== undefined) await host.stop()
   } finally {
@@ -471,6 +482,7 @@ function createTray(): void {
       { label: '打开日志目录', click: () => void shell.openPath(logDir()) },
       { label: '本地模型设置…', click: () => openLocalModelSettings() },
       { label: '本地模型状态…', click: () => showLocalModelStatus() },
+      { label: '镜像挂载…', click: () => openMountsWindow() },
       { type: 'separator' },
       { label: '退出', click: () => void requestQuit() },
     ]))
@@ -609,8 +621,40 @@ function openSkillsWindow(): void {
   void win.loadFile(join(rendererDir(), 'skills.html'))
 }
 
-function showAbout(): void {
-  void dialog.showMessageBox({
+/**
+ * 镜像挂载窗口：把取证镜像（E01/RAW/VMDK…）通过 LovelyCarve CLI 挂成只读盘符。
+ * 挂载点只在 CLI 进程存活期间有效，所以窗口只负责“让用户操作”，
+ * 常驻进程与清单都在主进程的 mountManager 里。
+ */
+function openMountsWindow(): void {
+  if (mountsWindow !== undefined && !mountsWindow.isDestroyed()) {
+    mountsWindow.focus()
+    return
+  }
+  const win = new BrowserWindow({
+    width: 820,
+    height: 760,
+    minWidth: 640,
+    minHeight: 520,
+    backgroundColor: COLORS.background,
+    title: `${PRODUCT_NAME} — 镜像挂载`,
+    icon: existsSync(windowIconPath()) ? windowIconPath() : undefined,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: preloadFile(),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+    },
+  })
+  mountsWindow = win
+  win.on('closed', () => { mountsWindow = undefined })
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  void win.loadFile(join(rendererDir(), 'mounts.html'))
+}
+
+function showAbout(): void {  void dialog.showMessageBox({
     type: 'info',
     title: `关于 ${PRODUCT_NAME}`,
     message: `${PRODUCT_NAME}（${PRODUCT_DISPLAY_NAME}）`,
@@ -681,6 +725,7 @@ function buildMenu(): void {
       submenu: [
         { label: '本地模型设置…', click: () => openLocalModelSettings() },
         { label: '本地模型状态…', click: () => showLocalModelStatus() },
+        { label: '镜像挂载…', accelerator: 'Ctrl+Shift+M', click: () => openMountsWindow() },
         { label: '重新探测本地网关', click: () => { void probeLocalModelGateway('manual').then(() => { showLocalModelStatus() }) } },
         { type: 'separator' },
         { label: '打开配置文件目录', click: () => void shell.openPath(userDataDir()) },
@@ -848,8 +893,8 @@ function registerIpc(): void {
   // 本机取证工具路径：不自动发现，路径只来自设置窗口（写 <DSH_HOME>/lovely-cli.json）。
   ipcMain.handle('seeu:lovely-tools:get', () => lovelyToolsView(process.env))
   ipcMain.handle('seeu:lovely-tools:pick', async (_event, tool: unknown) => {
-    const id = tool === 'lovelyspark' ? 'lovelyspark' : 'lovelymem'
-    const label = id === 'lovelyspark' ? 'LovelySpark' : 'LovelyMem V3'
+    const id = LOVELY_TOOL_SPECS.some((spec) => spec.id === tool) ? String(tool) : 'lovelymem'
+    const label = LOVELY_TOOL_SPECS.find((spec) => spec.id === id)?.label ?? '取证工具'
     const result = await dialog.showOpenDialog({
       title: `选择 ${label} 的 exe`,
       properties: ['openFile'],
@@ -866,6 +911,37 @@ function registerIpc(): void {
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
+  })
+
+  // ── 镜像挂载（LovelyCarve CLI 常驻进程；挂载点只在进程存活期间有效）──
+  ipcMain.handle('seeu:mounts:get', () => mountManager.status())
+  ipcMain.handle('seeu:mounts:pick-image', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择取证镜像',
+      properties: ['openFile'],
+      filters: [
+        { name: '取证镜像', extensions: ['e01', 'E01', 'ex01', 'dd', 'raw', 'img', 'vmdk', 'vhdx', 'qcow2', 'iso'] },
+        { name: '全部文件', extensions: ['*'] },
+      ],
+    })
+    if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+    return { ok: true, path: result.filePaths[0] }
+  })
+  ipcMain.handle('seeu:mounts:inspect', (_event, imagePath: unknown) => mountManager.inspect(String(imagePath ?? '')))
+  ipcMain.handle('seeu:mounts:mount', (_event, input: unknown) => {
+    const payload = (input ?? {}) as { imagePath?: unknown; partition?: unknown; mountPoint?: unknown }
+    return mountManager.mount({
+      imagePath: payload.imagePath === undefined ? undefined : String(payload.imagePath),
+      partition: payload.partition === undefined ? 0 : Number(payload.partition),
+      mountPoint: payload.mountPoint === undefined ? undefined : String(payload.mountPoint),
+    })
+  })
+  ipcMain.handle('seeu:mounts:unmount', (_event, id: unknown) => mountManager.unmount(String(id ?? '')))
+  ipcMain.handle('seeu:mounts:open', async (_event, mountPoint: unknown) => {
+    const point = String(mountPoint ?? '').trim()
+    if (!point) return { ok: false, error: '缺少挂载点' }
+    const error = await shell.openPath(point.endsWith('\\') ? point : `${point}\\`)
+    return error ? { ok: false, error } : { ok: true }
   })
 }
 
@@ -909,6 +985,7 @@ if (!gotLock) {
     mainWindow = createWindow()
     // 开发/自动化：SEEU_OPEN_SETTINGS=1 时启动即打开本地模型设置窗口（截图与 CDP 验收用）。
     if (process.env.SEEU_OPEN_SETTINGS === '1') openLocalModelSettings()
+    if (process.env.SEEU_OPEN_MOUNTS === '1') openMountsWindow()
     await startHost()
   })
 }

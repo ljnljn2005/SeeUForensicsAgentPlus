@@ -24,14 +24,14 @@ test('未配置时两款工具都是 unconfigured，且配置路径来自 SEEU_L
   const view = lovelyToolsView(env);
   assert.equal(view.configFile, lovelyConfigFile(env));
   assert.equal(view.error, undefined);
-  assert.equal(view.tools.length, 2);
+  assert.equal(view.tools.length, 3);
   for (const tool of view.tools) {
     assert.equal(tool.found, false);
     assert.equal(tool.source, 'unset');
     assert.equal(tool.configured, false);
     assert.equal(tool.path, '');
   }
-  assert.deepEqual(LOVELY_TOOL_SPECS.map((s) => s.id), ['lovelymem', 'lovelyspark']);
+  assert.deepEqual(LOVELY_TOOL_SPECS.map((s) => s.id), ['lovelymem', 'lovelyspark', 'lovelycarve']);
 });
 
 test('保存写盘后重新读取是 config 来源；可以只保存一个工具', (t) => {

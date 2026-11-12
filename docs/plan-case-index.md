@@ -1853,3 +1853,20 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 打包态回归：`verify-launch` 目录版 5249 ms / portable 37389 ms；`m2-ui-check`、`settings-check`（含工具路径区：两行、API 保存、真实点保存写盘、清空删键）、`export-check`、`cross-case-check` 全绿。
 - 尝试让 `real-gateway-ui.mjs` 支持 `SEEU_UI_EXE` 跑打包版：能起页面但停在「选择工作区」，composer 定位失败（`type-failed`），改动已用 `git checkout` 回滚，避免留下未验证路径。真机 UI 验证仍用 dev Electron。
 - 遗留：手动工具路径只存本机；打包版首启的「选择工作区」页对 CDP 脚本不友好，后续若要打包态真机 UI 回归，需先写默认工作区或用 `--user-data-dir` 预置 workspace。
+
+## 20.64 镜像挂载接口（取证镜像 → 只读盘符）
+
+- 用户指令（本轮）：「拉取一下最新仓库，看lovelycarve进来没，接下来提供接口供镜像的挂载」。先 `git pull --no-rebase origin main` 到 `186eb84`（fast-forward，含 upstream 的技能上传 `117b391`），确认 `resources/forensics/skills/lovelycarve-forensics/` 已在仓库里（SKILL.md 200 行 + commands/pitfalls/recipes 三份参考 + `test/verify_real.py`）。
+- 读 `references/commands.md` / `recipes.md` 得到硬约束：挂载命令是 `mounts create <path> --mount-point <X:>`、`mounts list`、`mounts delete <id> [--force]`；**挂载点只在 CLI 进程存活期间有效**，必须在 `sessions`/`shell`/`session` 常驻模式里用；Dokan 挂载需要管理员；同一案件不能同时被桌面端与 CLI 打开。
+- 新增 `tools/image-mount.mjs`（纯 Node，主进程/e2e 共用）：
+  - `mountsFile(env)`（`SEEU_MOUNTS_FILE` 或 `<DSH_HOME>/mounts.json`）、`mountCaseDir(env)`（`<DSH_HOME>/mount-case`）、`defaultMountPoint(env, taken)`（`X:` 起跳过占用）、`resolveLovelyCarveCli(env)`（环境变量 → `lovely-cli.json` 的 `lovelycarve` 键 → 常见安装位置，返回 `{path, source, error?}`）；
+  - `LovelyCarveHost`：spawn `lovelycarve-cli -q shell`，stdin 逐行写命令、stdout 逐行 JSON 与请求配对（超时 180 s），stderr 只保留末 4 KB；`LOVELY_CARVE_AGENT=1` / `NO_COLOR=1` 保证机器可读；
+  - `createMountManager({env,log})`：`status()`（CLI 状态 + 挂载清单 + 默认盘符）、`inspect(imagePath)`（一次性 CLI 发 `images get`，返回分区表）、`mount({imagePath,partition,mountPoint})`（校验绝对路径/盘符占用 → `cases create` → `images open` → `mounts create /part:N --mount-point X:` → 存记录）、`unmount(id)`（`mounts delete --force` + 删记录）、`dispose()`；
+  - 挂载清单 `<DSH_HOME>/mounts.json`：`{updatedAt, note, mounts:[{id,imagePath,imageName,partition,mountPoint,mountedAt,caseDir}]}`；`hostEnv()` 返回 `{SEEU_MOUNTS_FILE}`；
+  - 测试缝：CLI 路径是 `.mjs/.cjs/.js` 时用 `SEEU_MOUNT_NODE`（或 process.execPath）执行，单测/e2e 注入假 CLI，不需要真装 LovelyCarve 或 Dokan。
+- `tools/lovely-tools.mjs` 的 `LOVELY_TOOL_SPECS` 增加第三项 `lovelycarve`（`SEEU_LOVELYCARVE_CLI`，提示选 `lovelycarve-cli.exe` 不是 GUI）；`renderer/local-model.html` 工具卡片由两行变三行，`saveTools()`/事件绑定循环同步；`scripts/e2e/settings-check.mjs` 的 `toolsRows` 断言 2 → 3。
+- 新增 `src/mounts.ts`：re-export `createMountManager` 与类型，进程级单例 `mountManager`（日志经 `setMountLogger` 转发到 `logShell`），`mountHostEnv()`。`src/main.ts`：`new DshHost({ env: mountHostEnv() })`；`openMountsWindow()` 载 `renderer/mounts.html`；菜单「工具 → 镜像挂载…」（`Ctrl+Shift+M`）+ 托盘项；`SEEU_OPEN_MOUNTS=1` 启动即开；`requestQuit()` 先 `await mountManager.dispose()` 再停 dsh；IPC `seeu:mounts:get|pick-image|inspect|mount|unmount|open`。`src/preload.ts` 暴露 `window.seeu.mounts.{get,pickImage,inspect,mount,unmount,open}` 与类型。
+- 新增 `renderer/mounts.html`：CLI 状态卡（未配置红字提示 + 【去设置路径…】）、选择镜像 → 解析分区表格（radio 选分区）、挂载点输入 + 挂载按钮、当前挂载卡片（打开盘符 / 卸载）、说明「挂载点只在 SeeU 运行期间有效，关闭外壳释放」、挂载清单文件路径。
+- 测试：`tests/image-mount.test.mjs` 4 例（路径/CLI 解析/默认盘符/完整 inspect→mount→清单→unmount→dispose，用 `tests/fixtures/fake-lovelycarve-cli.mjs`）→ `npm test` **85/85**；`npm run test:e2e:mounts`（`scripts/e2e/mount-check.mjs`，端口 9461，假 CLI 复制到隔离 HOME）→ `{"ok":true,"inspect":{"partitions":2},"mount":{"mountPoint":"X:"},"state":{"count":1},"listVisible":true,"unmount":true,"stateAfter":0}`，截图 `.dev/shots/mounts.png`；`settings-check` `toolsRows:3` 全绿；`m2-ui-check` `m2ok:true`。
+- 踩坑：① `mount()` 里对已占用盘符依赖 `existsSync('X:\\')`，e2e 机器上 `X:` 未占用所以能过；真实机器要先选空盘符；② 挂载 id 优先取 `mounts create` 返回值，没有则从 `mounts list` 按盘符匹配，再兜底生成（不同 CLI 版本返回结构可能略有差异）；③ 窗口脚本的 `#mountRow` 用 `display:flex` 切换，初始 `display:none` 要一起改。
+- 遗留：未在真实 LovelyCarve + 真实镜像上跑（本机没装）；挂载清单里的 `exists` 只按 `X:\\` 是否存在判断，盘符被手动卸载后不会自动清理；会话侧技能还没有「读 mounts.json」的专门提示（下一步可在 SKILL.md / brief 里加一句）；等用户验收后再打 v0.2.10。

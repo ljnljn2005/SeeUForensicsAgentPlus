@@ -13,7 +13,7 @@ import { LOVELY_TOOL_SPECS, lovelyConfigFile, lovelyToolsView, saveLovelyToolPat
 
 export { LOVELY_TOOL_SPECS, lovelyConfigFile, lovelyToolsView, saveLovelyToolPaths }
 
-export type LovelyToolId = 'lovelymem' | 'lovelyspark'
+export type LovelyToolId = 'lovelymem' | 'lovelyspark' | 'lovelycarve'
 
 export interface LovelyToolState {
   readonly id: LovelyToolId

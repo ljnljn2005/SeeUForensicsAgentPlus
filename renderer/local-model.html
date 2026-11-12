@@ -278,6 +278,13 @@
       <button data-tool-pick="lovelyspark">选择…</button>
       <button data-tool-clear="lovelyspark">清除</button>
     </div>
+    <div class="tool" data-tool="lovelycarve">
+      <span class="dot" data-tool-dot></span>
+      <span class="tool-name">LovelyCarve CLI</span>
+      <input type="text" class="tool-path" data-tool-path="lovelycarve" readonly placeholder="未指定：点「选择…」选 lovelycarve-cli.exe" />
+      <button data-tool-pick="lovelycarve">选择…</button>
+      <button data-tool-clear="lovelycarve">清除</button>
+    </div>
     <div class="hint">只支持手动指定：程序不会去 PATH / 注册表 / 快捷方式里找 exe。选好后点下面的「保存工具路径」，新会话生效。LovelyMem 请选支持 <code>--cli</code> 的 v3 主程序，不要选 Lite / Luxe 的 GUI。</div>
     <div class="actions" style="margin:10px 0 6px"><button id="btn-tools-save">保存工具路径</button></div>
     <div id="tools-status" class="hint"></div>
@@ -550,7 +557,7 @@
   async function saveTools() {
     if (!toolsApi) return
     const payload = {}
-    for (const id of ['lovelymem', 'lovelyspark']) {
+    for (const id of ['lovelymem', 'lovelyspark', 'lovelycarve']) {
       const row = toolRow(id)
       payload[id] = row ? row.querySelector('[data-tool-path]').value : ''
     }
@@ -570,7 +577,7 @@
     }
   }
 
-  for (const id of ['lovelymem', 'lovelyspark']) {
+  for (const id of ['lovelymem', 'lovelyspark', 'lovelycarve']) {
     const row = toolRow(id)
     if (!row) continue
     row.querySelector('[data-tool-pick]').addEventListener('click', async () => {

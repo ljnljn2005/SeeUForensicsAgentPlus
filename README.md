@@ -79,6 +79,15 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
 
+### v0.2.10 待发布（v0.2.9 之后、尚未打包）
+
+> 工作树已包含 Gitea `main` 的最新提交（`186eb84`：技能上传 —— 菜单/管理器导入 ZIP 或文件夹，直达 agent 技能根），以及下面的镜像挂载接口。
+
+- **镜像挂载（取证镜像 → 只读盘符）**：菜单「工具 → 镜像挂载…」（`Ctrl+Shift+M`，托盘同项）打开新窗口 —— 选镜像（E01 / RAW / VMDK / VHDX / QCOW2 / ISO…）→ 解析分区（`/part:N`、卷标、文件系统、大小）→ 选分区与盘符 → 挂载为只读盘。挂载点由 LovelyCarve CLI 的 `mounts` 命令组提供，**只在 SeeU 运行期间有效**，卸载或关闭外壳即释放；同一案件不能被桌面端与 CLI 同时打开，Dokan 挂载可能要求管理员权限；
+- **接口实现**：新增 `tools/image-mount.mjs`（纯 Node）：`resolveLovelyCarveCli` 按「环境变量 → 设置窗口保存的 `lovely-cli.json` → 常见安装位置」找 CLI；`LovelyCarveHost` 起一个常驻 `lovelycarve-cli -q shell` 进程（stdin 写命令、stdout 逐行 JSON），因为挂载点是进程内资源；`createMountManager` 提供 `status / inspect / mount / unmount / dispose`，挂载清单写 `<DSH_HOME>/mounts.json` 并通过 `SEEU_MOUNTS_FILE` 下发给 dsh 会话，技能可直接读；测试用假 CLI（`tests/fixtures/fake-lovelycarve-cli.mjs`）不需要真装 LovelyCarve；
+- **CLI 路径仍为手动指定**：设置窗口「本机取证工具路径」从两行扩为三行（LovelyMem V3 / LovelySpark / LovelyCarve CLI），同样写 `lovely-cli.json`、`SEEU_LOVELYCARVE_CLI` 仅供调试；未配置时挂载窗口直接提示去设置，不会自己猜路径；
+- **测试**：`npm test` **85/85**（新增 `tests/image-mount.test.mjs` 4 例）；新增 `npm run test:e2e:mounts`（`scripts/e2e/mount-check.mjs`：假 CLI 下 get → 解析 2 个分区 → 挂载 → 校验 `mounts.json` → 页面刷新显示 → 卸载清空）；`settings-check` 断言工具路径区三行；`check:overlay` OK。
+
 ### v0.2.9 改了什么
 
 > 以下改动已进入 v0.2.9 安装包（v0.2.8 `ce02349` 之后：真机技能链路、工具路径手动指定），打包态回归见 `docs/packaging.md`。
@@ -660,7 +669,33 @@ headless 里技能根是 `<DSH_HOME>/skills`（脚本会把 `resources/forensics
 
 技能真机链路（`SEEU_REAL_SKILL=1`）：模型先调 `skill` 工具加载 `lovelymem-cli`，再照技能文档执行 `& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelymem -- version`，**51.8 s** 答出 `Lovelymem / 3.1.11 / starmem、vol3`。第一次跑失败暴露了 headless 与外壳的环境差异：headless 不会执行 `installBundledSkills()`（技能根为空），也不会注入 `SEEU_CLI_NODE`/`SEEU_LOVELY_CLI`，导致模型加载不到技能、包装器也起不来；脚本已补齐这两件事，并支持 `GW_LOVELYMEM_EXE` 兜底自动发现。
 
-## 10. 许可与来源
+## 10. 镜像挂载（取证镜像 → 只读盘符）
+
+取证镜像（`.E01` / `.dd` / `.raw` / `.vmdk` / `.vhdx` / `.qcow2` / `.iso`…）本身不是 Windows 能直接浏览的文件系统。会话里的技能要「按路径看文件」，就得先把镜像挂成一个只读盘符 —— 这正是 LovelyCarve CLI 的 `mounts` 命令组做的事，本项目把它做成了外壳里的一个窗口，而不是让模型自己拼命令。
+
+**前置条件**
+
+1. 安装 [LovelyCarve](https://lovelycarve.example/)（含 `lovelycarve-cli.exe` 与 Dokan 驱动）；
+2. 在「设置 → 本机取证工具路径」里手动选择 `lovelycarve-cli.exe`（**不选 GUI 的 `LovelyCarve.exe`**）；也可以写 `<DSH_HOME>/lovely-cli.json` 的 `lovelycarve` 键，或设置环境变量 `SEEU_LOVELYCARVE_CLI`（调试用）；
+3. 挂载/卸载可能需要以管理员身份启动外壳（Dokan 驱动），普通镜像解析不需要。
+
+**用法**
+
+1. 菜单「工具 → 镜像挂载…」（`Ctrl+Shift+M`）打开窗口；
+2. 「选择镜像…」→ 自动解析分区表并列出 `/part:N`、卷标、文件系统、大小；
+3. 选目标分区与盘符（默认 `X:`，会自动跳过已占用盘符），点「挂载为只读盘」；
+4. 窗口下方出现活动挂载卡片：可【打开盘符】直接进资源管理器，或【卸载】释放；
+5. 会话侧：挂载清单在 `<DSH_HOME>/mounts.json`，dsh 子进程通过 `SEEU_MOUNTS_FILE` 拿到同一路径，技能/模型可以直接读，不需要猜盘符。
+
+**约束（务必知道）**
+
+- 挂载点由 CLI 常驻进程创建，**只在 SeeU 运行期间有效**；关闭外壳 = 释放所有挂载点（窗口里也写了这句）；
+- 同一取证案件不能被 LovelyCarve 桌面端与 CLI 同时打开（案件锁）；遇到 `alreadyOpen` 类错误先关掉另一侧；
+- 只读挂载：不会改动镜像内容。
+
+**实现位置**：`tools/image-mount.mjs`（CLI 解析、常驻进程、挂载清单）、`src/mounts.ts`（主进程单例）、`renderer/mounts.html`（窗口）、`scripts/e2e/mount-check.mjs`（假 CLI 端到端）。
+
+## 11. 许可与来源
 
 - 外壳代码：MIT。
 - `dsh` 运行时：来自 npm `@deepseek-ai/dsh`（DeepSeek AI 开源，MIT）；本仓库不修改其源码，仅通过官方 profile/patch 机制扩展。

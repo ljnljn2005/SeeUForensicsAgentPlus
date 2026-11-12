@@ -1,0 +1,123 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import {
+  createMountManager,
+  defaultMountPoint,
+  mountCaseDir,
+  mountsFile,
+  resolveLovelyCarveCli,
+} from '../tools/image-mount.mjs'
+
+const here = dirname(fileURLToPath(import.meta.url))
+const fakeCli = join(here, 'fixtures', 'fake-lovelycarve-cli.mjs')
+
+function tempHome() {
+  const root = mkdtempSync(join(tmpdir(), 'seeu-mount-'))
+  const home = join(root, 'home')
+  mkdirSync(home, { recursive: true })
+  return { root, home }
+}
+
+test('mountsFile / mountCaseDir 跟随 SEEU_DSH_HOME 与显式覆盖', () => {
+  const { home } = tempHome()
+  assert.equal(mountsFile({ SEEU_DSH_HOME: home }), join(home, 'mounts.json'))
+  assert.equal(mountsFile({ SEEU_DSH_HOME: home, SEEU_MOUNTS_FILE: join(home, 'custom.json') }), join(home, 'custom.json'))
+  assert.equal(mountCaseDir({ SEEU_DSH_HOME: home }), join(home, 'mount-case'))
+})
+
+test('resolveLovelyCarveCli：环境变量 / 配置文件 / 未配置', () => {
+  const { root, home } = tempHome()
+  const viaEnv = resolveLovelyCarveCli({ SEEU_DSH_HOME: home, SEEU_LOVELYCARVE_CLI: fakeCli })
+  assert.equal(viaEnv.path, fakeCli)
+  assert.equal(viaEnv.source, 'env')
+
+  const missing = resolveLovelyCarveCli({ SEEU_DSH_HOME: home, SEEU_LOVELYCARVE_CLI: join(root, 'nope.exe') })
+  assert.equal(missing.path, null)
+  assert.match(String(missing.error), /不存在/)
+
+  const configFile = join(home, 'lovely-cli.json')
+  writeFileSync(configFile, JSON.stringify({ lovelycarve: fakeCli }))
+  const viaConfig = resolveLovelyCarveCli({ SEEU_DSH_HOME: home })
+  assert.equal(viaConfig.path, fakeCli)
+  assert.equal(viaConfig.source, 'config')
+
+  writeFileSync(configFile, JSON.stringify({ lovelycarve: join(root, 'gone.exe') }))
+  const stale = resolveLovelyCarveCli({ SEEU_DSH_HOME: home })
+  assert.equal(stale.path, null)
+  assert.match(String(stale.error), /配置的 LovelyCarve CLI 路径不存在/)
+
+  writeFileSync(configFile, '{}')
+  const unset = resolveLovelyCarveCli({ SEEU_DSH_HOME: home })
+  assert.equal(unset.path, null)
+  assert.equal(unset.source, 'unset')
+  assert.match(String(unset.error), /未配置 LovelyCarve CLI/)
+})
+
+test('defaultMountPoint 跳过已占用盘符', () => {
+  const taken = ['X:', 'Y:']
+  const point = defaultMountPoint({}, taken)
+  assert.equal(taken.includes(point), false)
+  assert.match(point, /^[A-Z]:$/)
+})
+
+test('MountManager：inspect → mount（写 mounts.json） → unmount', async () => {
+  const { root, home } = tempHome()
+  const imagePath = join(root, 'disk.E01')
+  writeFileSync(imagePath, 'fake-image')
+  const env = {
+    ...process.env,
+    SEEU_DSH_HOME: home,
+    SEEU_LOVELYCARVE_CLI: fakeCli,
+    SEEU_MOUNT_NODE: process.execPath,
+    SEEU_MOUNTS_FILE: join(home, 'mounts.json'),
+    SEEU_MOUNT_CASE_DIR: join(home, 'mount-case'),
+  }
+  const manager = createMountManager({ env: () => env })
+
+  const status = await manager.status()
+  assert.equal(status.ok, true)
+  assert.equal(status.cli.source, 'env')
+  assert.equal(status.hostRunning, false)
+  assert.deepEqual(status.mounts, [])
+  assert.equal(manager.hostEnv().SEEU_MOUNTS_FILE, join(home, 'mounts.json'))
+
+  const inspected = await manager.inspect(imagePath)
+  assert.equal(inspected.ok, true)
+  assert.equal(inspected.image.name, 'disk.E01')
+  assert.equal(inspected.image.partitions.length, 2)
+  assert.equal(inspected.image.partitions[0].fileSystem, 'NTFS')
+
+  const bad = await manager.inspect(join(root, 'missing.E01'))
+  assert.equal(bad.ok, false)
+  assert.match(String(bad.error), /不存在/)
+
+  const mounted = await manager.mount({ imagePath, partition: 0 })
+  assert.equal(mounted.ok, true, mounted.error)
+  assert.match(String(mounted.mount.point ?? mounted.mount.mountPoint), /^[A-Z]:$/)
+  const stateFile = join(home, 'mounts.json')
+  assert.equal(existsSync(stateFile), true)
+  const state = JSON.parse(readFileSync(stateFile, 'utf8'))
+  assert.equal(state.mounts.length, 1)
+  assert.equal(state.mounts[0].imagePath, imagePath)
+  assert.equal(state.mounts[0].partition, 0)
+  assert.match(String(state.note), /关闭外壳即释放/)
+
+  const afterMount = await manager.status()
+  assert.equal(afterMount.mounts.length, 1)
+  assert.equal(afterMount.hostRunning, true)
+
+  const unmounted = await manager.unmount(mounted.mount.id)
+  assert.equal(unmounted.ok, true, unmounted.error)
+  assert.deepEqual(JSON.parse(readFileSync(stateFile, 'utf8')).mounts, [])
+
+  const missingMount = await manager.unmount(mounted.mount.id)
+  assert.equal(missingMount.ok, false)
+
+  await manager.dispose()
+  assert.equal(manager.debugHost().running, false)
+})
