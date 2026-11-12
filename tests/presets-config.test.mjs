@@ -157,3 +157,14 @@ test('分析预设写明本机实测工具与 lovelyspark 优先', () => {
     assert.match(byId.get(id).config.plugins[0].config.prefix, /2026-11-12/, `${id} 缺少实测日期`)
   }
 })
+
+test('专家 persona 指向外部工具默认路径，并说明可在设置里改', () => {
+  const exe = byId.get('preset-exe').config.plugins[0].config.prefix
+  assert.match(exe, /ghidra-12\.1\.4/, 'exe persona 缺少 Ghidra 默认路径')
+  assert.match(exe, /analyzeHeadless\.bat/, 'exe persona 缺少 Ghidra 批处理入口')
+  assert.match(exe, /SEEU_TOOL_GHIDRA/, 'exe persona 缺少 $SEEU_TOOL_GHIDRA')
+  assert.match(exe, /外部取证工具路径/, 'exe persona 未说明设置里可改路径')
+  for (const id of ['preset-standard', 'preset-traffic', 'preset-log', 'preset-memory', 'preset-data', 'preset-apk', 'preset-exe']) {
+    assert.match(byId.get(id).config.plugins[0].config.prefix, /SEEU_TOOL_/, `${id} 未提到 $SEEU_TOOL_* 环境变量`)
+  }
+})

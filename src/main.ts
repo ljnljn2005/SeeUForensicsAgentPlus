@@ -36,6 +36,7 @@ import {
 } from './local-model.js'
 import { LOVELY_TOOL_SPECS, lovelyToolsView, saveLovelyToolPaths } from './lovely-tools.js'
 import { mountHostEnv, mountManager, setMountLogger } from './mounts.js'
+import { TOOL_PATH_SPECS, saveToolPaths, toolPathsEnv, toolPathsView } from './tool-paths.js'
 import { ensureBundledPluginPackages, installBundledPluginBundles } from './dsh-plugins.js'
 import { bundledSkillsDir, installBundledSkills, userSkillsDir } from './skills.js'
 import {
@@ -328,7 +329,10 @@ async function startHost(): Promise<void> {
   }
   void probeLocalModelGateway()
 
-  const next = new DshHost({ env: mountHostEnv() })
+  // 外部取证工具路径：设置窗口里改，随会话以 SEEU_TOOL_<ID> 环境变量下发（不存在的跳过）。
+  const extraToolEnv = toolPathsEnv(process.env)
+  logShell(`tool paths: 向会话注入 ${Object.keys(extraToolEnv).length} 个外部工具路径：${Object.keys(extraToolEnv).join(', ') || '（无）'}`)
+  const next = new DshHost({ env: { ...mountHostEnv(), ...extraToolEnv } })
   host = next
   next.on('state', (state: HostState) => {
     if (state.phase === 'ready') {
@@ -954,6 +958,27 @@ function registerIpc(): void {
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
+  })
+
+  // ── 外部取证工具路径（Ghidra/IDA/tshark/jadx/python/7z/sqlite3…）：设置窗口里改 ──
+  ipcMain.handle('seeu:tool-paths:get', () => toolPathsView(process.env))
+  ipcMain.handle('seeu:tool-paths:pick', async (_event, tool: unknown) => {
+    const spec = TOOL_PATH_SPECS.find((item) => item.id === tool)
+    if (spec === undefined) return { ok: false, error: '未知工具：' + String(tool) }
+    const result = await dialog.showOpenDialog({
+      title: `选择 ${spec.label}${spec.kind === 'dir' ? ' 目录' : ''}`,
+      properties: spec.kind === 'dir' ? ['openDirectory'] : ['openFile'],
+      ...(spec.kind === 'dir'
+        ? {}
+        : { filters: [{ name: '可执行/脚本文件', extensions: ['exe', 'bat', 'cmd', 'jar'] }, { name: '全部文件', extensions: ['*'] }] }),
+    })
+    if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+    return { ok: true, path: result.filePaths[0] }
+  })
+  ipcMain.handle('seeu:tool-paths:save', (_event, input: unknown) => {
+    const res = saveToolPaths(input as Record<string, unknown>, process.env)
+    if (res.ok) logShell(`tool paths: 已保存外部工具路径（${(res.saved ?? []).join(', ') || '无'}）`)
+    return res
   })
 
   // ── 镜像挂载（LovelyCarve CLI 常驻进程；挂载点只在进程存活期间有效）──

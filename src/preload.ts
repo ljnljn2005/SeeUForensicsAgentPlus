@@ -73,6 +73,34 @@ export interface LovelyToolsSaveResult {
   readonly tools?: LovelyToolState[]
 }
 
+export interface ToolPathState {
+  readonly id: string
+  readonly label: string
+  readonly kind: 'file' | 'dir'
+  readonly env: string
+  readonly hint: string
+  readonly defaultPath: string
+  readonly path: string
+  readonly source: 'default' | 'config'
+  readonly configured: boolean
+  readonly exists: boolean
+  readonly found: boolean
+}
+
+export interface ToolPathsView {
+  readonly configFile: string
+  readonly tools: ToolPathState[]
+  readonly error?: string
+}
+
+export interface ToolPathsSaveResult {
+  readonly ok: boolean
+  readonly error?: string
+  readonly configFile?: string
+  readonly tools?: ToolPathState[]
+  readonly saved?: string[]
+}
+
 export interface MountRecord {
   readonly id: string
   readonly imagePath: string
@@ -285,6 +313,14 @@ const api = {
       ipcRenderer.invoke('seeu:lovely-tools:pick', tool) as Promise<{ ok: boolean; path?: string; canceled?: boolean }>,
     save: (paths: Partial<Record<'lovelymem' | 'lovelyspark' | 'lovelycarve', string>>): Promise<LovelyToolsSaveResult> =>
       ipcRenderer.invoke('seeu:lovely-tools:save', paths) as Promise<LovelyToolsSaveResult>,
+  },
+  // 外部取证工具路径（Ghidra/IDA/tshark/jadx/python/7z/sqlite3…）：设置窗口里改。
+  toolPaths: {
+    get: (): Promise<ToolPathsView> => ipcRenderer.invoke('seeu:tool-paths:get') as Promise<ToolPathsView>,
+    pick: (tool: string): Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }> =>
+      ipcRenderer.invoke('seeu:tool-paths:pick', tool) as Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>,
+    save: (paths: Record<string, string>): Promise<ToolPathsSaveResult> =>
+      ipcRenderer.invoke('seeu:tool-paths:save', paths) as Promise<ToolPathsSaveResult>,
   },
   // 镜像挂载：取证镜像 → 只读盘符（LovelyCarve CLI 常驻进程，关闭外壳释放）。
   mounts: {

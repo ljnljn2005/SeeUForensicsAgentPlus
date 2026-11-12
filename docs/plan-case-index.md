@@ -2006,3 +2006,16 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 校验：`npm test` 112/112（`tests/presets-config.test.mjs` 增至 6 例：三预设顺序/名称/只读工具面、6 份 persona 长度与关键词）；`npm run check:overlay` 扩展逐预设校验 `preset-data`/`preset-apk`/`preset-exe`（存在、名称、tool-fs 只读）；`node scripts/build.mjs` OK。
 - 坑：① overlay 里现有分析预设的 `customSkillDirs` 必须写成带引号的 `!!js` 标量，否则 js-yaml 报 unknown tag / bad indentation；② 计划文档里写 `' '` 时若写成真实 NUL，会让整个 md 变 binary（本次已修复为转义文本）；③ persona 文本较长（单份 13.7 KB），替换脚本必须按缩进边界截断，不能按空行。
 - 遗留：日志分析预设尚无专家 persona（用户未提供对应文件）；真实观看效果需重启 dev 预览/重新打包，打包前先 `npm run check:overlay`。
+
+### 20.75 外部工具路径改为设置里可改（Ghidra/IDA/tshark/jadx/python/7z/sqlite3…）
+
+- 需求来源（用户）：「先指向这里吧：`C:\Users\ASUS\.dsh\plugins\dsh-infinite-gen-5\third_party\sources\ghidra-12.1.4`，然后这些工具都支持在设置里修改路径」——① Ghidra 不再标「未装」；② persona 里提到的外部工具路径都能在设置窗口改。
+- Ghidra 事实：该目录是源码树（`Ghidra/`、`GhidraBuild/`、`build.gradle`、`gradlew.bat`），Windows 入口在 `Ghidra/RuntimeScripts/Windows/ghidraRun.bat` 与 `.../support/analyzeHeadless.bat`（`support/` 下还有 bsim/ghidraClean/launch 等），所以设置项按「目录」类型校验。
+- 新增 `tools/tool-paths.mjs`（纯 Node，主进程与单测共用）：`TOOL_PATH_SPECS` 12 项（ghidra/ida/tshark/capinfos/editcap/python/jadx/apktool/adb/sevenzip/sqlite3/volatility，各带 `kind:'file'|'dir'`、`env:'SEEU_TOOL_<ID>'`、开发机实测 `defaultPath`、提示文案）；`toolPathsFile()` = `<DSH_HOME>/tool-paths.json`（`SEEU_TOOL_PATHS_CONFIG` 可覆盖）；`toolPathsView()`（每项给 defaultPath/configured/source/path/exists/found）；`saveToolPaths(input)`（只处理已知 id，空串＝清除回默认，校验绝对路径/存在/类型，写 2 空格 JSON）；`toolPathsEnv()`（只注入 found 的项，供 dsh 子进程）。
+- `src/tool-paths.ts` 薄层 re-export + 类型；`src/main.ts`：`new DshHost({ env: { ...mountHostEnv(), ...toolPathsEnv(process.env) } })`，并在启动时 `logShell('tool paths: 向会话注入 N 个外部工具路径…')`；新增 IPC `seeu:tool-paths:get|pick|save`（pick 按 kind 用 `openDirectory`/`openFile`，文件过滤 exe/bat/cmd/jar）；`src/preload.ts` 暴露 `window.seeu.toolPaths.{get,pick,save}`。
+- 设置页 `renderer/local-model.html`：在「本机取证工具路径」下新增「外部取证工具路径（可选，可改；留空用默认实测值）」区，JS 动态渲染 12 行（状态点 + 名称 + 只读输入 + 选择… + 重置），保存按钮 `#btn-tool-paths-save`，提示「会话里以 `$SEEU_TOOL_<工具>` 为准」。
+- persona 同步（`resources/forensics/cordis.patch.yml` 6 段「本机实测」+ exe 工具边界段）：Ghidra 由「未找到」改为默认源码树路径与 `analyzeHeadless.bat`；把「IDA Pro/Ghidra/…可能并不存在，必须先探测」改成「以环境变量与本机实测默认值为准」；每段末尾补「这些工具路径可以在『设置 → 本地模型与工具路径 → 外部取证工具路径』里逐项修改；会话里以 `$SEEU_TOOL_<工具>` 为准（未设置时用上面的默认值）」。
+- 测试：`tests/tool-paths.test.mjs` 5 例（默认视图/保存重读/清除回默认与类型校验/坏 JSON 不覆盖/只注入存在的项）；`tests/presets-config.test.mjs` 新增「persona 指向 Ghidra 默认路径 + 7 个预设都提 `SEEU_TOOL_`」；`scripts/e2e/settings-check.mjs` 新增 `toolPathsRows/toolPathsGhidra/toolPathsSectionVisible/toolPathsApiSaved/toolPathsUiSaved/toolPathsFileOk`（12 行、Ghidra 默认值、UI 保存落盘 `<DSH_HOME>/tool-paths.json`）。实测 `npm test` 121/121、`check:overlay` OK、settings-check `ok:true`。
+- 坑：① 新增行的 class 复用 `.tool` 后，旧断言 `.tools .tool` 数到 15 行导致 `toolsSectionVisible:false`——断言改为 `.tools .tool[data-tool]`；② `kind:'dir'` 的 Ghidra 必须用目录选择对话框，不能沿用 exe 过滤；③ 路径注入只对「存在且类型对」的项生效，避免把坏路径写进会话环境变量。
+- 遗留：改路径只影响新会话（dsh 启动时读环境变量）；打包版需重新打包才带上 `tool-paths` 模块与 persona 改动。
+

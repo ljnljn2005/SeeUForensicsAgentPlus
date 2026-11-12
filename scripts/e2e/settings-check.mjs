@@ -339,7 +339,7 @@ try {
   report.toolsConfigFile = toolsView?.configFile ?? null
   report.toolsRows = Array.isArray(toolsView?.tools) ? toolsView.tools.length : 0
   report.toolsSectionVisible = await evaluate(client, `(() => {
-    const rows = document.querySelectorAll('.tools .tool')
+    const rows = document.querySelectorAll('.tools .tool[data-tool]')
     const ids = [...rows].map((row) => row.getAttribute('data-tool'))
     return rows.length === 3 && ids.join(',') === 'lovelymem,lovelyspark,lovelycarve' && document.getElementById('btn-tools-save') !== null
   })()`)
@@ -384,6 +384,43 @@ try {
   report.toolsClearOk = Boolean(clearedWritten) && !Object.hasOwn(clearedWritten, 'lovelymem') && clearedWritten.lovelyspark === sparkExe
   if (!report.toolsClearOk) throw new Error('清除工具路径后配置不符：' + JSON.stringify(clearedWritten))
   log('工具路径', '分区可见，保存/清除后 ' + TOOLS_CONFIG)
+
+  // 外部取证工具路径（Ghidra/IDA/tshark/jadx/python/7z/sqlite3…）：12 行默认值 + 可改 + 写 tool-paths.json
+  const TOOL_PATHS_CONFIG = join(HOME, 'tool-paths.json')
+  const toolPathsView = await evaluate(client, 'window.seeu.toolPaths.get()')
+  report.toolPathsConfigFile = toolPathsView?.configFile ?? null
+  report.toolPathsRows = Array.isArray(toolPathsView?.tools) ? toolPathsView.tools.length : 0
+  if (report.toolPathsRows !== 12) throw new Error('外部工具路径条数不对：' + report.toolPathsRows)
+  if (report.toolPathsConfigFile !== TOOL_PATHS_CONFIG) throw new Error('外部工具路径配置文件不符：' + report.toolPathsConfigFile)
+  const ghidraRow = (toolPathsView?.tools ?? []).find((tool) => tool.id === 'ghidra')
+  report.toolPathsGhidra = ghidraRow?.path ?? null
+  if (!String(report.toolPathsGhidra).includes('ghidra-12.1.4')) throw new Error('Ghidra 默认路径不对：' + report.toolPathsGhidra)
+  report.toolPathsSectionVisible = await evaluate(client, `(() => {
+    const rows = document.querySelectorAll('[data-tool-path-row]')
+    const input = document.querySelector('[data-tool-path-input="ghidra"]')
+    return rows.length === 12 && input !== null && /ghidra-12\.1\.4/.test(input.value) && document.getElementById('btn-tool-paths-save') !== null
+  })()`)
+  if (report.toolPathsSectionVisible !== true) throw new Error('外部工具路径区渲染异常')
+  const ghidraDir = join(HOME, 'fake-ghidra')
+  mkdirSync(ghidraDir, { recursive: true })
+  const pathsSaved = await evaluate(client, `window.seeu.toolPaths.save({ ghidra: ${JSON.stringify(ghidraDir)} })`)
+  report.toolPathsApiSaved = pathsSaved?.ok === true && (pathsSaved.tools ?? []).some((tool) => tool.id === 'ghidra' && tool.path === ghidraDir)
+  if (!report.toolPathsApiSaved) throw new Error('toolPaths.save 失败：' + JSON.stringify(pathsSaved))
+  report.toolPathsUiSaved = await evaluate(client, `(async () => {
+    document.querySelector('[data-tool-path-input="ghidra"]').value = ${JSON.stringify(ghidraDir)}
+    document.getElementById('btn-tool-paths-save').click()
+    const t0 = Date.now()
+    while (Date.now() - t0 < 5000) {
+      if (/已保存外部工具路径/.test(document.getElementById('tool-paths-status').textContent)) return true
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    return false
+  })()`)
+  if (report.toolPathsUiSaved !== true) throw new Error('点「保存外部工具路径」后没有成功提示')
+  const toolPathsWritten = JSON.parse(readFileSync(TOOL_PATHS_CONFIG, 'utf8'))
+  report.toolPathsFileOk = toolPathsWritten.ghidra === ghidraDir
+  if (!report.toolPathsFileOk) throw new Error('外部工具路径配置内容不符：' + JSON.stringify(toolPathsWritten))
+  log('外部工具路径', '12 行默认值，保存后 ' + TOOL_PATHS_CONFIG)
 
   // 真实点「从网关拉取模型列表」按钮：应把 /v1/models 的 id 填进 textarea（保留已有显示名）
   await evaluate(client, `document.getElementById('btn-models').click(), true`)

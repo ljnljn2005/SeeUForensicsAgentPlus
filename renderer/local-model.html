@@ -291,6 +291,15 @@
     <div id="tools-config" class="hint"></div>
   </div>
 
+  <div class="field tools">
+    <label>外部取证工具路径（可选，可改；留空用默认实测值）</label>
+    <div id="tool-paths-rows"></div>
+    <div class="hint">Ghidra / IDA / tshark / jadx / python / 7-Zip / sqlite3 等外部工具。程序不会自动发现：这里显示的是本机默认路径，可逐项改。会话里以环境变量 <code>$SEEU_TOOL_GHIDRA</code>、<code>$SEEU_TOOL_TSHARK</code>、<code>$SEEU_TOOL_PYTHON</code> 等读取。</div>
+    <div class="actions" style="margin:10px 0 6px"><button id="btn-tool-paths-save">保存外部工具路径</button></div>
+    <div id="tool-paths-status" class="hint"></div>
+    <div id="tool-paths-config" class="hint"></div>
+  </div>
+
   <div class="actions">
     <button class="primary" id="btn-save">保存</button>
     <button id="btn-models">从网关拉取模型列表</button>
@@ -601,6 +610,111 @@
   }
   $('btn-tools-save').addEventListener('click', () => { void saveTools() })
 
+  // ── 外部取证工具路径（可选，可改；留空用默认实测值） ──────────────────────
+  const toolPathsApi = window.seeu && window.seeu.toolPaths
+  let toolPathsList = []
+
+  function toolPathRow(tool) {
+    const row = document.createElement('div')
+    row.className = 'tool'
+    row.dataset.toolPathRow = tool.id
+    const dot = document.createElement('span')
+    dot.className = 'dot'
+    const name = document.createElement('span')
+    name.className = 'tool-name'
+    name.textContent = tool.label
+    if (tool.hint) name.title = tool.hint
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.className = 'tool-path'
+    input.readOnly = true
+    input.dataset.toolPathInput = tool.id
+    const pick = document.createElement('button')
+    pick.textContent = '选择…'
+    const reset = document.createElement('button')
+    reset.textContent = '重置'
+    reset.disabled = !tool.configured
+    row.append(dot, name, input, pick, reset)
+    input.value = tool.path || ''
+    const bad = tool.exists && !tool.found
+    input.classList.toggle('missing', !tool.found)
+    dot.className = 'dot' + (tool.found ? ' ok' : (bad ? ' bad' : ''))
+    dot.title = tool.found ? '已找到（' + tool.source + '）' : (bad ? '路径存在但类型不对' : '未找到')
+    pick.addEventListener('click', async () => {
+      if (!toolPathsApi) return
+      const res = await toolPathsApi.pick(tool.id)
+      if (res && res.ok && res.path) {
+        input.value = res.path
+        dot.className = 'dot ok'
+        $('tool-paths-status').textContent = '已选择 ' + res.path + '（记得点「保存外部工具路径」）'
+        $('tool-paths-status').style.color = 'var(--muted)'
+      } else if (res && res.error) {
+        $('tool-paths-status').textContent = res.error
+        $('tool-paths-status').style.color = 'var(--err)'
+      }
+    })
+    reset.addEventListener('click', () => {
+      input.value = tool.defaultPath || ''
+      dot.className = 'dot ok'
+      $('tool-paths-status').textContent = '已恢复默认值（记得点「保存外部工具路径」）'
+      $('tool-paths-status').style.color = 'var(--muted)'
+    })
+    return row
+  }
+
+  function renderToolPaths(view) {
+    const rows = $('tool-paths-rows')
+    rows.textContent = ''
+    toolPathsList = (view && Array.isArray(view.tools)) ? view.tools : []
+    for (const tool of toolPathsList) rows.append(toolPathRow(tool))
+    const status = $('tool-paths-status')
+    if (view && view.error) {
+      status.textContent = '配置文件读取失败：' + view.error
+      status.style.color = 'var(--err)'
+    } else {
+      status.textContent = ''
+    }
+    const cfg = $('tool-paths-config')
+    if (cfg) cfg.textContent = view && view.configFile ? '配置文件：' + view.configFile : ''
+  }
+
+  async function loadToolPaths() {
+    if (!toolPathsApi) {
+      $('tool-paths-status').textContent = '预加载桥不可用（window.seeu.toolPaths 缺失），无法在这里修改外部工具路径。'
+      $('tool-paths-status').style.color = 'var(--err)'
+      return
+    }
+    try {
+      renderToolPaths(await toolPathsApi.get())
+    } catch (error) {
+      $('tool-paths-status').textContent = '读取外部工具路径失败：' + (error && error.message ? error.message : error)
+      $('tool-paths-status').style.color = 'var(--err)'
+    }
+  }
+
+  async function saveToolPaths() {
+    if (!toolPathsApi) return
+    const payload = {}
+    for (const input of document.querySelectorAll('[data-tool-path-input]')) {
+      payload[input.dataset.toolPathInput] = input.value
+    }
+    $('btn-tool-paths-save').disabled = true
+    try {
+      const res = await toolPathsApi.save(payload)
+      if (!res.ok) {
+        $('tool-paths-status').textContent = '保存失败：' + res.error
+        $('tool-paths-status').style.color = 'var(--err)'
+        return
+      }
+      renderToolPaths(res)
+      $('tool-paths-status').textContent = '已保存外部工具路径，新会话生效。'
+      $('tool-paths-status').style.color = 'var(--ok)'
+    } finally {
+      $('btn-tool-paths-save').disabled = false
+    }
+  }
+  $('btn-tool-paths-save').addEventListener('click', () => { void saveToolPaths() })
+
   async function load() {
     if (!api) {
       setStatus('预加载桥不可用（window.seeu.localModel 缺失），请从桌面版菜单打开本页。', 'err')
@@ -801,6 +915,7 @@
   }
 
   void loadTools()
+  void loadToolPaths()
   void load()
 </script>
 </body>
