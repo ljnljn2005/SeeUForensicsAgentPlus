@@ -2391,3 +2391,15 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：`tests/extra-dirs.test.mjs` 5/5（新增 forget：大小写不敏感、只删指定项、不存在不报错）；`npm test` 173/173；`m2-ui-check` `m2ok:true`。
 - 真机：拷贝一份索引到 `.dev/myos-ui` 并加入额外目录 → `/list` 显示 `extra:true`；`POST /extra-dirs/remove` → `{ok:true,dirs:[]}`，再 `/list` 恢复单条。
 - 坑：① `POST` 路由最初插在 `path.startsWith('/myos/')` 分支内部，`/extra-dirs/remove` 根本进不去 → 报 405「method not allowed」；移到 `/brief` 之后、MYOS 分支之前。② python 里写 `'\u0000'` 转义时被解释成真实 NUL，把 `index.js` 变成二进制文件（`grep` 报 Binary file）→ 用字节替换回 `\u0000` 文本。
+
+### 20.104 索引来源标签（第 26 轮）
+
+- `tools/ges-index/query.mjs` 的 `findIndexes()` 从 `manifest.json` 带回 `tool`（`ges-index` / `seeu-myso-import`）。
+- `plugins/seeu-case-index/index.js` 的 `/list` 每项新增 `source` 与 `sourceLabel`：
+  - `tool === 'seeu-myso-import'` → `myos` /「MYOS 导入」；
+  - 在额外目录清单里且不是 MYOS → `external` /「外部目录」；
+  - 其余 → `ges` /「火眼建库」。
+- 面板索引行用 `sourceLabel` 取代原来硬编码的「外部目录」标记（火眼建库用灰色、其余青色；`title` 显示 manifest 里的 `tool`），【移除】只对 `extra` 出现。
+- 测试：`tests/myos-index.test.mjs` 增加「`findIndexes` 能读到 `manifest.tool`」断言；`npm test` 173/173、`m2-ui-check` `m2ok:true`。
+- 真机：`W盘` → `ges:火眼建库`；MYOS 导入索引 → `myos:MYOS 导入`（用 node `fetch` 读 UTF-8 验证，避免控制台码页干扰）。
+- 坑：① 比较字符串把 `seeu-myso-import` 写成 `seeu-myos-import`（myso/myos 调换）→ 标签永远落到 external；这种拼写错误不会报错，只能靠真机对照 `tool` 字段发现。② 用 python 管道解析 `curl` 输出时，Windows 控制台按 GBK 解码 UTF-8，`sourceLabel` 会显示成乱码 —— 那是诊断链路的编码问题，不是接口问题；用 node `fetch` 或写文件再读可避免。

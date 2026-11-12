@@ -74,6 +74,8 @@ function syncOneCase(dbPath) {
   }
 }
 
+const SOURCE_LABELS = { ges: '火眼建库', myos: 'MYOS 导入', external: '外部目录' };
+
 function defaultDirs() {
   const env = process.env['SEEU_INDEX_SEARCH_DIRS'] ?? '';
   const dirs = env.split(';').map((s) => s.trim()).filter(Boolean);
@@ -194,11 +196,11 @@ async function handle(req, res) {
       const extraSet = new Set(readExtraDirs().map((item) => resolve(item).toLowerCase()));
       // meta 是给面板直接用的人类可读摘要（与写入会话概览的口径一致）。
       return send(res, 200, {
-        indexes: indexes.map((ix) => ({
-          ...ix,
-          meta: indexSummary(ix),
-          extra: extraSet.has(resolve(ix.caseDir ?? '\u0000').toLowerCase()),
-        })),
+        indexes: indexes.map((ix) => {
+          const extra = extraSet.has(ix.caseDir ? resolve(ix.caseDir).toLowerCase() : '');
+          const source = ix.tool === 'seeu-myso-import' ? 'myos' : extra ? 'external' : 'ges';
+          return { ...ix, meta: indexSummary(ix), extra, source, sourceLabel: SOURCE_LABELS[source] };
+        }),
       });
     }
     // ---------- 会话上下文里的案件概览（AGENTS.md 注入状态） ----------

@@ -79,6 +79,7 @@ export function findIndexes(dirs = []) {
         builtAt,
         sizeBytes: statSync(db).size,
         // 规模 / 新鲜度摘要用（manifest 可能缺失，调用方要容错）
+        tool: typeof manifest?.tool === 'string' ? manifest.tool : null,
         durationMs: manifest?.durationMs ?? null,
         counts: manifest?.counts ?? null,
         leaves: manifest?.leaves ?? null,

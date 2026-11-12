@@ -174,6 +174,7 @@ test('导入后的索引能被面板发现（findIndexes + manifest）', withCli
     assert.equal(found.length, 1)
     assert.equal(found[0].caseNumber, 'myos-case-3')
     assert.equal(found[0].caseName, '案件丙')
+    assert.equal(found[0].tool, 'seeu-myso-import', '索引来源（manifest.tool）应能被面板读到')
     assert.ok(found[0].counts, '应读到 manifest.json 的 counts')
     assert.equal(found[0].counts.records, 3)
     const summary = indexSummary(found[0])

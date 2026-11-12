@@ -2026,7 +2026,14 @@ window.__ModuleLoader__.load({
                     h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8 } },
                       h('span', { style: { color: C_FG, fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, ix.caseName ?? ix.caseNumber ?? basename(ix.caseDir)),
                       ix.caseNumber ? h('span', { style: { ...S.tag, flex: 'none' } }, ix.caseNumber) : null,
-                      ix.extra ? h('span', { style: { ...S.tag, flex: 'none', color: C_ACC, borderColor: C_ACC } }, '外部目录') : null,
+                      ix.sourceLabel ? h('span', {
+                        style: {
+                          ...S.tag, flex: 'none',
+                          color: ix.source === 'ges' ? C_FG3 : C_ACC,
+                          borderColor: ix.source === 'ges' ? C_L2 : C_ACC,
+                        },
+                        title: ix.tool ? '索引由 ' + ix.tool + ' 生成' : '',
+                      }, ix.sourceLabel) : null,
                       h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, fmtBytes(ix.sizeBytes ?? 0)),
                       ix.extra ? h('span', {
                         role: 'button',
