@@ -2515,3 +2515,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `plugins/seeu-case-index/client.js`：活动行点击不再盲目 `scan`，而是先 `GET /list`（不带 dir，避免 `/list?dir=` 合并默认目录导致误判），按 `item.dbFile` 或规范化后的 `item.caseDir`（`split('\').join('/').toLowerCase()`）在返回索引里查找；找不到 → 新增 `activityNote`（muted 卡片底部、`data-activity-note`、琥珀色）「打不开该活动：索引已不存在（…），可能被删除或移动。」；找到 → 只把 `list` 设为索引列表并打开目标库/节点。
 - e2e 自包含：`m2-ui-check` 启动前若 `SEEU_DSH_HOME` 是绝对路径，就写入 `index-activity.json`（今天 build + 昨天 myos-import，`caseDir` 指向不存在的 `E:/seeu-missing-*`）；断言点击第一行后 `activityOpenNote` 含「打不开该活动」、`activityOpenNoteOk:true`。
 - 坑：① `replace(/\/g,'/')` 经 python heredoc 两次转义变成 `/\/g`（非法正则），整块插件面板 import 失败、`errors` 里只有 `Uncaught SyntaxError: missing ) after argument list`——改用 `split('\').join('/')`；② m2 脚本里 `log()` 不存在（那是别的脚本的 helper），用 `console.log`；③ e2e 自己写活动文件比外部 bash 预置更稳（外部预置会被前一次运行的清空/覆盖弄丢）。
+
+### 20.119 活动可逐条移除（第 40 轮）
+
+- 动机：活动是 JSON 追加记录，误操作（失败建库、测试导入）留下的行只能「清空全部」，粒度太粗。
+- `tools/ges-index/activity.mjs`：新增 `removeActivity({ at, title }, env)`——按 `at` + `title` 精确定位删除一条，未命中不改文件与原样返回；写盘结构同 `recordActivity`。
+- 插件：`POST /activity/remove {at,title}` → 返回 `{ok, entries, summary, summaryText}`（与 `/activity` 同口径）。
+- 面板：活动行右侧加【移除】小按钮（`data-activity-remove`、`stopPropagation`），成功后同步 `activity/activitySummary/activityBuckets` 并清空提示。
+- 测试：`tests/activity.test.mjs` +1 例（删除命中/未命中不改文件）→ 8/8；`m2-ui-check` 断言 `activityRowsBeforeRemove:2` → 点击移除 → `activityRowsAfterRemove:1`、`activityRemoveOk:true` 并纳入 `activityOk`。

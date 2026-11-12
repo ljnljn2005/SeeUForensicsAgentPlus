@@ -51,6 +51,19 @@ export function clearActivity(env = process.env) {
   writeFileSync(file, `${JSON.stringify({ updatedAt: new Date().toISOString(), entries: [] }, null, 2)}\n`, 'utf8')
 }
 
+/** 删除一条活动（按 at + title 定位；返回删除后的列表，未命中则原样返回）。 */
+export function removeActivity({ at = '', title = '' } = {}, env = process.env) {
+  const entries = readActivity(env)
+  const index = entries.findIndex((item) => String(item.at ?? '') === String(at) && String(item.title ?? '') === String(title))
+  if (index < 0) return entries
+  const next = entries.filter((_, i) => i !== index)
+  const file = activityFile(env)
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, `${JSON.stringify({ updatedAt: new Date().toISOString(), entries: next }, null, 2)}
+`, 'utf8')
+  return next
+}
+
 /** 活动统计窗口（天）。 */
 export const ACTIVITY_SUMMARY_DAYS = 7
 

@@ -12,7 +12,7 @@ import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.m
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
 import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTableCounts, myosTables } from './myos.mjs';
 import { forgetExtraDir, readExtraDirs, rememberExtraDir } from '../../tools/ges-index/extra-dirs.mjs';
-import { activityFile, clearActivity, formatActivitySummary, readActivity, recordActivity, summarizeActivity } from '../../tools/ges-index/activity.mjs';
+import { activityFile, clearActivity, formatActivitySummary, readActivity, recordActivity, removeActivity, summarizeActivity } from '../../tools/ges-index/activity.mjs';
 
 function pathBase(value) {
   const text = String(value ?? '').replace(/[\/]+$/, '');
@@ -215,6 +215,12 @@ async function handle(req, res) {
     if (req.method === 'POST' && path === '/activity/clear') {
       clearActivity();
       return send(res, 200, { ok: true, entries: [] });
+    }
+    if (req.method === 'POST' && path === '/activity/remove') {
+      const body = await readBody(req);
+      const entries = removeActivity({ at: body?.at ?? '', title: body?.title ?? '' });
+      const summary = summarizeActivity(entries);
+      return send(res, 200, { ok: true, entries, summary, summaryText: formatActivitySummary(summary) });
     }
     if (req.method === 'GET' && path === '/list') {
       const dirs = [

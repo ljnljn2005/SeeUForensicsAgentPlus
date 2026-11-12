@@ -235,10 +235,17 @@ await sleep(700)
     report.activityOpenNoteOk = /打不开该活动/.test(String(report.activityOpenNote))
     if (!report.activityOpenNoteOk) throw new Error('活动行打开失败时没有提示：' + JSON.stringify({ note: report.activityOpenNote, rows: report.activityRowCount, rowText: report.activityRowText, noteEls: report.activityNoteEls, firstRows: report.activityRows, visible: report.activityVisible, emptyHint: report.activityEmptyHint, bars: report.activityBars, filterText: report.activityFilterText }))
     console.log('活动打开失败提示:', String(report.activityOpenNote).slice(0, 60))
+    // 第 40 轮：移除单条活动（按钮不冒泡触发打开）。
+    report.activityRowsBeforeRemove = await ev("document.querySelectorAll('[data-activity-kind]').length")
+    await ev("(document.querySelector('[data-activity-remove]') || {click(){}}).click(), true")
+    await sleep(900)
+    report.activityRowsAfterRemove = await ev("document.querySelectorAll('[data-activity-kind]').length")
+    report.activityRemoveOk = report.activityRowsBeforeRemove === 2 && report.activityRowsAfterRemove === 1
+    if (!report.activityRemoveOk) throw new Error('移除活动失败：' + JSON.stringify({ before: report.activityRowsBeforeRemove, after: report.activityRowsAfterRemove }))
   }
 
   report.activitySummaryText = await ev("(() => { const el = document.querySelector('[data-activity-summary]'); return el ? el.textContent.trim() : '' })()")
-  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true) && report.activitySummaryPresent === 1 && report.activityBars === 7 && report.activityDayFilterOk === true && report.activityOpenNoteOk === true
+  report.activityOk = report.activityVisible === true && (report.activityRows > 0 || report.activityEmptyHint === true) && report.activitySummaryPresent === 1 && report.activityBars === 7 && report.activityDayFilterOk === true && report.activityOpenNoteOk === true && report.activityRemoveOk === true
 }
 report.idxFilterOk = report.idxFilterChips === 4 && report.idxFilterClickMyos === true && report.idxFilterEmpty === true && report.idxFilterClickAll === true && report.idxFilterRestore === true
 report.rootText = text.slice(text.indexOf('取证案件索引'), text.indexOf('取证案件索引') + 900)

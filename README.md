@@ -81,6 +81,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 ### v0.3.12 待发布（未打包）
 
+- **活动可逐条移除**（第 40 轮）：每行右侧【移除】（`data-activity-remove`，`stopPropagation` 不会误触发打开）→ `POST /activity/remove {at,title}` 精确删一条并刷新统计/条形；`removeActivity()` 单测 +1（按 at+title、未命中不改文件）；`m2-ui-check` 断言移除后行数 2→1（`activityRemoveOk:true`）。
 - **活动行打开失败有提示**（第 39 轮）：点活动行时先核对 `/list` 返回的索引（按 `dbFile` 或规范化 `caseDir` 匹配），找不到就在卡片底部显示「打不开该活动：索引已不存在（…），可能被删除或移动。」（琥珀色），不再静默失败；`m2-ui-check` 内置预置活动（今天/昨天各 1 条、指向不存在的目录），断言 `activityOpenNoteOk:true` 并纳入 `activityOk`。
 - **体检报告可导出 .md**（第 38 轮）：`envReportMarkdown()` 生成标准 Markdown（标题 + 检查时间 + 合计 + 四列表格 + 备注），设置页「导出 .md」按钮走 `save-export` IPC 落盘（目录同 CSV 导出，`SEEU_EXPORT_DIR` 可指定），e2e 读回落盘文件断言含 `| 项目 | 状态 | 详情 | 提示 |` 与 `合计：**6 项正常`。
 - **活动条形可点选当天**（第 37 轮）：点「最近活动」任一小条形即只看那一天（再点取消）；标题行显示「当天 1 条 · 共 2 条」，旁边出现「只看 2026-11-13 · 点条形取消」。`m2-ui-check` 预置「今天 1 条 / 昨天 1 条」后断言 `activityFilterText`、`activityHeaderText:"当天 1 条 · 共 2 条"`、`activityFilterCleared`、`activityDayFilterOk:true`。

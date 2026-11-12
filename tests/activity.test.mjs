@@ -11,7 +11,8 @@ import {
   formatActivitySummary,
   readActivity,
   recordActivity,
-  summarizeActivity,
+  removeActivity,
+  summarizeActivity
 } from '../tools/ges-index/activity.mjs'
 
 const tempEnv = () => {
@@ -116,4 +117,22 @@ test('summarizeActivity：按天分桶（最近 N 天，最后一天是今天，
   assert.deepEqual(summary.buckets[4], { date: '2026-11-11', builds: 1, imports: 0, total: 1 })
   assert.equal(summary.buckets.reduce((sum, item) => sum + item.total, 0), 3)
   assert.equal(summary.builds, 2)
+})
+
+test('removeActivity：按 at+title 精确删除一条，未命中不改文件', () => {
+  const { env, cleanup } = tempEnv()
+  try {
+    const first = recordActivity({ kind: 'build', title: 'case-a' }, env)
+    recordActivity({ kind: 'myos-import', title: 'case-b', rows: 3 }, env)
+    assert.equal(readActivity(env).length, 2)
+    const next = removeActivity({ at: first.at, title: first.title }, env)
+    assert.equal(next.length, 1)
+    assert.equal(next[0].title, 'case-b')
+    assert.equal(readActivity(env).length, 1)
+    const unchanged = removeActivity({ at: 'nope', title: 'nope' }, env)
+    assert.equal(unchanged.length, 1)
+    assert.equal(readActivity(env).length, 1)
+  } finally {
+    cleanup()
+  }
 })

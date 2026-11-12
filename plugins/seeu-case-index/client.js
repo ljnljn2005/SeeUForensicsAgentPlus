@@ -1514,6 +1514,19 @@ window.__ModuleLoader__.load({
       const [activityBuckets, setActivityBuckets] = useState([]);
       const [activityDay, setActivityDay] = useState('');
       const [activityNote, setActivityNote] = useState('');
+
+      // 移除单条活动：失败时给提示，成功后同步刷新统计与条形。
+      const dropActivity = async (item) => {
+        try {
+          const body = await post('/activity/remove', { at: item?.at ?? '', title: item?.title ?? '' });
+          if (Array.isArray(body?.entries)) setActivity(body.entries);
+          setActivitySummary(typeof body?.summaryText === 'string' ? body.summaryText : '');
+          if (Array.isArray(body?.summary?.buckets)) setActivityBuckets(body.summary.buckets);
+          setActivityNote('');
+        } catch (error) {
+          setActivityNote('移除活动失败：' + (error && error.message ? error.message : error));
+        }
+      };
       useEffect(() => {
         let alive = true;
         if (!db) { setEvList([]); return undefined; }
@@ -2180,7 +2193,15 @@ window.__ModuleLoader__.load({
             h('span', { style: { fontSize: 12, color: C_FG } }, item.title ?? ''),
             h('span', { style: S.muted }, item.detail ?? ''),
             h('div', { style: { flex: 1 } }),
-            h('span', { style: S.muted }, item.at ? new Date(item.at).toLocaleTimeString('zh-CN', { hour12: false }) : '')))
+            h('span', { style: S.muted }, item.at ? new Date(item.at).toLocaleTimeString('zh-CN', { hour12: false }) : ''),
+            h('button', {
+              type: 'button',
+              'data-activity-remove': '1',
+              title: '移除这条活动记录（不删除索引文件）',
+              className: 'seeu-btn',
+              style: { fontSize: 10.5, padding: '1px 6px', opacity: 0.75 },
+              onClick: (event) => { event.stopPropagation(); void dropActivity(item); },
+            }, '移除')))
             : h('div', { style: S.muted }, '建库或从 MYOS 导入后，这里会按时间列出最近的工作，点一行可直接打开对应索引。'),
           activityNote ? h('div', {
             'data-activity-note': '1',
