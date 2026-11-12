@@ -53,16 +53,63 @@ async function startMockGateway() {
       return
     }
     if (req.method === 'POST' && req.url === '/v1/chat/completions') {
-      // 预热用的最小非流式补全：返回一句 pong
-      res.writeHead(200, { 'content-type': 'application/json' })
-      res.end(
-        JSON.stringify({
-          id: 'mock-chat-' + Date.now(),
-          object: 'chat.completion',
-          choices: [{ index: 0, message: { role: 'assistant', content: 'pong' }, finish_reason: 'stop' }],
-          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-        }),
-      )
+      const chunks = []
+      req.on('data', (chunk) => chunks.push(chunk))
+      req.on('end', () => {
+        let body = {}
+        try {
+          body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+        } catch {
+          body = {}
+        }
+        const NL = String.fromCharCode(10)
+        // 流式自检：先返回 reasoning_content，再返回正文（模拟 Spark 单机 Qwen 的思考流）
+        if (body.stream === true) {
+          res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
+          const emit = (delta) => res.write('data: ' + JSON.stringify({ choices: [{ index: 0, delta }] }) + NL + NL)
+          emit({ reasoning_content: '让我想一下，' })
+          emit({ reasoning_content: '先确认这是流式自检。' })
+          emit({ content: 'ok' })
+          res.write('data: [DONE]' + NL + NL)
+          res.end()
+          return
+        }
+        // 工具自检：模型返回 ping_tool 调用
+        const wantsTool = Array.isArray(body.tools) && body.tools.some((tool) => tool?.function?.name === 'ping_tool')
+        if (wantsTool) {
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(
+            JSON.stringify({
+              id: 'mock-tool-' + Date.now(),
+              object: 'chat.completion',
+              choices: [
+                {
+                  index: 0,
+                  message: {
+                    role: 'assistant',
+                    content: null,
+                    tool_calls: [
+                      { id: 'call_ping', type: 'function', function: { name: 'ping_tool', arguments: '{"value":1}' } },
+                    ],
+                  },
+                  finish_reason: 'tool_calls',
+                },
+              ],
+            }),
+          )
+          return
+        }
+        // 预热用的最小非流式补全：返回一句 pong
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(
+          JSON.stringify({
+            id: 'mock-chat-' + Date.now(),
+            object: 'chat.completion',
+            choices: [{ index: 0, message: { role: 'assistant', content: 'pong' }, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          }),
+        )
+      })
       return
     }
     res.writeHead(404)
@@ -304,6 +351,23 @@ try {
   if (probe?.ok !== true) throw new Error(`测试连接失败：${JSON.stringify(probe)}`)
   report.gatewayModels = (probe.models ?? []).map((m) => m.id)
   log('测试连接', `HTTP ${probe.status}，模型 ${report.gatewayModels.join(',')}`)
+
+  // 能力自检（流式 + 思考流 + 工具调用）：mock 网关同时模拟流式 reasoning 与 ping_tool
+  const diag = await evaluate(client, `window.seeu.localModel.diagnose({
+    baseURL: 'http://127.0.0.1:${MOCK_PORT}/v1',
+    apiKey: 'local',
+    model: 'qwen2.5-32b-instruct',
+    thinkingFormat: 'qwen-chat-template'
+  })`)
+  report.diagItems = (diag?.items ?? []).map((item) => ({ key: item.key, ok: item.ok }))
+  const diagByKey = Object.fromEntries((diag?.items ?? []).map((item) => [item.key, item]))
+  if (diagByKey.models?.ok !== true || diagByKey.chat?.ok !== true) throw new Error('自检基础项失败：' + JSON.stringify(diag))
+  if (diagByKey.stream?.ok !== true) throw new Error('流式自检失败：' + JSON.stringify(diagByKey.stream))
+  if (diagByKey.reasoning?.ok !== true) throw new Error('思考流自检失败：' + JSON.stringify(diagByKey.reasoning))
+  if (diagByKey.tools?.ok !== true) throw new Error('工具自检失败：' + JSON.stringify(diagByKey.tools))
+  report.diagOk = diag.ok === true
+  if (!report.diagOk) throw new Error('自检整体未通过：' + JSON.stringify(report.diagItems))
+  log('能力自检', report.diagItems.map((item) => item.key + (item.ok ? ':✓' : ':✗')).join(' '))
 
   const saved = await evaluate(client, `window.seeu.localModel.save({
     enabled: true,

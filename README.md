@@ -813,6 +813,7 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 
 **与火眼索引的关系**：两者互补 —— 火眼/`ges` 的结果由 `ges-case-index` 建 `case-index.db`（面板检索，快）；MYOS 则是「活的取证软件」，负责接案件、跑任务、查结果库。统一的「一次入库、AI 快速读取」走同一套索引：用 MYOS MCP 取数据（不要直接读 MYOS 数据目录）→ 归一化写入 `case-index.db` 的 evidence/record/entity 表 → 面板与技能都只查索引。融合细节见 `docs/plan-case-index.md` §20.67。
 
+- **「测试连接」升级为五项能力自检（第 6 轮）**：设置页能力自检从「模型列表 / 基础对话 / 工具调用」扩展到五项——新增**流式输出**（首字延迟、流式字符数）与**思考流**（是否返回 `reasoning_content`/`reasoning`，按高级区的思考流格式带 `enable_thinking` 或 `reasoning_effort`）；任一项标红时汇总行给出对应排查建议，诊断文本一并带出。
 - **思考流（reasoning）格式可配（第 5 轮）**：本地网关对推理内容的暴露方式不同。设置页「高级：超时与重试」新增「思考流格式」下拉 + `chat_template_kwargs`（JSON）：`deepseek`（流式 `reasoning_content`，dsv4.1-flash）、`qwen-chat-template`（带 `enable_thinking`，qwen3.8-flash-next）、`qwen`/`chat-template`/`string-thinking`，默认 `auto` 交给运行时判断。Spark 单机预设自动填 `qwen-chat-template` + `{"enable_thinking": true}`，双机预设填 `deepseek`；patch 写进 provider `compat.thinkingFormat` 与 `compat.chatTemplateKwargs`，设置页保存/回填、`settings-check` 断言均覆盖。
 
 ## 12. 随包 dsh 插件

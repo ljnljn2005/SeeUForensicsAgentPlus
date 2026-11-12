@@ -2112,3 +2112,15 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：`tests/local-model.test.mjs` 新增「思考流格式」用例（auto 不写、deepseek/qwen-chat-template 写进 provider compat、kwargs 键值透传、非法值回 auto、数组 kwargs 被忽略）；`scripts/e2e/settings-check.mjs` 的 `deploySingle/deployDual` 断言格式与 kwargs、保存后 `written.thinkingFormat === 'deepseek'`。
 - 坑：`str()` 对 undefined 返回 undefined → `(str(...) || 'auto').toLowerCase()`；把 patch 文本 `YAML.parse` 得到的是数组，取 `rows[0].config.providers[route]` 才能看到 compat。
 - 验证：`npm test` 126/126、`check:overlay` OK、`build` OK、`settings-check` 全绿（含 `thinkingSaved:true`、单机 `qwen-chat-template` / 双机 `deepseek`）。
+
+### 20.84 能力自检扩展到流式与思考流（第 6 轮）
+
+- 动机：本机部署最容易出问题的三处——流式（不返回 `stream:true` 会白屏/卡住）、思考流（Qwen 看不到思考）、工具调用（不能查库）。之前自检只覆盖模型列表/对话/工具，流式与思考只能靠会话试。
+- `src/local-model.ts`：`DiagnosisItem.key` 扩展 `'stream' | 'reasoning'`；新增 `probeStream()`（`stream:true` 逐块读 SSE，统计首字延迟、正文字符数、`reasoning_content`/`reasoning` 字符数；按 `GatewayProbeInput.thinkingFormat` 带 `chat_template_kwargs.enable_thinking` 或 `reasoning_effort:'low'`）；自检顺序改为 模型列表 → 基础对话 → 流式输出 → 思考流 → 工具调用；`auto` 模式下思考流未返回不算失败（非推理模型正常），显式格式下未返回则标红并提示检查模型/开关。
+- 设置页：`api.diagnose({ baseURL, apiKey, model, thinkingFormat })` 传当前思考流格式；汇总行区分「流式不可用」「未看到思考流」两类提示。
+- e2e：`scripts/e2e/settings-check.mjs` 的 mock 网关支持 `stream:true`（先回两段 `reasoning_content` 再回正文与 `[DONE]`）与 `tools`（回 `ping_tool` 调用）；新增 `diag` 断言五项全 ✓、`report.diagItems/diagOk`。
+- 坑：用 python heredoc 往 TS/HTML 里写 `'
+'`、`/
+?
+/` 会被吃掉一层反斜杠 → 生成真实换行，`esbuild` 报 `Unterminated string literal`、设置页脚本静默失败（表现为「勾选流式用量后 preview 未更新」）。这类改写后要 `node --check` 提取出的脚本，并优先用 `String.fromCharCode(10)` 代替转义。
+- 验证：`npm test` 125/125、`check:overlay` OK、`build` OK、`settings-check` 全绿（`diagItems` 五项 ✓、`thinkingSaved:true`）。

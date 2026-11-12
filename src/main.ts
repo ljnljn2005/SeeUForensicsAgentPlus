@@ -911,8 +911,11 @@ function registerIpc(): void {
   ipcMain.handle('seeu:local-model:probe', async () => (await probeLocalModelGateway('manual')) ?? null)
   ipcMain.handle('seeu:local-model:save', (_event, input: unknown) => writeLocalModelConfig(input))
   ipcMain.handle('seeu:local-model:preview', (_event, input: unknown) => previewLocalModelPatch(input))
-  ipcMain.handle('seeu:local-model:test', (_event, probe: { baseURL?: string; apiKey?: string }) =>
-    testLocalGateway(probe ?? {}))
+  ipcMain.handle(
+    'seeu:local-model:test',
+    (_event, probe: { baseURL?: string; apiKey?: string; model?: string; thinkingFormat?: string }) =>
+      testLocalGateway(probe ?? {}),
+  )
   ipcMain.handle('seeu:local-model:warmup', async (_event, probe: { baseURL?: string; apiKey?: string; model?: string } | undefined) => {
     const input = probe ?? {}
     if (input.baseURL !== undefined && input.baseURL !== '') return warmupLocalGateway(input)

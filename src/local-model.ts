@@ -359,10 +359,12 @@ export async function warmupLocalGateway(input: {
 export interface GatewayProbeInput extends GatewayProbe {
   /** 参与自检的模型 id；不给就取 /models 的第一个。 */
   readonly model?: string
+  /** 配置的思考流格式（来自 local-model.json 的 thinkingFormat）；用于流式/思考自检。 */
+  readonly thinkingFormat?: string
 }
 
 export interface DiagnosisItem {
-  readonly key: 'models' | 'chat' | 'tools'
+  readonly key: 'models' | 'chat' | 'stream' | 'reasoning' | 'tools'
   readonly label: string
   readonly ok: boolean
   readonly detail: string
@@ -459,6 +461,106 @@ async function postCompletion(
   }
 }
 
+interface StreamProbe {
+  ok: boolean
+  status: number
+  ms: number
+  firstDeltaMs: number
+  contentChars: number
+  reasoningChars: number
+  sample: string
+  error?: string
+}
+
+/**
+ * 流式自检：`stream:true` 时网关是否逐块返回、首字多快、有没有思考流。
+ * 思考流不只看 `reasoning_content`：部分本地网关会写成 `reasoning` 或把思考塞进 content 的
+ * `<thinking>` 段，这里都算「返回了思考」，具体怎么解析交给 dsh 的 compat.thinkingFormat。
+ */
+async function probeStream(
+  url: string,
+  apiKey: string | undefined,
+  body: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<StreamProbe> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const started = Date.now()
+  let firstDeltaMs = 0
+  let contentChars = 0
+  let reasoningChars = 0
+  const sampleParts: string[] = []
+  try {
+    const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'text/event-stream' }
+    if (apiKey !== undefined && apiKey !== '') headers.authorization = `Bearer ${apiKey}`
+    const response = await net.fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    if (!response.ok || response.body === null) {
+      const text = await response.text().catch(() => '')
+      return { ok: false, status: response.status, ms: Date.now() - started, firstDeltaMs: 0, contentChars: 0, reasoningChars: 0, sample: text.slice(0, 200) }
+    }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let reasoningSeen = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let index
+      while ((index = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, index).trim()
+        buffer = buffer.slice(index + 1)
+        if (!line.startsWith('data:')) continue
+        const payload = line.slice(5).trim()
+        if (payload === '' || payload === '[DONE]') continue
+        let chunk: {
+          choices?: Array<{ delta?: { content?: string; reasoning_content?: string; reasoning?: string } }>
+        }
+        try {
+          chunk = JSON.parse(payload) as typeof chunk
+        } catch {
+          continue
+        }
+        for (const choice of chunk.choices ?? []) {
+          const delta = choice.delta
+          const reasoning = delta?.reasoning_content ?? delta?.reasoning ?? ''
+          if (reasoning !== '') {
+            reasoningChars += reasoning.length
+            if (reasoningSeen.length < 120) reasoningSeen += reasoning
+          }
+          if (delta?.content !== undefined && delta.content !== '') {
+            contentChars += delta.content.length
+            if (sampleParts.join('').length < 80 && !delta.content.includes('thinking')) sampleParts.push(delta.content)
+          }
+          if (firstDeltaMs === 0 && (reasoning !== '' || (delta?.content ?? '') !== '')) {
+            firstDeltaMs = Date.now() - started
+          }
+        }
+      }
+    }
+    reader.releaseLock()
+    return {
+      ok: firstDeltaMs > 0 || contentChars > 0 || reasoningChars > 0,
+      status: response.status,
+      ms: Date.now() - started,
+      firstDeltaMs,
+      contentChars,
+      reasoningChars,
+      sample: (reasoningSeen || sampleParts.join('')).replace(/\s+/g, ' ').slice(0, 60),
+    }
+  } catch (error) {
+    const message = (error as Error).name === 'AbortError' ? `超时（${timeoutMs}ms）` : (error as Error).message
+    return { ok: false, status: 0, ms: Date.now() - started, firstDeltaMs: 0, contentChars: 0, reasoningChars: 0, sample: message }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /**
  * 「测试连接与能力自检」：本地网关能不能用，不只看 `/models` 通不通。
  *
@@ -541,7 +643,46 @@ export async function diagnoseLocalGateway(input: GatewayProbeInput): Promise<Ga
     return { ok: false, baseURL: base, model, items }
   }
 
-  // 3) 工具调用
+  // 3) 流式与思考流
+  const thinkingFormat = (input.thinkingFormat ?? 'auto').trim()
+  const streamStarted = Date.now()
+  const stream = await probeStream(
+    `${base}/chat/completions`,
+    input.apiKey,
+    {
+      model,
+      messages: [{ role: 'user', content: '用一句话说明你在思考什么，然后只回复 ok。' }],
+      stream: true,
+      max_tokens: 96,
+      ...(thinkingFormat === 'qwen-chat-template' || thinkingFormat === 'chat-template'
+        ? { chat_template_kwargs: { enable_thinking: true } }
+        : {}),
+      ...(thinkingFormat === 'deepseek' ? { reasoning_effort: 'low' } : {}),
+    },
+    Math.min(timeoutMs, 60_000),
+  )
+  items.push({
+    key: 'stream',
+    label: '流式输出',
+    ok: stream.ok,
+    detail: stream.ok
+      ? `首字 ${Math.max(stream.firstDeltaMs, 0)} ms，共 ${stream.contentChars} 字${stream.reasoningChars > 0 ? `（思考 ${stream.reasoningChars} 字）` : ''}`
+      : `HTTP ${stream.status}：${stream.error ?? stream.sample}`,
+    ms: stream.ms,
+  })
+  items.push({
+    key: 'reasoning',
+    label: '思考流',
+    ok: stream.reasoningChars > 0 || thinkingFormat === 'auto',
+    detail: stream.reasoningChars > 0
+      ? `返回思考 ${stream.reasoningChars} 字：${stream.sample.slice(0, 40)}…`
+      : thinkingFormat === 'auto'
+        ? '自动模式：网关未回思考字段（多数非推理模型正常；想强制可见请在高级里选格式）'
+        : `格式「${thinkingFormat}」下未返回 reasoning_content/reasoning —— 检查模型是否推理模型、是否需要 enable_thinking`,
+    ms: stream.ms,
+  })
+
+  // 4) 工具调用
   const tool = await postCompletion(
     `${base}/chat/completions`,
     input.apiKey,

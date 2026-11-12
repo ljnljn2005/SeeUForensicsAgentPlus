@@ -514,8 +514,14 @@
     const sum = document.createElement('div')
     sum.className = 'sum'
     const tools = res.items.find((i) => i.key === 'tools')
+    const stream = res.items.find((i) => i.key === 'stream')
+    const reasoning = res.items.find((i) => i.key === 'reasoning')
     sum.textContent = res.ok
-      ? '自检通过：网关可用于取证会话（含工具调用）。模型：' + (res.model || '(未指定)')
+      ? '自检通过：网关可用于取证会话（流式/思考流/工具调用均正常）。模型：' + (res.model || '(未指定)')
+      : stream && !stream.ok
+        ? '流式输出不可用 —— 本产品按流式渲染，请检查网关是否支持 stream:true。'
+        : reasoning && !reasoning.ok
+          ? '未看到思考流 —— 如果模型支持推理，请在高级里把「思考流格式」切到对应项后重试。'
       : tools && !tools.ok
         ? '网关能对话，但工具调用不可用 —— 该模型在本产品里只能聊天，不能查案件库、不能用技能。'
         : '自检未通过，按上面标红的一项排查。'
@@ -927,7 +933,12 @@
     $('btn-models').disabled = true
     setStatus('正在读取 ' + baseURL.replace(/\/$/, '') + '/models …')
     try {
-      const res = await api.test({ baseURL, apiKey: $('apiKey').value.trim() })
+      const res = await api.test({
+        baseURL,
+        apiKey: $('apiKey').value.trim(),
+        model: ($('models').value.split(String.fromCharCode(10))[0] || '').split('|')[0].trim() || undefined,
+        thinkingFormat: $('thinkingFormat').value || 'auto',
+      })
       if (!res || res.ok !== true) {
         const hint = res && res.hint ? '\n' + res.hint : ''
         setStatus('拉取失败：' + ((res && res.error) || '未知错误') + hint, 'err')
@@ -966,7 +977,12 @@
     setStatus('正在自检 ' + form.baseURL.replace(/\/$/, '') + '（模型列表 → 基础对话 → 工具调用，本地模型首 token 慢可能等十几秒）…')
     $('btn-test').disabled = true
     try {
-      const res = await api.diagnose({ baseURL: form.baseURL, apiKey: form.apiKey, model })
+      const res = await api.diagnose({
+        baseURL: form.baseURL,
+        apiKey: form.apiKey,
+        model,
+        thinkingFormat: form.thinkingFormat || 'auto',
+      })
       renderDiag(res)
       setStatus(res.ok ? '自检通过。' : '自检发现问题，见下方逐项结果。', res.ok ? 'ok' : 'warn')
     } catch (error) {
