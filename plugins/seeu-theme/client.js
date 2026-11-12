@@ -282,6 +282,35 @@ window.__ModuleLoader__.load({
           },
         })
       }
+      // 本机工具就绪度：外部工具路径 + 当前挂载数，一次读取即可（挂载窗口里可刷新）
+      const [tools, setTools] = React.useState(null)
+      React.useEffect(() => {
+        let alive = true
+        const load = async () => {
+          try {
+            if (!shell || !shell.toolPaths || typeof shell.toolPaths.get !== 'function') return
+            const view = await shell.toolPaths.get()
+            if (!alive || !view) return
+            const rows = Array.isArray(view.tools) ? view.tools : []
+            const ready = rows.filter((row) => row && row.found).length
+            let mounts = 0
+            try {
+              if (shell.mounts && typeof shell.mounts.get === 'function') {
+                const state = await shell.mounts.get()
+                mounts = Array.isArray(state?.mounts) ? state.mounts.length : 0
+              }
+            } catch {
+              mounts = 0
+            }
+            if (alive) setTools({ ready, total: rows.length, mounts })
+          } catch {
+            // 外壳 API 不可用时静默隐藏
+          }
+        }
+        void load()
+        return () => { alive = false }
+      }, [])
+
       const fmtBytes = (n) => (n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MiB' : n >= 1024 ? Math.round(n / 1024) + ' KiB' : String(n ?? 0) + ' B')
       const fmtTime = (value) => {
         const ts = Date.parse(String(value ?? ''))
@@ -362,6 +391,42 @@ window.__ModuleLoader__.load({
             ),
           )
         : null
+      const toolsChip = tools
+        ? h(
+            'div',
+            {
+              key: 'tools',
+              'data-seeu-tools': tools.ready + '/' + tools.total,
+              'data-seeu-mounts': String(tools.mounts),
+              title: '本机外部工具路径就绪度与当前镜像挂载数（点击打开设置）',
+              onClick: openLocalModel,
+              style: {
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '3px 12px',
+                borderRadius: '999px',
+                fontSize: '11.5px',
+                lineHeight: 1.7,
+                cursor: 'pointer',
+                color: 'var(--dsw-alias-label-secondary, #A9BBD1)',
+                background: 'var(--dsw-alias-bg-layer-2, #131E33)',
+                border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,0.12))',
+              },
+            },
+            h('span', {
+              style: {
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: tools.ready >= tools.total ? '#34D399' : '#FBBF24',
+              },
+            }),
+            h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #8397B0)' } }, '本机工具：'),
+            h('span', { style: { color: 'var(--dsw-alias-label-primary, #E6EDF7)', fontWeight: 600 } }, tools.ready + '/' + tools.total + ' 就绪'),
+            h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #8397B0)' } }, '· 镜像挂载 ' + tools.mounts),
+          )
+        : null
       return h(
         'div',
         { className: 'seeu-hero-wrap', style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' } },
@@ -403,6 +468,7 @@ window.__ModuleLoader__.load({
         ),
         recentChip,
         lmChip,
+        toolsChip,
       )
     }
 

@@ -179,6 +179,17 @@ try {
   report.localModelOk = lmChip !== null && /Mock 14B/.test(report.localModelText) && /网关可用/.test(report.localModelText)
   log('默认本地模型 chip', report.localModelOk ? report.localModelText : '没出现')
   if (!report.localModelOk) throw new Error('欢迎页没有显示默认本地模型 chip')
+  // 欢迎页「本机工具」chip：外部工具就绪度 + 当前挂载数（需要外壳 toolPaths API）
+  const toolsChip = await evaluate(client, `(async () => {
+    const el = document.querySelector('[data-seeu-tools]')
+    return el ? { text: el.innerText, ready: el.getAttribute('data-seeu-tools'), mounts: el.getAttribute('data-seeu-mounts') } : null
+  })()`)
+  report.toolsText = toolsChip ? toolsChip.text : ''
+  report.toolsChip = toolsChip ? toolsChip.ready : ''
+  report.toolsOk = toolsChip !== null && /\d+\/\d+ 就绪/.test(report.toolsText) && /镜像挂载/.test(report.toolsText)
+  log('本机工具 chip', report.toolsOk ? report.toolsText : '没出现')
+  if (!report.toolsOk) throw new Error('欢迎页没有显示本机工具就绪度 chip')
+
   // 欢迎页「最近案件」chip：需要真实案件库在场
   if (existsSync(CASE_DB)) {
     const recentText = await evaluate(client, `(async () => {

@@ -2097,3 +2097,9 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试/回归：`tests/image-mount.test.mjs` 增 `mountErrorHint` 用例并断言 inspect/mount/unmount 的 `ms`（5/5）；`scripts/e2e/mount-check.mjs` 断言 `inspect.ms`/`mount.ms`/`unmountMs` 且页面接线存在（`timingWired`，UI 直接调用 API 时不会触发 `noteTiming`，所以断言元素与 `noteTiming` 逻辑而非文案）；`npm test` **125/125**、`check:overlay` OK、`build` OK、`mount-check` 全绿（inspect 217 ms / mount 588 ms / unmount 1 ms）。
 - 坑：inspect 的「文件不存在」早返回原来不带 `hint`，导致单测拿不到提示 —— 三个早返回统一补 `hint`/`ms`。
 
+### 20.82 欢迎页「本机工具」chip（第 4 轮）
+
+- 需求：把「外部工具就绪度 + 当前挂载数」放到欢迎页，一眼看出环境是否齐、有没有挂载中的镜像；避免每次都要打开设置核对。
+- 实现 `plugins/seeu-theme/client.js` 的 `HeroActions`：新增 `tools` 状态（`shell.toolPaths.get()` → `ready/total`，`shell.mounts.get()` → `mounts.length`），只在外壳 API 存在时渲染；`data-seeu-tools="13/13"`、`data-seeu-mounts="0"`，文案「本机工具：13/13 就绪 · 镜像挂载 0」，全部就绪绿点、否则琥珀点，点击打开设置窗口。
+- e2e `scripts/e2e/hero-check.mjs` 新增 `toolsText/toolsChip/toolsOk` 断言；实测 `toolsOk:true`、文本「本机工具：13/13 就绪 · 镜像挂载 0」，其余 chip/入口/窗口/面板断言不变。
+- 验证：`node scripts/build.mjs` OK、`hero-check` `ok:true`、`npm test` 125/125；未改后端，无打包影响。
