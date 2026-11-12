@@ -963,3 +963,17 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：`verify-launch` 目录版 `ok:true, elapsedMs:6180`、portable `ok:true, elapsedMs:48782`。
 - 打包态 e2e（`SEEU_UI_EXE` 传 Windows 正斜杠路径、隔离 home/userData）：`m2-ui-check`（`m2ok:true`、`myosImportOk:true`、`errors:[]`）、`settings-check --exe`（`ok:true`、`toolPathsRows:13`、`diagOk:true`、`thinkingSaved:true`）、`plugins-check --exe`（`ok:true`、175 包、`activationFailures:[]`）、`skills-check --exe`（`ok:true`、Qiko 43 个、`leaked:[]`）、`hero-check --exe`（`ok:true`、本机工具 13/13）、`mount-check --exe`（`ok:true`、inspect 154 ms）。
 
+
+### v0.3.9 回归验证（第 28 轮）
+
+- 产物（已搬进 `release/`，删 0.3.8 三件）：`release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B、`app.asar` **426,530,364 B（34,223 entries）**、NSIS **281,886,671 B**（blockmap 294,656 B）、portable **236,647,317 B**、`win-unpacked` 总计 1,110,881,592 B。
+- `.probe/asar-039-check.mjs`（由 038 复制，`version039`；必需路径加 `tools/ges-index/extra-dirs.mjs` 与 `resources/forensics/skills/myos-import/SKILL.md`；新增 `myosBatchImport`/`myosDbName`/`myosImportSkill`/`extraDirs`/`indexSourceLabels`/`indexSourceFilter`/`myosRealE2e`/`mountTimingUi`）：**全部 true、`missing:[]`**。首次 `myosDbName` 为 false——`resolveDbByName` 在 `plugins/seeu-case-index/myos.mjs` 而不是 `index.js`，检查改读该文件。
+- 启动：目录版 `verify-launch --port 5393` → `ok:true, elapsedMs:5076`；portable `--port 5394` → `ok:true, elapsedMs:58673`。
+- 打包态 e2e（先 `Get-Process electron | Stop-Process -Force` 清残留；`SEEU_UI_EXE` 用 Windows 正斜杠路径、每个探针独立 `SEEU_DSH_HOME`/`SEEU_USER_DATA`）：
+  - `m2-ui-check` → `m2ok:true, myosImportOk:true, errors:[]`（含索引来源筛选 `idxFilterOk`）；
+  - `settings-check --exe` → `ok:true`（13 行外部工具路径、`diagItems` 五项全 ✓、`thinkingSaved:true`、`toolPathsRows:13`）；
+  - `plugins-check --exe` → `ok:true`（175 个插件包、`activationFailures:[]`）；
+  - `skills-check --exe` → `ok:true`（6 个随包技能含 `myos-import`、Qiko 43 个、`leaked:[]`）；
+  - `hero-check --exe` → `ok:true`（5 个快捷入口、本机工具 13/13）；
+  - `mount-check --exe` → `ok:true`（inspect 165 ms / mount 310 ms / unmount 1 ms）；
+  - `myos-real-import`（真实 MYOS 运行中）→ `ok:true, skipped:false`，`MApps` 导入 10 行。

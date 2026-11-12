@@ -30,6 +30,8 @@
 - **视觉层**：`plugins/seeu-theme/` 是一个 dsh 客户端插件 + 宿主样式注入——取证深色主题（青蓝强调色、中文字体栈）、侧栏/欢迎页 SeeU 品牌、页面标题替换、欢迎页三步上手提示（选案件目录建库 → 直接提问 → 引用回查）与三个快捷入口（打开取证索引 / 本地模型设置 / 取证工作区）；同时关闭官方 brand 插件避免双份。
 - **取证职责**：`resources/forensics/cordis.patch.yml` 以 dsh 官方 patch-list 机制叠加在 `web` profile 之上——关闭遥测/产品分析行，注入中文取证 persona，并把会话 preset（`preset-standard`）改成**取证专用工具面**：保留官方 22 项里的 19 项（子代理 / 工作流 / 后台作业 / 定时任务 / 目标 / plan / todo 都可用），去掉 `tool-web`（取证会话不联网）、`tool-plugin-manager`（可联网安装/移除插件包）与 `tool-plugin-market`（插件市场），`tool-fs` 收成只读。详见 [docs/forensics-profile.md](docs/forensics-profile.md)。
 
+**打包与打包态回归（第 28 轮）**：v0.3.9 已出 NSIS `281,886,671 B`、portable `236,647,317 B`、`app.asar` `426,530,364 B`（34,223 entries）；`.probe/asar-039-check.mjs` 全部检查通过（含 `tools/ges-index/extra-dirs.mjs`、`resources/forensics/skills/myos-import/SKILL.md`、MYOS 批量/`dbName`/根库、来源标签与筛选、`test:e2e:myos`）；目录版冷启动 **5076 ms**、portable 58.7 s；打包态 `m2-ui-check`（`m2ok:true`、`myosImportOk:true`）、`settings-check`（13 行外部工具路径、五项自检、思考流保存）、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（6 个随包技能 + Qiko 43 个）、`hero-check`（本机工具 13/13、快捷入口齐全）、`mount-check`（inspect 165 ms / mount 310 ms）、真实 MYOS 导入（`test:e2e:myos`：`MApps` 10 行、`skipped:false`）全绿。
+
 ## 2. 快速开始
 
 本机 **LovelyMem V3 / LovelySpark / LovelyCarve CLI** 已接入：会话按需加载对应技能，通过现有 shell 调用，
@@ -62,14 +64,14 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.8**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.3.9**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,846,908 B ≈ 1.03 GiB，含随包 dsh 插件与技能库） |
-| `release/win-unpacked/resources/app.asar` | 426,495,680 B（34,220 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory,qiko}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的十个预设 + MYOS MCP 行） |
-| `release/SeeUForensicsAgentPlus-0.3.8-x64.exe`（NSIS 安装包） | 281,879,944 B（blockmap 294,694 B） |
-| `release/SeeUForensicsAgentPlus-0.3.8-x64-portable.exe` | 236,575,720 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,881,592 B ≈ 1.03 GiB，含随包 dsh 插件与技能库） |
+| `release/win-unpacked/resources/app.asar` | 426,530,364 B（34,223 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory,qiko}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的十个预设 + MYOS MCP 行） |
+| `release/SeeUForensicsAgentPlus-0.3.9-x64.exe`（NSIS 安装包） | 281,886,671 B（blockmap 294,656 B） |
+| `release/SeeUForensicsAgentPlus-0.3.9-x64-portable.exe` | 236,647,317 B |
 
 实测冷启动到 dsh UI：目录版 **6180 ms**；portable 首次 48.8s（先要把 ~1.1GB 解包到 `%TEMP%`，属于预期）。
 
@@ -77,9 +79,9 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-### v0.3.8 改了什么
+### v0.3.9 改了什么
 
-- **打包与打包态回归（第 16 轮）**：v0.3.8 已出 NSIS `281,879,944 B`、portable `236,575,720 B`、`app.asar` `426,495,680 B`（34,220 entries）；`.probe/asar-038-check.mjs` 全部检查通过（含 `tools/myos-index/**`、`plugins/seeu-case-index/myos.mjs`、`/myos/*` 路由与面板入口）；目录版冷启动 **6180 ms**、portable 48.8 s；打包态 `m2-ui-check`（`m2ok:true, myosImportOk:true`）、`settings-check`（13 行外部工具、五项自检、思考流保存）、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（Qiko 43 个）、`hero-check`（本机工具 13/13、快捷入口齐全）、`mount-check`（inspect 154 ms）全绿。
+- **打包与打包态回归（第 16 轮，v0.3.8）**：v0.3.8 已出 NSIS `281,879,944 B`、portable `236,575,720 B`、`app.asar` `426,495,680 B`（34,220 entries）；`.probe/asar-038-check.mjs` 全部检查通过（含 `tools/myos-index/**`、`plugins/seeu-case-index/myos.mjs`、`/myos/*` 路由与面板入口）；目录版冷启动 **6180 ms**、portable 48.8 s；打包态 `m2-ui-check`（`m2ok:true, myosImportOk:true`）、`settings-check`（13 行外部工具、五项自检、思考流保存）、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（Qiko 43 个）、`hero-check`（本机工具 13/13、快捷入口齐全）、`mount-check`（inspect 154 ms）全绿。
 - **面板「从 MYOS 导入」入口（第 14 轮）**：面板工具栏新增「从 MYOS 导入…」按钮，弹窗里列 MYOS 案件 → 检材 → 粘贴结果库（`.mfs`）→「列出表」→ 选表自动生成 SQL → 填输出案件目录/案件名/检材名 → 导入为 SeeU 索引；导入成功后可一键「完成并查看索引」刷新列表。宿主端新增 `plugins/seeu-case-index/myos.mjs` 与 `/seeu-index/myos/{cases,materials,tables,import}` 四个路由（MYOS 未启动时返回 503 与「先启动超级取证大师」提示），`tests/plugin-myos.test.mjs` 6 例、`npm test` 156/156；`m2-ui-check` 增加「MYOS 导入按钮存在且弹窗能打开」断言。选案件/检材后会调 `query_phone_forensics_results_overview` / `query_computer_forensics_results_overview` **自动发现结果库（`.mfs`）**并给出下拉（带「N 张表」提示），选中即填好表清单与 SQL；概览拿不到时仍可手填路径。
 - **真实 MYOS 端到端验证（第 17 轮）**：本机启动「超级取证大师」后实测跑通——MCP 列出真实案件（`M盘` / `案件20261015145357` / …）、自动发现 `.mfs` 结果库、导入 `TBL_APPDATA_MANAGER` 10 条记录到本地索引并能在面板发现（`npm run test:e2e:myos`，MYOS 未运行时自动 skip）。真机还修了三个问题：① 概览里相对路径/模板串混杂 → 只收绝对路径并去重；② `sqlite_query` 返回数组行 → 统一转对象，否则正文为空；③ 表名提示从 `sqliteQueryHints[].sql` 与 `mfsStats.indexTable` 解析，`MApps.mfs` 直接提示 `TBL_APPDATA_MANAGER`。
 - **MYOS 增量导入（第 18 轮）**：导入默认改成 **追加**——同一案件先导 `MApps` 再导浏览历史/其他检材表时，已有记录不丢；`importMyosRows({mode:'append'})` 自动分配下一个 `eid`、artifact 路径带 `#eid` 去重、manifest 累计 `counts/leaves/sources`；CLI 加 `--append`，面板弹窗加「写入方式：追加 / 整库重建」勾选。实测 5 条 + 2 条 = 7 条、2 个检材。

@@ -2410,3 +2410,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `m2-ui-check` 新增断言：`idxFilterChips===4`、chip 文案（`全部 1|火眼建库 1|MYOS 导入 0|外部目录 0`）、点「MYOS 导入」出现空提示、点「全部」恢复出 `W盘`，汇总为 `idxFilterOk`。
 - 验证：`m2-ui-check` → `idxFilterOk:true, m2ok:true, errors:[]`；`npm test` 173/173、`check:overlay` OK。
 - 坑：手写这段 JSX 时先插入 chip 又保留旧的 `indexes.map(...)` 收尾，导致括号/三元结构错位；`esbuild.transformSync(loader:'jsx')` 只报 `Unterminated` 之类的模糊错误，最后用「重写整个 return 数组」的方式一次收干净，再用 transform 校验。
+
+### 20.106 v0.3.9 打包（第 28 轮）
+
+- 累积改动进包：MYOS 导入链路（面板/自动发现/真实端到端/追加/批量/进度/预估/`myos-import` 技能/根库补齐）、额外目录持久化与移除、索引来源标签与筛选、建库进度/取消/索引元数据、思考流格式、五项能力自检、dsh-auth cookie 清理。
+- `npm version 0.3.9`；build、`npm test` 173/173、`check:overlay` 通过；`electron-builder --win --x64 -c.directories.output=release-039`（后台 job，约 16 分钟，无签名）。
+- 产物：NSIS 281,886,671 B、portable 236,647,317 B、`app.asar` 426,530,364 B（34,223 entries）、win-unpacked 1,110,881,592 B；asar-039 全 true；冷启动 5076 ms、portable 58.7 s；打包态 m2/settings/plugins/skills/hero/mount/真实 MYOS 导入全绿。
+- 坑：asar-039 首次 `myosDbName:false`——`resolveDbByName` 位于 `myos.mjs`，检查脚本误读 `index.js`；打包期间 portable 仍分两段 7z 压缩（约 10 分钟），不要提前搬产物。
