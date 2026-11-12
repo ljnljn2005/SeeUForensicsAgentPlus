@@ -939,3 +939,10 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - StarMem 设为内存预设默认引擎（lovelymem / Volatility 兜底）；外部工具路径设置现有 13 行（Ghidra 为目录型，其余为可执行文件）。
 - 0.3.4 的三件产物已在本次打包后删除；`release/` 只保留 0.3.5。
 
+### v0.3.6 回归验证
+
+- 产物：NSIS `SeeUForensicsAgentPlus-0.3.6-x64.exe` **281,864,757 B**（blockmap 293,917 B）、portable **236,497,369 B**、`resources/app.asar` **426,435,518 B（34,213 entries）**、`win-unpacked` 总计 1,110,786,746 B；electron-builder 26.18.0、Electron 44.7.0、无证书跳过签名（约 15 分钟）。
+- asar 自检：`.probe/asar-036-check.mjs` **82 项全 true**、`missing:[]`。新增 `thinkingFormat`（main.cjs 含 thinkingFormat/chatTemplateKwargs、设置页含 kwargs 控件）、`diagnoseStream`（`probeStream` + `reasoning_content` + `key: "stream"`）、`mountTiming`（`mounts.html` 有 `noteTiming`、main.cjs 有 `mountErrorHint`）、`heroToolsChip`、`version036`。
+- 启动：目录版 `verify-launch --port 9491` → `ok:true, elapsedMs:5088`；portable `--port 9492 --timeout 240000` → `ok:true, elapsedMs:52954`。
+- 打包态 e2e（`SEEU_UI_EXE` 指 `release/win-unpacked/SeeUForensicsAgentPlus.exe`，用 Windows 路径）：`m2-ui-check` `m2ok:true/errors:[]`；`settings-check --exe` `ok:true`（`diagItems` 五项全 ✓、`thinkingSaved:true`、`toolPathsRows:13`、`probeNoContextWindow:false`）；`plugins-check --exe` `ok:true`（175 个插件包、`activationFailures:[]`、`activationOk:true`）；`skills-check --exe` `ok:true`（`leaked:[]`）；`hero-check --exe` `ok:true`（本机工具 13/13、镜像挂载 0）；`mount-check --exe` `ok:true`（inspect 164 ms、2 分区、mount/unmount 正常）。
+- 坑：asar 检查里匹配 esbuild 产物要按压缩后的写法（`key: "stream"` 双引号；`mountErrorHint` 在主进程 bundle，不在 `mounts.html`），否则误报 false。

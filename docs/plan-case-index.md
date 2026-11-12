@@ -2124,3 +2124,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 ?
 /` 会被吃掉一层反斜杠 → 生成真实换行，`esbuild` 报 `Unterminated string literal`、设置页脚本静默失败（表现为「勾选流式用量后 preview 未更新」）。这类改写后要 `node --check` 提取出的脚本，并优先用 `String.fromCharCode(10)` 代替转义。
 - 验证：`npm test` 125/125、`check:overlay` OK、`build` OK、`settings-check` 全绿（`diagItems` 五项 ✓、`thinkingSaved:true`）。
+
+### 20.85 v0.3.6 打包与打包态回归（第 7 轮）
+
+- 目的：把 Qiko 融合、StarMem、检材优先级、挂载链路修复、思考流格式、五项自检、caseNumber 查询等累积改动打成一个可交付版本，并按老流程做打包态回归。
+- 版本：`npm version 0.3.6 --no-git-tag-version`；build、`npm test` 125/125、`check:overlay` OK；`npx electron-builder --win --x64 -c.directories.output=release-036`（exit 0，约 15 分钟）。
+- 产物：NSIS **281,864,757 B**（blockmap 293,917）、portable **236,497,369 B**、`app.asar` **426,435,518 B（34,213 entries）**、目录版 1,110,786,746 B；已搬进 `release/`（0.3.5 三件删除）。
+- asar 自检 `.probe/asar-036-check.mjs`（由 035 复制）：新增 `thinkingFormat`/`diagnoseStream`/`diagnoseItems`/`mountTiming`/`heroToolsChip`/`version036`，最终 **82 项全 true**。两处误报修复：`key: 'stream'` 在 esbuild 产物里是双引号；`mountErrorHint` 编译进 `dist/main.cjs` 而非 `mounts.html`。
+- 打包态验证：目录版冷启动 5088 ms、portable 52,954 ms；`m2-ui-check`/`settings-check`（五项自检全 ✓、thinkingSaved）/`plugins-check`（175 包、0 激活失败）/`skills-check`/`hero-check`（工具 chip 13/13）/`mount-check`（解析 164 ms）全绿。
+- 沟通口径：本轮为「打包 + 回归」，无新功能；待用户验收安装包，并继续等待真实网关与完整内存镜像做真机基准。

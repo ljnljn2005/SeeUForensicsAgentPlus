@@ -62,22 +62,25 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.5**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.3.6**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,752,752 B ≈ 1.03 GiB，含随包 dsh 插件与技能库） |
-| `release/win-unpacked/resources/app.asar` | 426,401,524 B（34,213 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory,qiko}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的十个预设 + MYOS MCP 行） |
-| `release/SeeUForensicsAgentPlus-0.3.5-x64.exe`（NSIS 安装包） | 281,858,620 B（blockmap 293,867 B） |
-| `release/SeeUForensicsAgentPlus-0.3.5-x64-portable.exe` | 236,534,010 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,786,746 B ≈ 1.03 GiB，含随包 dsh 插件与技能库） |
+| `release/win-unpacked/resources/app.asar` | 426,435,518 B（34,213 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory,qiko}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的十个预设 + MYOS MCP 行） |
+| `release/SeeUForensicsAgentPlus-0.3.6-x64.exe`（NSIS 安装包） | 281,864,757 B（blockmap 293,917 B） |
+| `release/SeeUForensicsAgentPlus-0.3.6-x64-portable.exe` | 236,497,369 B |
 
-实测冷启动到 dsh UI：目录版 **6192 ms**；portable 首次 50.8s（先要把 ~1.1GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **5088 ms**；portable 首次 53.0s（先要把 ~1.1GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-### v0.3.6 待发布（未打包）
+### v0.3.6 改了什么
+
+- **打包与打包态回归（v0.3.6）**：NSIS `281,864,757 B`（blockmap 293,917 B）、portable `236,497,369 B`、`app.asar` `426,435,518 B`（34,213 entries）、目录版总计 `1,110,786,746 B`；`.probe/asar-036-check.mjs` **82 项全 true**（新增 `thinkingFormat`/`diagnoseStream`/`diagnoseItems`/`mountTiming`/`heroToolsChip`/`version036`，并修正流式检查对 esbuild 双引号字符串的匹配）；打包态 `m2-ui-check`（`m2ok:true`）、`settings-check --exe`（`ok:true`：五项自检 `diagItems` 全 ✓、`thinkingSaved:true`、外部工具路径 13 行）、`plugins-check --exe`（`ok:true`：175 插件包、`activationFailures:[]`）、`skills-check --exe`（`ok:true`、`leaked:[]`）、`hero-check --exe`（`ok:true`：本机工具 13/13）、`mount-check --exe`（`ok:true`：解析 164 ms、卸载正常）；目录版冷启动 **5088 ms**、portable **52,954 ms**；`npm test` **125/125**、`npm run check:overlay` OK。
+- **能力自检扩展到五项（第 6 轮）**
 
 - **真实工具基准（第 3 轮）**：新增 `scripts/e2e/real-tools-bench.mjs`（`npm run test:e2e:real-tools`）与 `docs/benchmarks.md`，在本机真实素材上实测三套工具：LovelyCarve 1.3.0 解析 `W:/AP3_LEUNG_YL_USB.E01`（776 MB EWF）**162 ms**、挂载 part 0 到 `X:` **266 ms**、卸载 **154 ms**（`X:\` 可见 `WEPE`、`Sunny.zip`、`vera_key` 等）；LovelySpark 0.3.20 首次冷启动 11.3 s、`analyze` 86 KB 的 `L1-6.pcapng` **9–13 s**（27 个模块，分析库落在检材同目录 `<pcap>.db.generations/`）、`investigate` 复用分析库 8.8 s；StarMem 0.2.2 `--json info` **525 ms**（本机唯一内存样本是流量工具自带的 raw 进程转储，`windows-info` 报「未找到 KDBG」、`pslist/netscan` 超时——采集类命令需用户提供完整内存镜像）。
 - **修复 LovelyCarve 挂载链路（真实 CLI 才暴露的两个坑）**：① `--case` 只能作为进程启动参数，会话里再带会被 CLI 拒绝并让进程退出 → 改为「一次性 `cases create` 建案件 → 常驻 `lovelycarve-cli -q --case <dir> shell` → `images open` → `mounts create`」；② LovelyCarve 1.3.0 的 `mounts delete --force` **会卸载但不返回 JSON**，等响应会挂住 → 改为「写命令 + 轮询盘符是否消失（12 s）」，必要时兜底停进程释放挂载；③ 进程异常退出后残留在 `mounts.json` 的记录，会在下次 `status()` 按盘符存在性自动清理。
