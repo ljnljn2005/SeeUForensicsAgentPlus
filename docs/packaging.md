@@ -815,6 +815,16 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 尝试用 `real-gateway-ui.mjs` 直接跑打包版（临时给脚本加过 `SEEU_UI_EXE` 支持）：页面能起、但打包版首次启动会落在「选择工作区」页，composer 驱动不稳（`stage:"type-failed"`），脚本改动已回滚；真机联调仍以 dev Electron 版脚本（`SEEU_UI_TOOL=1`，`ok:true`）+ headless 版为准。
 - 预览仍在线（重启后 token 会变），等用户视觉验收与手动工具路径设置。
 
+### v0.3.1 回归验证
+
+- 版本 0.3.1（`16fa05f` 设置菜单 + 提示词修复；MYOS MCP 行在打包前追加）。
+- 产物：`release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B；`resources/app.asar` 169,110,408 B（19,686 entries）；NSIS 212,015,610 B（blockmap 221,605 B）；portable 189,611,751 B；win-unpacked 803,954,851 B。
+- asar 自检 `.probe/asar-031-check.mjs`：`{"entries":19686,"missing":[],checks 全 true}`，新增 `settingsMenu`/`settingsMenuVisible`/`heroMountsSkills`/`briefPaths`/`briefNoBrute`/`queryPaths`/`skillCoverage`/`personaNoBrute`/`myosMcpRow`。
+- 启动：目录版 `verify-launch --port 9503` → `ok:true, elapsedMs:6889`；portable `--port 9504` → `ok:true, elapsedMs:37851`。
+- 打包态 e2e：`hero-check --exe` → `ok:true`，快捷入口 `["index","model","workspace","mounts","skills"]`、设置窗口打开成功；`settings-check --exe` → `ok:true`，`toolsRows:3`、`toolsApiSaved/toolsUiSaved/toolsFileOk/toolsClearOk` 全 true；`m2-ui-check`（`SEEU_UI_EXE`）→ `m2ok:true, errors:[]`。
+- 坑：MYOS MCP 行是打包开始后才加的，第一次 0.3.1 产物（13:08 asar）已含该行但 portable 是更早的 13:04 产物；为一致性用 `rm -rf release-031/win-unpacked release-031/*.exe release-031/*.7z` 后整包重建（13:20 asar → 13:21 NSIS → 13:29 portable）。
+- 说明：打包态的 MYOS MCP 只验证了「配置已进 asar + 启动不受影响」；真实工具调用在 dev headless 下验证（`toolsCount:75`、`mcpToolCount:49`）。
+
 ### v0.3.0 回归验证
 
 - 打包：版本由 Gitea `main` 合并带入 **0.3.0**（`package-lock.json` 同步 0.3.0）；`node scripts/build.mjs`、`npm test`（85/85）、`npm run check:overlay` 全绿；`npx electron-builder --win --x64 -c.directories.output=release-030`（约 13 分钟、无证书跳过签名），产物搬进 `release/` 并删 0.2.9 的 NSIS/blockmap（0.2.9 portable 因正在运行被占用，保留）。

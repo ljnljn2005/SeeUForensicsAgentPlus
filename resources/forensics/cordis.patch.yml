@@ -350,3 +350,29 @@
                 name: '@deepseek-ai/dsh-command-compact'
               - id: tool-result-pruner
                 name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+
+# ---------------------------------------------------------------------------
+# 5) 外部取证软件 MCP 接入：超级取证大师（MYOS）
+#
+#    MYOS 自带 stdio MCP 服务（mcp.json：command=myos_mcp_server.exe），
+#    提供案件/检材/取证任务/结果查询/sqlite_query 等 49 个工具。
+#    使用前必须先启动「超级取证大师」（ForensicDesktop + D-Bus），
+#    连接状态可用健康检查工具 mcp__myos-forensics__health_check_dbus 确认。
+#    MYOS 未启动时本行启动失败不影响外壳（failOnStartupError: false），
+#    启动 MYOS 后按 reconnect 策略自动重连。
+# ---------------------------------------------------------------------------
+- insert:
+    - id: seeu-mcp-myos
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: stdio
+        serverName: myos-forensics
+        command: D:/Programs/MYOS/Client/tools/mcp/myos_mcp_server.exe
+        args: []
+        toolCallTimeoutMs: 120000
+        failOnStartupError: false
+        reconnect:
+          enabled: true
+          initialDelayMs: 3000
+          maxDelayMs: 60000
+          maxAttempts: 50

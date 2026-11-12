@@ -32,9 +32,8 @@
 
 ## 2. 快速开始
 
-本机 **LovelyMem V3 / LovelySpark CLI** 已接入：会话按需加载对应技能，通过现有 shell 调用，
-自动寻找本机 CLI（安装记录、快捷方式及便携目录），完整输出落盘、模型只接收限长预览，
-无新增运行依赖或 MCP 服务。换电脑无需沿用开发机路径，详见 [CLI 接入说明](docs/lovely-cli.md)。
+本机 **LovelyMem V3 / LovelySpark / LovelyCarve CLI** 已接入：会话按需加载对应技能，通过现有 shell 调用，
+完整输出落盘、模型只接收限长预览，无新增运行依赖；CLI 路径在「设置 → 本机取证工具路径」手动指定（不做自动发现）。详见 [CLI 接入说明](docs/lovely-cli.md)。
 
 ```bash
 npm install        # 已配 .npmrc（npmmirror + electron 镜像），D 盘约需 1.1G
@@ -63,27 +62,36 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.0**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.3.1**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,946,399 B ≈ 767 MiB） |
-| `release/win-unpacked/resources/app.asar` | 169,101,956 B（19,686 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`dist/renderer/{local-model,mounts,skills}.html`） |
-| `release/SeeUForensicsAgentPlus-0.3.0-x64.exe`（NSIS 安装包） | 212,013,664 B（blockmap 221,709 B） |
-| `release/SeeUForensicsAgentPlus-0.3.0-x64-portable.exe` | 189,622,254 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 803,954,851 B ≈ 767 MiB） |
+| `release/win-unpacked/resources/app.asar` | 169,110,408 B（19,686 entries，含 `plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的 MYOS MCP 行） |
+| `release/SeeUForensicsAgentPlus-0.3.1-x64.exe`（NSIS 安装包） | 212,015,610 B（blockmap 221,605 B） |
+| `release/SeeUForensicsAgentPlus-0.3.1-x64-portable.exe` | 189,611,751 B |
 
-实测冷启动到 dsh UI：目录版 5118 ms；portable 首次 50.5s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
+实测冷启动到 dsh UI：目录版 6889 ms；portable 首次 37.9s（先要把 ~800MB 解包到 `%TEMP%`，属于预期；机器上同时有旧实例在跑时更慢）。
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-> 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.2.9-x64-portable.exe`，因为打包时它正在运行、文件被占用无法删除；0.3.0 的产物不受影响。
+> 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.2.9-x64-portable.exe` 与 `SeeUForensicsAgentPlus-0.3.0-x64-portable.exe`，因为打包时它们正在运行、文件被占用无法删除；不影响 0.3.1 的产物。
+
+### v0.3.1 改了什么
+
+- **设置入口进菜单**：新增一级菜单「设置」——本地模型与工具路径…（`Ctrl+,`）、镜像挂载…（`Ctrl+Shift+M`）、技能管理器…（`Ctrl+Shift+S`）、本地模型状态、重新探测网关、打开配置文件/日志目录；主窗口菜单栏改为**常显**（`autoHideMenuBar: false` + `setMenuBarVisibility(true)`），不用再按 Alt 或记快捷键。欢迎页快捷入口新增「镜像挂载」「技能管理器」两个按钮。
+- **修「暴力搜盘」问题**：真实试用时模型查不到 CHAN_MH（`pf` 手机全量提取，索引只有 1 行元数据）就去 `Get-ChildItem -Recurse E:\` 全盘搜。根因是案件概览没告诉它原始文件在哪、也没有行为规则。现在会话概览（`<DSH_HOME>/AGENTS.md`）的检材表增加「类型 / 入库记录 / 火眼统计 / 原始文件（如 `W:\CHAN_MH_mobile.zip`）/ 备注」，对未解析检材标 ⚠ 并汇总；新增「取证定位规则」：设备信息先看备注（本例备注直接写着 `iPhone D331pAP/iOS17.1.1 全量提取`）→ 需要内容先查索引 → 索引没有就看检材盘/火眼解析 → 镜像用「设置 → 镜像挂载…」挂成只读盘符 → **禁止全盘递归搜索**（`Get-ChildItem -Recurse`、`dir /s`、`find /`）。
+- `ges-case-index` 技能新增「索引里没有数据时（全量提取 / 镜像类检材）」小节；三个 preset persona 同步加入「先定位再取证、禁止全盘递归」。
+- **接入超级取证大师（MYOS）MCP**：`resources/forensics/cordis.patch.yml` 新增 `seeu-mcp-myos` 行（`@deepseek-ai/dsh-mcp-client`，stdio，`serverName: myos-forensics`，命令 `D:/Programs/MYOS/Client/tools/mcp/myos_mcp_server.exe`），MYOS 自带 MCP 提供 **49 个取证工具**（案件/检材/取证任务/结果概览/只读 `sqlite_query`/导出等），在会话里以 `mcp__myos-forensics__…` 暴露；MYOS 未启动时 `failOnStartupError: false` 不影响外壳，启动后按 `reconnect` 自动重连。连接自检先用 `health_check_dbus`。
+- 测试：`npm test` 84–85 全 pass、`check:overlay` OK；`hero-check` 快捷入口变为 `[index, model, workspace, mounts, skills]` 且 `ok:true`；`m2-ui-check` `m2ok:true`。
+- **打包与回归（v0.3.1）**：NSIS `212,015,610 B`、portable `189,611,751 B`、`app.asar` `169,110,408 B`（19,686 entries，含 MYOS MCP 行）；`.probe/asar-031-check.mjs` 42 项全 true；打包态 `hero-check`（快捷入口含 mounts/skills、设置窗口可打开）、`settings-check`（工具路径 3 行 + 保存/清除）、`m2-ui-check`（`m2ok:true`）全绿；`npm test` **85/85**；目录版冷启动 6889 ms、portable 37.9 s。
 
 ### v0.3.0 改了什么
 
 > 以下改动已进入 v0.3.0 安装包（v0.2.9 `a112f49` 之后：Gitea `main` 的技能上传 `186eb84` + 镜像挂载 `f56aa57`），打包态回归见 `docs/packaging.md`。
 
-- **镜像挂载（取证镜像 → 只读盘符）**：菜单「工具 → 镜像挂载…」（`Ctrl+Shift+M`，托盘同项）打开新窗口 —— 选镜像（E01 / RAW / VMDK / VHDX / QCOW2 / ISO…）→ 解析分区（`/part:N`、卷标、文件系统、大小）→ 选分区与盘符 → 挂载为只读盘。挂载点由 LovelyCarve CLI 的 `mounts` 命令组提供，**只在 SeeU 运行期间有效**，卸载或关闭外壳即释放；同一案件不能被桌面端与 CLI 同时打开，Dokan 挂载可能要求管理员权限；
+- **镜像挂载（取证镜像 → 只读盘符）**：菜单「设置 → 镜像挂载…」（`Ctrl+Shift+M`，托盘同项）打开新窗口 —— 选镜像（E01 / RAW / VMDK / VHDX / QCOW2 / ISO…）→ 解析分区（`/part:N`、卷标、文件系统、大小）→ 选分区与盘符 → 挂载为只读盘。挂载点由 LovelyCarve CLI 的 `mounts` 命令组提供，**只在 SeeU 运行期间有效**，卸载或关闭外壳即释放；同一案件不能被桌面端与 CLI 同时打开，Dokan 挂载可能要求管理员权限；
 - **接口实现**：新增 `tools/image-mount.mjs`（纯 Node）：`resolveLovelyCarveCli` 按「环境变量 → 设置窗口保存的 `lovely-cli.json` → 常见安装位置」找 CLI；`LovelyCarveHost` 起一个常驻 `lovelycarve-cli -q shell` 进程（stdin 写命令、stdout 逐行 JSON），因为挂载点是进程内资源；`createMountManager` 提供 `status / inspect / mount / unmount / dispose`，挂载清单写 `<DSH_HOME>/mounts.json` 并通过 `SEEU_MOUNTS_FILE` 下发给 dsh 会话，技能可直接读；测试用假 CLI（`tests/fixtures/fake-lovelycarve-cli.mjs`）不需要真装 LovelyCarve；
 - **CLI 路径仍为手动指定**：设置窗口「本机取证工具路径」从两行扩为三行（LovelyMem V3 / LovelySpark / LovelyCarve CLI），同样写 `lovely-cli.json`、`SEEU_LOVELYCARVE_CLI` 仅供调试；未配置时挂载窗口直接提示去设置，不会自己猜路径；
 - **技能上传 / 技能管理器（合并 Gitea `main` 的 `117b391`）**：「技能」菜单新增技能管理器、导入文件夹、导入 ZIP、打开技能目录 —— 自研最小 ZIP 解析（中央目录 + `inflateRaw`，拒绝 ZIP64/加密/分卷，逐段消毒防 `..` 穿越），校验 `SKILL.md` frontmatter，随包技能受保护不可覆盖；导入写 `<DSH_HOME>/skills/<name>`，dsh 技能目录 watch 自动重扫，新会话立即生效；
@@ -199,7 +207,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 > 1. **视觉层**：新增 `plugins/seeu-theme/`（宿主 `index.js` 把 `theme.css` 注入首屏 `<style>`，客户端 `client.js` 兜底 `<link>` + 改 `document.title`）——取证深色主题（深蓝底 + 青色强调）、中文字体栈、圆角/滚动条/选中态统一；官方 `ui-brand-official` 置为 disabled，改由主题插件提供侧栏品牌「SeeU 取证」与欢迎页大图标；`locale.preference: zh`。
 > 2. **索引面板视觉重构**：`plugins/seeu-case-index/client.js` 全量 token 化，加 KPI 条（案件/检材/记录/实体/库大小/生成时间）、pill 标签 + 数量 badge、树行高与竖线指引、检材名加粗 + 平台/备注次级色、骨架屏/空态、表视图 sticky 表头。
 > 3. **本地模型接入（OpenAI 兼容网关）**：见 §9。`tools/local-model.mjs` 生成 `llm-pi-ai` providers + `agent-default-model` + `session-title-llm` + `retryPolicy`，外壳启动时写成 `<userData>/local-model.patch.yml` 作为第二个 `--patch`。
-> 4. **本地模型设置窗口**：菜单 `工具 → 本地模型设置…`（托盘也有），支持连通性测试（主进程 `net` 请求 `/v1/models`）、实时预览生成的 patch、保存并重启。
+> 4. **本地模型设置窗口**：菜单 `设置 → 本地模型与工具路径…`（`Ctrl+,`，托盘也有），支持连通性测试（主进程 `net` 请求 `/v1/models`）、实时预览生成的 patch、保存并重启。
 > 5. **启动探测**：启动时 4 秒探测已配置的网关，结果写 `logs\shell.log`，失败只提示不阻塞；错误页新增【本地模型设置】按钮。
 > 6. **长上下文/低并发调优**：`retryPolicy.maxRetries 3`、标题生成 512 tokens/20s、preset 内 `compaction-basic` 余量 `headroomTokens: 8192`（128k 窗口不再在 57k 就压缩，32k 小模型也能直接跑）。
 > 7. 打包态验证：目录版 `{"ok":true,"elapsedMs":4095}`、portable `{"ok":true,"elapsedMs":36517}`、打包态面板 `m2ok:true`（七个标签、24 表、实体/时间线真实数据、`errors:[]`）、打包态设置窗口 `{"ok":true,…,"previewHasRetryPolicy":true,"badGatewayRejected":true}`（页面来自 asar 内的 `dist/renderer/local-model.html`）。
@@ -509,7 +517,7 @@ node tools/ges-index/cli.mjs xcase entity --value 85254877240
 开发预览：`npm run dev:web -- --workspace "<案件目录>" --local-model resources/forensics/local-model.example.json`
 临时覆盖：环境变量 `SEEU_LOCAL_MODEL_JSON='<同一段 JSON>'`（优先级最高，自动化测试用这个）。
 
-**设置界面（推荐）**：菜单 `工具 → 本地模型设置…`（托盘菜单里也有）打开一个独立窗口，可以直接填网关地址、模型、上下文窗口，并且：
+**设置界面（推荐）**：菜单 `设置 → 本地模型与工具路径…`（`Ctrl+,`，托盘菜单里也有）打开一个独立窗口，可以直接填网关地址、模型、上下文窗口，并且：
 
 - 【测试连接与能力自检】由主进程直接请求网关（走 Electron `net`，不受页面 CORS 限制），一次跑三项并逐项给结果：① `GET <baseURL>/models`（地址/鉴权，列出模型 id）；② 一次非流式对话（`max_tokens: 16`，确认模型真能出字）；③ 一次带 `ping_tool` 函数定义的请求（确认网关/模型支持 OpenAI 工具调用——**这项不过，模型在本产品里只能聊天，不能查案件库、不能用技能**）。每项都带耗时；不支持工具的模型会明确提示「只能聊天」；
 - 【从网关拉取模型列表】读一次 `GET <baseURL>/models`，把拿到的模型 id 直接填进「模型列表」（已填过「id | 显示名」的显示名会保留）——不用手抄模型名，也避免 id 抄错导致 `model not found`；如果网关自报上下文窗口（vLLM 的 `max_model_len`、llama.cpp/LM Studio 的 `n_ctx` / `context_length`），会顺手把它填进「上下文窗口」，并在状态行提示「已按网关自报填上下文窗口 N」；多个模型自报值不一致时只提示、不自动选；
@@ -682,7 +690,7 @@ headless 里技能根是 `<DSH_HOME>/skills`（脚本会把 `resources/forensics
 
 **用法**
 
-1. 菜单「工具 → 镜像挂载…」（`Ctrl+Shift+M`）打开窗口；
+1. 菜单「设置 → 镜像挂载…」（`Ctrl+Shift+M`）或欢迎页「镜像挂载」快捷入口打开窗口；
 2. 「选择镜像…」→ 自动解析分区表并列出 `/part:N`、卷标、文件系统、大小；
 3. 选目标分区与盘符（默认 `X:`，会自动跳过已占用盘符），点「挂载为只读盘」；
 4. 窗口下方出现活动挂载卡片：可【打开盘符】直接进资源管理器，或【卸载】释放；
@@ -696,7 +704,41 @@ headless 里技能根是 `<DSH_HOME>/skills`（脚本会把 `resources/forensics
 
 **实现位置**：`tools/image-mount.mjs`（CLI 解析、常驻进程、挂载清单）、`src/mounts.ts`（主进程单例）、`renderer/mounts.html`（窗口）、`scripts/e2e/mount-check.mjs`（假 CLI 端到端）。
 
-## 11. 许可与来源
+## 11. 外部取证软件 MCP（超级取证大师 MYOS）
+
+MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/MYOS/Client/tools/mcp/myos_mcp_server.exe`（`mcp.json`：`id: myos-forensics-mcp`、`cmdType: stdio`、版本 1.1.4）。本项目把它注册进 dsh 的 overlay，让会话里的模型能直接查案件、提交取证任务、读结果 —— 不用人再点软件。
+
+**注册位置**：`resources/forensics/cordis.patch.yml` 末尾的 `- insert:` 行 `seeu-mcp-myos`（`@deepseek-ai/dsh-mcp-client`）：
+
+```yaml
+- insert:
+    - id: seeu-mcp-myos
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: stdio
+        serverName: myos-forensics
+        command: D:/Programs/MYOS/Client/tools/mcp/myos_mcp_server.exe
+        args: []
+        toolCallTimeoutMs: 120000
+        failOnStartupError: false
+        reconnect: { enabled: true, initialDelayMs: 3000, maxDelayMs: 60000, maxAttempts: 50 }
+```
+
+**使用前**：先启动「超级取证大师」（`ForensicDesktop` + D-Bus 服务）。MYOS 没启动时外壳照常可用，MCP 会按重连策略等待；连上后先用 `health_check_dbus` 确认（返回 `DBus 服务健康：OK` 且 `forensicDesktopRunning: true`）。若 MCP 进程因 MYOS 退出而断开，重启 MYOS 后会自动重连。
+
+**可用工具（49 个，按用途分组）**
+
+- 案件：`query_cases`、`query_open_cases`、`open_case`、`close_case`、`create_case_and_open`、`query_case_types`、`query_case_settings`、`query_materials`；
+- 检材/取证：`add_image_material`、`add_disk_material`、`add_file_collection_material`、`submit_computer_forensic_task`、`load_case`、`restart_computer_forensics`、`start_computer_image_emulation_task`、`start_auto_mobile_forensics`、`start_phone_file_forensics_task`、`start_phone_folder_forensics_task`、`start_phone_direct_forensics_task`、`reply_phone_forensics_message`、`reply_phone_detection_message`、`reset_phone_detection`、`query_phone_direct_devices`、`query_phone_forensic_items`；
+- 结果/检索：`query_computer_forensics_results_overview`、`query_phone_forensics_results_overview`、`query_phone_file_forensics_result_summary`、`sqlite_query`（只读 SELECT，含加密 `.mfs` 取证库）、`quick_search_files`、`quick_search_content`、`global_search_content`、`raw_data_content_search`、`create_file_index_task`、`query_device_info`、`query_device_mount_path`、`query_current_node_data`；
+- 任务/解密：`query_task_status`、`wait_task_completion`、`query_case_running_tasks`、`stop_task`、`stop_phone_forensics_task`、`query_encrypt_types`、`decrypt_partition`、`query_decrypt_task_status`；
+- 导出/其它：`export_case`、`export_bcp`、`open_mftool`、`query_local_disks`、`health_check_dbus`。
+
+工具面较长（49 个），dsh 会把过长的公开名截断并加短哈希后缀，例如 `mcp__myos-forensics__myos-forensics_add_disk_materi_12e5a19cef61`；以工具列表里实际显示的名字为准。
+
+**与火眼索引的关系**：两者互补 —— 火眼/`ges` 的结果由 `ges-case-index` 建 `case-index.db`（面板检索，快）；MYOS 则是「活的取证软件」，负责接案件、跑任务、查结果库。统一的「一次入库、AI 快速读取」走同一套索引：用 MYOS MCP 取数据（不要直接读 MYOS 数据目录）→ 归一化写入 `case-index.db` 的 evidence/record/entity 表 → 面板与技能都只查索引。融合细节见 `docs/plan-case-index.md` §20.67。
+
+## 12. 许可与来源
 
 - 外壳代码：MIT。
 - `dsh` 运行时：来自 npm `@deepseek-ai/dsh`（DeepSeek AI 开源，MIT）；本仓库不修改其源码，仅通过官方 profile/patch 机制扩展。
