@@ -10,7 +10,7 @@ import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTable
 import { genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
 import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.mjs';
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
-import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTables } from './myos.mjs';
+import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTableCounts, myosTables } from './myos.mjs';
 
 const ROUTE = '/seeu-index';
 const jobs = new Map();
@@ -233,6 +233,10 @@ async function handle(req, res) {
       if (req.method === 'POST' && path === '/myos/import') {
         const result = await myosImport(await readBody(req));
         return send(res, 200, result);
+      }
+      if (req.method === 'POST' && path === '/myos/row-counts') {
+        const counts = await myosTableCounts(await readBody(req));
+        return send(res, 200, counts);
       }
       if (req.method === 'GET' && path === '/myos/import-batch') {
         return send(res, 200, { job: myosBatchJob });

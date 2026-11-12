@@ -80,6 +80,11 @@ function handle(call) {
     }
     if (name === 'myos-forensics.sqlite_query') {
       const sql = String(args.sql ?? '')
+      if (/count\s*\(\s*\*\s*\)/i.test(sql)) {
+        const n = /TBL_EMPTY/.test(sql) ? 0 : 42
+        reply(id, textResult({ columns: ['n'], rows: [{ n }], truncated: false }))
+        return
+      }
       if (/sqlite_master/i.test(sql)) {
         reply(id, textResult({ columns: ['name'], rows: [{ name: 'TBL_APPDATA_MANAGER' }], truncated: false }))
         return

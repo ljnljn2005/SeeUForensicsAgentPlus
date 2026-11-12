@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTables } from '../plugins/seeu-case-index/myos.mjs'
+import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTableCounts, myosTables } from '../plugins/seeu-case-index/myos.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const FAKE = join(HERE, 'fixtures', 'fake-myos-mcp.mjs')
@@ -161,4 +161,22 @@ test('myosImportBatch：onProgress 按表回报进度', withEnv(async () => {
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+}))
+
+test('myosTableCounts：预估每张表行数，空表为 0', withEnv(async () => {
+  const result = await myosTableCounts({
+    caseId: 'case-1',
+    db: 'D:/MYOS/Case/案件庚/dev/手机-data.D01/data/MApps.mfs',
+    tables: ['TBL_A', 'TBL_EMPTY'],
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.tables.map((item) => [item.table, item.count]), [['TBL_A', 42], ['TBL_EMPTY', 0]])
+  assert.equal(result.total, 42)
+}))
+
+test('myosTableCounts：缺 tables 时报 400', withEnv(async () => {
+  await assert.rejects(
+    () => myosTableCounts({ caseId: 'case-1', db: 'D:/x.mfs', tables: [] }),
+    (error) => error.status === 400,
+  )
 }))

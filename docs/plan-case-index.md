@@ -2338,3 +2338,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 面板：轮询 `GET /myos/import-batch`，进度行「批量导入：第 2/5 张表 · TBL_X · 已收集 N 条记录」；新增表名过滤输入（大小写不敏感）、「全选」只勾当前过滤结果。
 - 测试：`tests/plugin-myos.test.mjs` 增至 11/11（`onProgress` 事件序列 `start→table→imported→table→imported→done`、index 递增、done 汇总）。
 - 坑：批量任务状态不能只存在 React 里（弹窗关闭就丢），必须放插件进程；`POST` 改异步后客户端必须轮询，否则 `await post` 拿不到结果。
+
+### 20.99 导入前预估条数（第 21 轮）
+
+- 需求：MYOS 一个 `.mfs` 里几十张表，其中不少是空的；批量导入前应先看每张表多少行，避免白等。
+- `plugins/seeu-case-index/myos.mjs`：`myosTableCounts({caseId, db, tables, maxTables})`——逐表 `select count(*) as n from "T"`（`maxRows:1`），返回 `{tables:[{table,count}], total}`；单表失败记 `{count:null,error}` 不中断。
+- 路由 `POST /myos/row-counts`。
+- 面板批量区：新增「预估条数」「只选非空」按钮；勾选列表每行显示 `42 行`（0 行琥珀色、失败显示「预估失败」）；下方显示「预估：选中表合计 N 行（每张表最多导入 2000 行；空表会自动跳过）」。
+- 测试：`tests/plugin-myos.test.mjs` 13/13（含预估两表 → `42 / 0`、缺 tables 400）；`npm test` 167/167；`m2-ui-check` `m2ok:true`。
+- 真机：`MApps.mfs` → `TBL_APPDATA_MANAGER 5 行`；`AndroidBrowser…mfs` → 浏览历史 2 行、下载表 0 行；不存在的表返回 `no such table`（界面显示「预估失败」）。
+- 坑：`count(*)` 在真实 MYOS 里同样受 `maxRows` 限制，但只返回 1 行；不可把空表当失败——空表是「0 行」，表不存在才是失败。

@@ -1246,6 +1246,8 @@ window.__ModuleLoader__.load({
       const [pickedTables, setPickedTables] = useState([]);
       const [tableQuery, setTableQuery] = useState('');
       const [batchJob, setBatchJob] = useState(null);
+      // 预估行数：导入前先看每张表有多少行（空表可跳过）。
+      const [counts, setCounts] = useState({});
 
       useEffect(() => {
         let alive = true;
@@ -1356,6 +1358,21 @@ window.__ModuleLoader__.load({
         finally { setBusy(''); }
       };
 
+      const doCountTables = async () => {
+        const list = pickedTables.length ? pickedTables : filteredTables;
+        if (!list.length) { setError('先勾选表或输入表名过滤'); return; }
+        if (!dbPath.trim()) { setError('先填结果库路径'); return; }
+        setBusy('counts');
+        setError('');
+        try {
+          const body = await post('/myos/row-counts', { caseId: caseId.trim(), db: dbPath.trim(), tables: list });
+          const next = {};
+          for (const item of body.tables ?? []) next[item.table] = item;
+          setCounts(next);
+        } catch (e) { setError(String(e.message ?? e)); }
+        finally { setBusy(''); }
+      };
+
       const doImport = async () => {
         if (!sql.trim()) { setError('先填要执行的 SQL（选表后会自动生成 select * from … limit 2000）'); return; }
         if (!outDir.trim()) { setError('先填输出案件目录（索引会写到 <目录>/.seeu-index/case-index.db）'); return; }
@@ -1427,11 +1444,20 @@ window.__ModuleLoader__.load({
               h('span', { style: S.muted }, `勾选多张表一次导入（每张表一个检材，共 ${tables.length} 张）`),
               h('input', { style: { ...S.input, width: 150, fontSize: 11.5 }, value: tableQuery, placeholder: '按表名过滤，如 TBL_PR_', onChange: (e) => setTableQuery(e.target.value), spellCheck: false }),
               actionButton('全选', () => setPickedTables([...new Set([...pickedTables, ...filteredTables])]), {}),
-              actionButton('清空', () => setPickedTables([]), {})),
+              actionButton('清空', () => setPickedTables([]), {}),
+              actionButton(busy === 'counts' ? '预估中…' : '预估条数', doCountTables, { disabled: busy === 'counts' }),
+              actionButton('只选非空', () => setPickedTables(filteredTables.filter((t) => counts[t] && counts[t].count > 0)), {})),
             h('div', { className: 'seeu-scroll', style: { maxHeight: 120, overflow: 'auto', border: '1px solid ' + C_L2, borderRadius: 6, padding: '4px 8px' } },
               ...(filteredTables.length ? filteredTables.map((t) => h('label', { key: t, style: { ...S.row, gap: 6, fontSize: 11.5, color: C_FG2, padding: '2px 0' } },
                 h('input', { type: 'checkbox', checked: pickedTables.includes(t), onChange: () => toggleTable(t) }),
-                h('span', null, t))) : [h('span', { key: 'none', style: { ...S.muted, fontSize: 11.5 } }, '没有匹配的表名')])),
+                h('span', null, t),
+                counts[t] ? h('span', { style: { ...S.muted, fontSize: 10.5, color: counts[t].count === 0 ? '#F5A524' : C_FG3 } },
+                  counts[t].count === null ? '预估失败' : `${counts[t].count} 行`) : null)) : [h('span', { key: 'none', style: { ...S.muted, fontSize: 11.5 } }, '没有匹配的表名')])),
+            Object.keys(counts).length && pickedTables.some((t) => counts[t])
+              ? h('div', { style: { ...S.muted, fontSize: 11 } },
+                  `预估：选中表合计 ${pickedTables.reduce((sum, t) => sum + (counts[t] && Number.isFinite(counts[t].count) ? counts[t].count : 0), 0)} 行` +
+                  '（每张表最多导入 2000 行；空表会自动跳过）')
+              : null,
             batchJob && batchJob.status === 'running' ? h('div', { style: { ...S.muted, fontSize: 11 } },
               `批量导入：第 ${Math.max(batchJob.index, 1)}/${batchJob.total} 张表${batchJob.table ? ' · ' + batchJob.table : ''} · 已收集 ${batchJob.records} 条记录` +
               (batchJob.phase === 'start' ? ' · 正在准备…' : '')) : null,

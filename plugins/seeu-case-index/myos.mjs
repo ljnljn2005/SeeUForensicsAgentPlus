@@ -171,3 +171,41 @@ export async function myosImportBatch({ caseId, db, tables, outDir, caseName, ev
     return { ok: true, dbFile, caseDir, caseName, evidenceName: baseName, mode: 'append', tables: items, skipped, totals }
   })
 }
+
+/**
+ * 预估每张表的行数（导入前预览，避免把空表/巨型表一起导）。
+ * count(*) 只查一行，代价远小于导入；失败的表单独标 error。
+ */
+export async function myosTableCounts({ caseId, db, tables, maxTables = 200 } = {}) {
+  const dbPath = String(db ?? '').trim()
+  if (!dbPath) throw fail('缺少 db（结果库 .mfs 路径）')
+  const list = (Array.isArray(tables) ? tables : []).map((item) => String(item ?? '').trim()).filter(Boolean)
+  if (list.length === 0) throw fail('缺少 tables（要预估的表）')
+  const id = String(caseId ?? '').trim()
+  const picked = list.slice(0, Math.min(Math.max(Number(maxTables) || 200, 1), 1000))
+
+  return call(async (client) => {
+    if (id) {
+      try {
+        await client.call('myos-forensics.open_case', { caseId: id, timeoutMs: 120000 })
+      } catch {
+        // 忽略：结果库能读就行。
+      }
+    }
+    const rows = []
+    for (const table of picked) {
+      const statement = `select count(*) as n from ${JSON.stringify(table)}`
+      try {
+        const payload = await readMyosRows(client, { dbPath, sql: statement, maxRows: 1 })
+        const first = payload.rows[0] ?? {}
+        const value = first.n ?? first.count ?? Object.values(first)[0] ?? 0
+        const count = Number(value)
+        rows.push({ table, count: Number.isFinite(count) ? count : 0 })
+      } catch (error) {
+        rows.push({ table, count: null, error: error instanceof Error ? error.message : String(error) })
+      }
+    }
+    const total = rows.reduce((sum, row) => sum + (Number.isFinite(row.count) ? row.count : 0), 0)
+    return { ok: true, tables: rows, total }
+  })
+}
