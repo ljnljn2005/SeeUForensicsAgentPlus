@@ -169,6 +169,15 @@ export function buildEnvReport(facts = {}, now = Date.now()) {
   }
 }
 
+/** 支持一键自动修复的项（其余项需要用户去设置/安装）。 */
+export const FIXABLE_ENV_KEYS = ['plugins', 'skills']
+
+/** 找出当前报告里可自动修复、且状态不是 ok 的项。 */
+export function envFixTargets(report) {
+  const items = Array.isArray(report?.items) ? report.items : []
+  return items.filter((item) => FIXABLE_ENV_KEYS.includes(item?.key) && item?.status !== 'ok').map((item) => item.key)
+}
+
 /** 纯文本版（方便贴进聊天/报告；设置页用卡片渲染，不依赖这个）。 */
 export function formatEnvReport(report) {
   const mark = { ok: '[OK]', warn: '[!]', fail: '[X]' }

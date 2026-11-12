@@ -40,7 +40,7 @@ import {
 import { LOVELY_TOOL_SPECS, lovelyToolsView, saveLovelyToolPaths } from './lovely-tools.js'
 import { mountHostEnv, mountManager, setMountLogger } from './mounts.js'
 import { TOOL_PATH_SPECS, saveToolPaths, toolPathsEnv, toolPathsView } from './tool-paths.js'
-import { collectEnvReport, envReportMarkdown, envReportText } from './env-report.js'
+import { collectEnvReport, envFixTargets, envReportMarkdown, envReportText } from './env-report.js'
 import { ensureBundledPluginPackages, installBundledPluginBundles } from './dsh-plugins.js'
 import { bundledSkillsDir, installBundledSkills, userSkillsDir } from './skills.js'
 import {
@@ -1023,6 +1023,38 @@ function registerIpc(): void {
       const report = await collectEnvReport()
       logShell(`env report: ${report.summary.ok} 正常 / ${report.summary.warn} 注意 / ${report.summary.fail} 不可用`)
       return { ok: true, report, text: envReportText(report), markdown: envReportMarkdown(report) }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  // 第 44 轮：体检「一键修复」——只处理可自动补齐的项（随包插件包 / 随包技能）。
+  ipcMain.handle('seeu:env:fix', async () => {
+    try {
+      const targets = envFixTargets(await collectEnvReport())
+      const repaired: string[] = []
+      if (targets.includes('plugins') && process.env.SEEU_DISABLE_DSH_PLUGINS !== '1') {
+        installBundledPluginBundles()
+        const packages = ensureBundledPluginPackages(app.getVersion())
+        logShell(`env fix: 插件包 ${packages.packages.length} 个（复制 ${packages.copied} 个）`)
+        repaired.push('插件包')
+      }
+      if (targets.includes('skills')) {
+        const skills = installBundledSkills(app.getVersion())
+        logShell(`env fix: 技能 ${skills.skills.length} 个，技能组 ${skills.sets?.length ?? 0} 组`)
+        repaired.push('技能')
+      }
+      const report = await collectEnvReport()
+      logShell(`env fix: 目标 ${targets.join(',') || '无'}；已处理 ${repaired.join(',') || '无'}`)
+      return {
+        ok: true,
+        repaired,
+        targets,
+        report,
+        text: envReportText(report),
+        markdown: envReportMarkdown(report),
+        error: undefined,
+      }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }

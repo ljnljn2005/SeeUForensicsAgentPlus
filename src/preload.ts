@@ -348,6 +348,8 @@ const api = {
   env: {
     report: (): Promise<{ ok: boolean; report?: EnvReport; text?: string; markdown?: string; error?: string }> =>
       ipcRenderer.invoke('seeu:env:report') as Promise<{ ok: boolean; report?: EnvReport; text?: string; markdown?: string; error?: string }>,
+    fix: (): Promise<{ ok: boolean; repaired?: string[]; targets?: string[]; report?: EnvReport; text?: string; markdown?: string; error?: string }> =>
+      ipcRenderer.invoke('seeu:env:fix') as Promise<{ ok: boolean; repaired?: string[]; targets?: string[]; report?: EnvReport; text?: string; markdown?: string; error?: string }>,
   },
   // 镜像挂载：取证镜像 → 只读盘符（LovelyCarve CLI 常驻进程，关闭外壳释放）。
   mounts: {

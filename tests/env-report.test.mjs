@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   buildEnvReport,
+  envFixTargets,
   envReportMarkdown,
   formatEnvReport,
   worstStatus
@@ -95,4 +96,33 @@ test('envReportMarkdown：标题/合计/表格行/提示列', () => {
   assert.equal(lines.length, report.items.length)
   assert.ok(lines.some((line) => line.includes('案件索引目录')))
   assert.ok(lines.some((line) => line.includes('→') === false))
+})
+
+test('envFixTargets：只认可自动修复且状态非 ok 的项', () => {
+  const report = buildEnvReport(
+    {
+      plugins: { bundles: 6, missing: ['billion-context'] },
+      skills: { bundled: 5, installed: 0, sets: ['qiko'] },
+      tools: { ready: 10, total: 13 },
+      localModel: { configured: false, enabled: false, model: '' },
+      mounts: { cliConfigured: true, cliFound: true, mounts: 0 },
+      myos: { configured: false, path: '' },
+      indexDirs: { dirs: 0 },
+    },
+    Date.parse('2026-11-13T00:00:00Z'),
+  )
+  assert.deepEqual(envFixTargets(report).sort(), ['plugins', 'skills'])
+  const okReport = buildEnvReport(
+    {
+      plugins: { bundles: 6, missing: [] },
+      skills: { bundled: 5, installed: 6, sets: ['traffic', 'log', 'memory', 'qiko'] },
+      tools: { ready: 13, total: 13 },
+      localModel: { configured: true, enabled: true, model: 'deepseek-flash' },
+      mounts: { cliConfigured: true, cliFound: true, mounts: 0 },
+      myos: { configured: true, path: 'D:/Programs/MYOS/Client/tools/mcp/myos_mcp_server.exe' },
+      indexDirs: { dirs: 2 },
+    },
+    Date.parse('2026-11-13T00:00:00Z'),
+  )
+  assert.deepEqual(envFixTargets(okReport), [])
 })

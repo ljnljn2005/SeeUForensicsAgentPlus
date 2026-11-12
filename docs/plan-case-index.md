@@ -2544,3 +2544,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `plugins/seeu-case-index/client.js`：新增 `activityQuery` state 与 `matchesActivity(item)`（title/detail/kind 小写包含），`activityShown` = 当天过滤（`activityDay`）后再按文本过滤，列表与「当天 N 条 · 共 M 条」都用它；标题行加筛选框（`data-activity-search`，placeholder「筛选活动（案件名 / 表名 / 类型）」）与 `[data-activity-search-count]`（`N 条匹配` / `没有匹配的活动`）；列表空时渲染 `[data-activity-empty]`（有筛选词显示「没有匹配的活动」，否则保留原引导文案）。
 - e2e：`m2-ui-check` 在移除单条后（剩「昨日导入样例」）→ 筛选「昨日」断言 1 行 + 「1 条匹配」→ 筛选「不存在」断言空态文案 → 清空恢复 1 行 → `activitySearchOk:true` 纳入 `activityOk`。
 - 坑：初版预期筛「今日」，但前一步刚移除「今日建库样例」，行数必然为 0——e2e 断言要跟数据顺序一致。
+
+### 20.123 体检「一键修复可自动项」（第 44 轮）
+
+- 动机：体检能报出「随包插件没复制到 profile」「技能没装到 DSH_HOME」，但用户只能重启/重装。
+- `tools/env-report.mjs`：`FIXABLE_ENV_KEYS = ['plugins','skills']` + `envFixTargets(report)`（只取可自动修且状态非 ok 的项）；`src/env-report.ts` re-export。
+- `src/main.ts`：IPC `seeu:env:fix` —— 取 targets；`plugins` → `installBundledPluginBundles()` + `ensureBundledPluginPackages(app.getVersion())`（`SEEU_DISABLE_DSH_PLUGINS=1` 跳过）；`skills` → `installBundledSkills(app.getVersion())`；修复后重新 `collectEnvReport()`，返回 `{ok, repaired, targets, report, text, markdown}` 并写日志 `env fix: …`。
+- `src/preload.ts`：`window.seeu.env.fix()`。
+- 设置页：体检操作行新增【一键修复可自动项】`#btn-env-fix`（`renderEnvReport()` 里按 plugins/skills 是否非 ok 启用），点击后重渲染报告并在 `#env-copy-status` 显示「已自动修复：插件包、技能」/「没有需要自动修复的项」。
+- 测试：`tests/env-report.test.mjs` +1（可修复项筛选、全 ok 返回空）→ 6/6；`settings-check` 断言 `envFixApiOk:true`（直接调用返回 ok+repaired+report）与隔离 home 下按钮置灰 `envFixButtonDisabled:true`。
+- 坑：① `src/main.ts` 的 env-report import 是 `{ collectEnvReport, envReportMarkdown, envReportText }`（顺序与预期不同），替换未命中导致 `envFixTargets is not defined`——靠 e2e 捕获 IPC 返回 error 才看到；② `skillsItem` 判定是 `installed > 0` 即 ok，单测里造「技能缺」要 `installed: 0`，不能只给 `sets`。

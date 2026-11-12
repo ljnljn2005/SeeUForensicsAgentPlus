@@ -533,6 +533,23 @@ try {
   if (!report.envCopyOk) throw new Error('复制体检结果内容不符：' + String(envClipboard).slice(0, 160))
   log('复制体检结果', `${report.envClipboardChars} 字符`)
 
+  // 第 44 轮：体检「一键修复可自动项」——隔离 home 里插件/技能已就绪，按钮应禁用；
+  // 但修复 API 本身必须可用（直接调用返回 ok + repaired 数组）。
+  report.envFixApi = await evaluate(client, "typeof (window.seeu.env && window.seeu.env.fix) === 'function'")
+  const fixRes = await evaluate(client, `(async () => {
+    try {
+      const r = await window.seeu.env.fix()
+      return { ok: r && r.ok === true, repaired: r && r.repaired, hasReport: Boolean(r && r.report), error: r && r.error }
+    } catch (error) {
+      return { ok: false, error: String(error && error.message ? error.message : error) }
+    }
+  })()`)
+  report.envFixApiOk = report.envFixApi === true && fixRes?.ok === true && Array.isArray(fixRes.repaired) && fixRes.hasReport === true
+  report.envFixButtonDisabled = await evaluate(client, "document.getElementById('btn-env-fix').disabled === true")
+  report.envFixOk = report.envFixApiOk && report.envFixButtonDisabled === true
+  if (!report.envFixOk) throw new Error('体检一键修复接线不对：' + JSON.stringify({ api: report.envFixApi, res: fixRes, disabled: report.envFixButtonDisabled }))
+  log('体检一键修复', 'API 可用 · 按钮状态 ' + (report.envFixButtonDisabled ? '禁用（无待修复项）' : '可点'))
+
   // 第 38 轮：导出体检报告 .md（走 save-export IPC，落 SEEU_EXPORT_DIR）。
   await evaluate(client, `document.getElementById('btn-env-export').click(), true`)
   await sleep(700)

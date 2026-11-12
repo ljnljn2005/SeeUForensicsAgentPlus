@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
-import { buildEnvReport, formatEnvReport } from '../tools/env-report.mjs'
+import { buildEnvReport, envFixTargets, formatEnvReport } from '../tools/env-report.mjs'
 import { resolveMyosMcp } from '../tools/myos-index/mcp.mjs'
 import { describeLocalModelConfig } from './local-model.js'
 import { mountManager } from './mounts.js'
@@ -142,4 +142,4 @@ export function envReportText(report: EnvReport): string {
   return formatEnvReport(report)
 }
 
-export { envReportMarkdown } from '../tools/env-report.mjs'
+export { envReportMarkdown, envFixTargets, FIXABLE_ENV_KEYS } from '../tools/env-report.mjs'

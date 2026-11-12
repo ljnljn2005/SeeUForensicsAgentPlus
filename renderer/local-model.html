@@ -332,6 +332,7 @@
     <div class="hint">一次性检查：随包 dsh 插件、取证技能、外部工具路径、本机模型配置、镜像挂载（LovelyCarve）、MYOS MCP、案件索引目录。只读检查，不会启动会话或改动配置。</div>
     <div class="actions" style="margin:10px 0 6px">
       <button id="btn-env-check">开始体检</button>
+      <button id="btn-env-fix" disabled title="自动补齐随包 dsh 插件包与取证技能；其余项请按提示到对应设置处理">一键修复可自动项</button>
       <button id="btn-env-copy" disabled>复制结果</button>
       <button id="btn-env-export" disabled>导出 .md</button>
       <span id="env-summary" class="hint" style="margin-left:8px"></span>
@@ -776,6 +777,12 @@
     if (copyButton) copyButton.disabled = !lastEnvText
     const exportButton = $('btn-env-export')
     if (exportButton) exportButton.disabled = !lastEnvMarkdown
+    const fixButton = $('btn-env-fix')
+    if (fixButton) {
+      const autoFixable = ['plugins', 'skills']
+      const items = Array.isArray(report.items) ? report.items : []
+      fixButton.disabled = !items.some((item) => autoFixable.includes(item.key) && item.status !== 'ok')
+    }
     const sum = report.summary || {}
     const summary = $('env-summary')
     summary.textContent = '体检结果：' + (sum.ok || 0) + ' 项正常 · ' + (sum.warn || 0) + ' 项注意 · ' + (sum.fail || 0) + ' 项不可用'
@@ -824,6 +831,30 @@
     } catch (error) {
       status.textContent = '导出失败：' + (error && error.message ? error.message : error)
       status.style.color = 'var(--err)'
+    }
+  }
+
+  async function fixEnvReport() {
+    const button = $('btn-env-fix')
+    const status = $('env-copy-status')
+    button.disabled = true
+    status.textContent = '正在自动补齐插件包与技能…'
+    status.style.color = 'var(--muted)'
+    try {
+      if (!envApi || typeof envApi.fix !== 'function') throw new Error('预加载桥不可用（window.seeu.env.fix 缺失）')
+      const res = await envApi.fix()
+      if (!res || !res.ok || !res.report) throw new Error((res && res.error) || '修复失败')
+      const repaired = Array.isArray(res.repaired) ? res.repaired : []
+      renderEnvReport({ ...res.report, text: res.text, markdown: res.markdown })
+      status.textContent = repaired.length
+        ? '已自动修复：' + repaired.join('、') + '。其余注意项请按提示处理。'
+        : '没有需要自动修复的项（已正常或需手动处理）。'
+      status.style.color = 'var(--muted)'
+    } catch (error) {
+      status.textContent = '自动修复失败：' + (error && error.message ? error.message : error)
+      status.style.color = 'var(--err)'
+    } finally {
+      button.disabled = false
     }
   }
 
@@ -1150,6 +1181,8 @@
   void loadTools()
   const envButton = $('btn-env-check')
   if (envButton) envButton.addEventListener('click', () => { void runEnvCheck() })
+  const envFixButton = $('btn-env-fix')
+  if (envFixButton) envFixButton.addEventListener('click', () => { void fixEnvReport() })
   const envCopyButton = $('btn-env-copy')
   if (envCopyButton) envCopyButton.addEventListener('click', () => { void copyEnvReport() })
   const envExportButton = $('btn-env-export')
