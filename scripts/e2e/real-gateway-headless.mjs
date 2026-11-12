@@ -5,7 +5,7 @@
 //     node scripts/e2e/real-gateway-headless.mjs
 // 可选：GW_CONTEXT（默认 131072）、GW_MAX_TOKENS（默认 8192）、SEEU_CASE_DIR、SEEU_REAL_HOME。
 import { spawn, spawnSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -21,6 +21,9 @@ const home = process.env.SEEU_REAL_HOME || join(root, '.dev', 'real-home')
 // 这跟产品无关，headless 只是借一个可写的临时目录当工作区。
 const work = process.env.SEEU_REAL_WORK || join(tmpdir(), 'seeu-real-work')
 const taskTimeoutMs = Number(process.env.SEEU_REAL_TASK_TIMEOUT || 600_000)
+// headless 子进程里 PowerShell 自动发现偶尔超时（技能任务跑在负载高的机器上），
+// 允许显式给 LovelyMem V3 exe：GW_LOVELYMEM_EXE='E:\...\lovelymem.v3.exe'。
+const lovelyExe = process.env.GW_LOVELYMEM_EXE || ''
 const patchFile = join(root, '.dev', 'real-gateway.patch.yml')
 const CASE_NAMES = ['CHAN_MH_mobile.zip', 'LEUNG_YL_mobile.zip', 'FUNG_CC_mobile.zip', 'IQ_Coin_Type_Transactions.zip', 'AP3_LEUNG_YL_USB.E01']
 
@@ -31,6 +34,9 @@ if (!base || !key || !model) {
 
 mkdirSync(home, { recursive: true })
 mkdirSync(work, { recursive: true })
+// 技能根 = <DSH_HOME>/skills（与外壳 installBundledSkills 一致）；不装的话 headless 里
+// 模型看不到 lovelymem-cli / lovelyspark-cli 等随包技能。
+cpSync(join(root, 'resources', 'forensics', 'skills'), join(home, 'skills'), { recursive: true, force: true })
 mkdirSync(join(root, '.dev'), { recursive: true })
 writeFileSync(join(home, 'index-state.json'), JSON.stringify({ dirs: [caseDir] }))
 // 跑之前用当前代码重写一遍 <DSH_HOME>/AGENTS.md 的概览区块：插件进程内会缓存 briefSig，
@@ -109,7 +115,17 @@ function runTask(task, timeoutMs = taskTimeoutMs) {
       task,
     ], {
       cwd: work, // 工作区放临时目录：仓库目录交给沙箱会让 ACL 授权失败（见 plan §20.57）
-      env: { ...process.env, DSH_HOME: home, SEEU_LOCAL_LLM_API_KEY: key },
+      env: {
+        ...process.env,
+        DSH_HOME: home,
+        SEEU_LOCAL_LLM_API_KEY: key,
+        // 与外壳 host.ts 注入的一致：技能里的 & $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI
+        // 需要这两个变量才能找到薄层包装器（开发态=仓库里的 tools/lovely-cli/cli.mjs）。
+        SEEU_CLI_NODE: process.execPath,
+        SEEU_LOVELY_CLI: join(root, 'tools', 'lovely-cli', 'cli.mjs'),
+        SEEU_LOVELY_CONFIG: join(home, 'lovely-cli.json'),
+        ...(lovelyExe ? { SEEU_LOVELYMEM_EXE: lovelyExe } : {}),
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
     let out = ''
@@ -183,6 +199,24 @@ try {
   }
 
   report.ok = report.question.ok && report.question.briefUsed.length === CASE_NAMES.length && report.tool.called && report.tool.resultStatus === 'completed' && /v\d+\.\d+/.test(report.tool.answer)
+
+  // 可选第三轮：验「技能按需加载 + 包装器执行本机 CLI」（SEEU_REAL_SKILL=1 时跑）。
+  if (process.env.SEEU_REAL_SKILL === '1') {
+    const t3 = await runTask('使用 lovelymem-cli 技能，执行它的 version 子命令（形如 lovelymem -- version），只回复应用名、版本号和可用引擎，不要做其他操作。')
+    const cmds = t3.toolCalls.map((c) => ({ tool: c.tool ?? null, command: c.input?.command ?? c.input?.cmd ?? c.input?.name ?? null })).slice(0, 8)
+    report.skill = {
+      ok: t3.ok,
+      elapsedMs: t3.elapsedMs,
+      toolCalls: cmds,
+      skillLoaded: t3.toolCalls.some((c) => c.tool === 'skill') || cmds.some((c) => String(c.command ?? '').includes('lovely')),
+      wrapperUsed: cmds.some((c) => /lovely-cli|SEEU_LOVELY_CLI/.test(String(c.command ?? ''))),
+      lovelyExe: lovelyExe || null,
+      versionSeen: /3\.1\.11|Lovelymem/i.test(t3.answerText),
+      answer: t3.answerText.slice(0, 500),
+      stderrTail: t3.stderrTail,
+    }
+    report.ok = report.ok && report.skill.ok && report.skill.versionSeen
+  }
 } catch (e) {
   report.errors.push(String(e?.message ?? e))
 }

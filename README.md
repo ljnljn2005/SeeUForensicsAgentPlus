@@ -77,6 +77,11 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.1.7-x64-portable.exe`，因为验收时它正在运行、文件被占用无法删除；0.2.x 的产物不受影响。
 
+### v0.2.9 待发布（v0.2.8 之后、尚未打包）
+
+- **技能链路真机验证**：`npm run test:e2e:real-gateway` 新增可选第三轮（`SEEU_REAL_SKILL=1`）——模型按需加载 `lovelymem-cli` 技能后，用技能里写的命令 `& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelymem -- version` 调包装器，实测 51.8 s、2 次工具调用、答出 `Lovelymem / 3.1.11 / starmem、vol3`（`skillLoaded:true`、`wrapperUsed:true`）。headless 脚本同时补齐了技能安装（`resources/forensics/skills` → `<DSH_HOME>/skills`）与 `SEEU_CLI_NODE`/`SEEU_LOVELY_CLI`/`SEEU_LOVELYMEM_EXE` 注入 —— 之前只装外壳时才有这些，headless 直接跑会「技能不可用」；
+- 这一步补上了 v0.2.8 遗留的最后一条「模型主动调技能未做真机会话」。
+
 ### v0.2.8 改了什么
 
 > 以下改动已进入 v0.2.8 安装包（v0.2.7 `c3f22e1` 之后：真机联调修复、检索 CSV、验收材料、LovelyMem/LovelySpark 集成），打包态回归见 `docs/packaging.md`。
@@ -604,6 +609,16 @@ GW_BASE=http://10.10.250.120:8080/v1 GW_KEY=sk-... GW_MODEL=deepseek-flash \
 
 它用 `SEEU_LOCAL_MODEL_JSON` 注入真实配置、把 `index-state.json` 指向真实案件目录（让案件概览注入 AGENTS.md），然后 CDP 点击 composer 输入问题并回车，轮询「思考块出现 / 首段正文 / 5 个检材名齐全」。实测 `REPORT {"ok":true,"thinkingSeen":true,"firstSignalMs":10123,"firstTextMs":12168,"totalMs":13173,"names":[5 个检材名],"namesOk":true}`，截图写 `docs/screenshots/10-real-gateway-chat.png`。凭据只走环境变量。
 
+技能链路（可选第三轮，验证「模型按需加载技能 → 执行本机 CLI」）：
+
+```bash
+GW_BASE=http://10.10.250.120:8080/v1 GW_KEY=sk-... GW_MODEL=deepseek-flash SEEU_REAL_SKILL=1 \\
+  GW_LOVELYMEM_EXE='E:\\CTFTools\\...\\Lovelymem\\lovelymem.v3.exe' \\
+  npm run test:e2e:real-gateway
+```
+
+headless 里技能根是 `<DSH_HOME>/skills`（脚本会把 `resources/forensics/skills` 复制过去），并注入 `SEEU_CLI_NODE` / `SEEU_LOVELY_CLI`，否则技能里写的 `& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI …` 找不到包装器。`GW_LOVELYMEM_EXE` 是兜底：headless 子进程里 PowerShell 的自动发现（注册表/快捷方式）在高负载下偶发 6 s 超时，这时显式给 exe 路径。实测 `REPORT` 的 `skill` 段：`skillLoaded:true`、`wrapperUsed:true`、`elapsedMs:51755`、`toolCalls:[skill lovelymem-cli, pwsh …version]`、`answer:"Lovelymem / 3.1.11 / starmem、vol3"`。
+
 脚本都会用 `taskkill` 清理 Electron，结束后不留进程。
 
 ### 9.4 注意
@@ -634,6 +649,8 @@ GW_BASE=http://10.10.250.120:8080/v1 GW_KEY=sk-... GW_MODEL=deepseek-flash \
 桌面 UI 实测（真 Electron + 真网关，`npm run test:e2e:real-gateway-ui`）：思考块 **10.1 s** 出现、首段正文 **12.2 s**、**13.2 s** 收齐 5/5 检材名；界面同时显示「思考」折叠块与「深度求索中，用时 12 秒」，说明推理模型的思考内容在本地链路上能及时给出，用户不会面对纯白屏。截图见 `docs/screenshots/10-real-gateway-chat.png`。踩坑：脚本把 `GW_BASE`（已含 `/v1`）再拼一次 `/v1` → 网关回 `404 page not found`，界面显示「处理失败 · PI_AI_ERROR」；已归一化 baseURL，同时确认错误在界面上是可读的。
 
 联调还发现一处数据口径 bug 并已修：会话概览「规模：记录 22777 条」与检材表各行相加不一致（`evidences()` 原来取火眼 `evidence.record_count`）。现在按索引内 `record` 行数统计（本案 1/1/8,443/1/14,331，合计 22,777），火眼原值保留在 `reportedRecordCount` 字段，概览表格下方也加了口径说明。
+
+技能真机链路（`SEEU_REAL_SKILL=1`）：模型先调 `skill` 工具加载 `lovelymem-cli`，再照技能文档执行 `& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelymem -- version`，**51.8 s** 答出 `Lovelymem / 3.1.11 / starmem、vol3`。第一次跑失败暴露了 headless 与外壳的环境差异：headless 不会执行 `installBundledSkills()`（技能根为空），也不会注入 `SEEU_CLI_NODE`/`SEEU_LOVELY_CLI`，导致模型加载不到技能、包装器也起不来；脚本已补齐这两件事，并支持 `GW_LOVELYMEM_EXE` 兜底自动发现。
 
 ## 10. 许可与来源
 

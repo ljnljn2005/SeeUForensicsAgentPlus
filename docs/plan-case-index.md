@@ -1808,3 +1808,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 实测 `REPORT {"ok":true,"thinkingSeen":true,"firstSignalMs":10123,"firstTextMs":12168,"totalMs":13173,"names":[5 个检材名],"namesOk":true}`：思考块 10.1 s、正文 12.2 s、13.2 s 全部收齐；界面出现「思考」折叠块与「深度求索中，用时 12 秒」。
 - 踩坑：第一版把 `GW_BASE`（`…/v1`）再拼一次 `/v1` → 网关 `404 page not found`，UI 显示「处理失败 · PI_AI_ERROR」；已在脚本里 `replace(/\/v1$/i,'').replace(/\/+$/,'') + '/v1'` 归一化。另：类型断言用 `innerText.slice(0,40)` 会截掉关键字导致误判失败，已放宽到 120 字符。
 - 遗留：桌面 UI 这条只测「问答」不测工具轮（工具链路由 headless e2e 覆盖）；仍只有一个模型（`deepseek-flash`）跑过真机。
+
+---
+
+## 20.61 技能链路真机验证（headless 第三轮）
+
+- 目标：补 20.58 遗留的最后一条——「模型按技能主动调用本机 CLI」只验证过技能文件落盘与 shell 环境，没跑过真实模型会话。
+- 做法：给 `scripts/e2e/real-gateway-headless.mjs` 加可选第三轮（`SEEU_REAL_SKILL=1`）：提示「使用 lovelymem-cli 技能，执行它的 version 子命令…」，断言 `skillLoaded`（出现 `skill` 工具调用且参数为 `lovelymem-cli`）、`wrapperUsed`（pwsh 命令里含 `lovely-cli` 或 `SEEU_LOVELY_CLI`）、`versionSeen`（回答含 `3.1.11` 或 `Lovelymem`），并纳入 `report.ok`。
+- 第一次跑直接失败：模型说「技能 `lovelymem-cli` 在本会话不可用」，转而自己去 `E:\CTFTools\...` 里翻 exe。根因是 headless 与外壳的环境差异：外壳启动前 `installBundledSkills()` 会把 `resources/forensics/skills/**` 复制到 `<DSH_HOME>/skills`，并向 dsh 子进程注入 `SEEU_CLI_NODE`/`SEEU_LOVELY_CLI`；headless 脚本两件事都没做，所以技能根为空、技能内的 `& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI …` 也没有变量。
+- 修复：脚本启动时 `cpSync(join(root,'resources','forensics','skills'), join(home,'skills'), {recursive:true,force:true})`；spawn env 补 `SEEU_CLI_NODE: process.execPath`、`SEEU_LOVELY_CLI: join(root,'tools','lovely-cli','cli.mjs')`、`SEEU_LOVELY_CONFIG: join(home,'lovely-cli.json')`。
+- 第二次跑：技能加载成功、命令也对，但包装器报「找不到 lovelymem CLI」，`status` 里 `found:false`。原因：headless 子进程里 `discovery.mjs` 的 PowerShell 探测（注册表/卸载项/进程/快捷方式，6 s 超时）在高负载下超时返回空；随后常见目录搜索限 5 层/1 s，够不到 `E:\CTFTools\Forensics\1-ComputerAnalysis\3-MemAnalysis\Lovelymem\`。这个目录本就在自动发现覆盖范围内，只是这一轮没算完。
+- 修复：脚本支持 `GW_LOVELYMEM_EXE='E:\...\lovelymem.v3.exe'`，非空时注入 `SEEU_LOVELYMEM_EXE`（`cli.mjs` 的显式覆盖优先级最高）。重新跑：`skill.elapsedMs:51755`、`skillLoaded:true`、`wrapperUsed:true`、`lovelyExe` 已回显，回答 `Lovelymem / 3.1.11 / starmem、vol3`，只有 2 次工具调用（`skill` + 1 次 `pwsh`），没有再去翻盘。
+- 顺带修：`wrapperUsed` 原先只匹配 `lovely-cli` 字面量，而模型用的是 `$env:SEEU_LOVELY_CLI`，会误报 false；改成两条都认。
+- 回归：`npm test` 80/80、`npm run check:overlay` OK；本轮只动 e2e 脚本与文档，未改产品代码，无需重新打包。
+- 遗留：真实内存镜像分析（`doctor`/`plugins`/`run`）仍未跑，取决于本机 V3 授权与耗时；`qwen3.8-flash-next` 仍未做真机会话；`GW_LOVELYMEM_EXE` 属机器相关参数，换机器要么靠自动发现、要么显式给路径。
