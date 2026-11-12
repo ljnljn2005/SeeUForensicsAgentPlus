@@ -23,10 +23,10 @@ const cli = path.join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.j
 const failures = []
 const fail = (message) => failures.push(message)
 
-/** 从 dump 中截出 preset-standard 的 plugins 段，避免与 web-app patch 的顶层行混淆。 */
-function presetSection(dump) {
+/** 从 dump 中截出某个 preset 的 plugins 段，避免与 web-app patch 的顶层行混淆。 */
+function presetSection(dump, id = 'preset-standard') {
   const lines = dump.split(/\r?\n/)
-  const start = lines.findIndex((line) => line === '- id: preset-standard')
+  const start = lines.findIndex((line) => line === `- id: ${id}`)
   if (start < 0) return ''
   const end = lines.findIndex((line, index) => index > start && /^- id: /.test(line))
   return lines.slice(start, end < 0 ? undefined : end).join('\n')
@@ -105,6 +105,29 @@ function main() {
       fail('tool-fs 未收敛为只读（write/edit 应为 false）')
     }
     if (!/name: 取证分析（Forensics）/.test(preset)) fail('preset 名称不是取证预设名')
+
+    // 新增的三个分析预设：各自只引用自己那组技能根，工具面保持只读取证。
+    const analysisPresets = [
+      ['preset-traffic', '流量分析（Traffic）', 'SEU_SKILL_SET_TRAFFIC'],
+      ['preset-log', '日志分析（Log）', 'SEU_SKILL_SET_LOG'],
+      ['preset-memory', '内存分析（Memory）', 'SEU_SKILL_SET_MEMORY'],
+    ]
+    for (const [id, label, env] of analysisPresets) {
+      const section = presetSection(dump, id)
+      if (section === '') {
+        fail(`dump 里找不到 ${id}`)
+        continue
+      }
+      if (!section.includes(label)) fail(`${id} 名称不是「${label}」`)
+      if (!new RegExp(env).test(section)) fail(`${id} 没有引用技能根 ${env}`)
+      if (!/customSkillDirs/.test(section)) fail(`${id} 缺少 customSkillDirs（按预设注入技能）`)
+      const fsBlock = section.split(/^(?=\s*- id: )/m).map((block) => block.trimStart()).find((block) => block.startsWith('- id: tool-fs')) ?? ''
+      if (!/write: false/.test(fsBlock) || !/edit: false/.test(fsBlock)) fail(`${id} 的 tool-fs 未收敛为只读`)
+    }
+    // 取证预设不应引用分组技能根（lovelyspark/lovelymem 只属于分析预设）。
+    for (const id of ['preset-standard', 'preset-seeu-lite']) {
+      if (/SEU_SKILL_SET_/.test(presetSection(dump, id))) fail(`${id} 不应引用分组技能根`)
+    }
 
     const lineCount = dump.trimEnd().split(/\r?\n/).length
     if (lineCount < 1200) fail(`dump 行数异常（${String(lineCount)}），配置可能没生效`)

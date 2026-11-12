@@ -36,6 +36,7 @@ import {
 } from './local-model.js'
 import { LOVELY_TOOL_SPECS, lovelyToolsView, saveLovelyToolPaths } from './lovely-tools.js'
 import { mountHostEnv, mountManager, setMountLogger } from './mounts.js'
+import { installBundledPluginBundles } from './dsh-plugins.js'
 import { bundledSkillsDir, installBundledSkills, userSkillsDir } from './skills.js'
 import {
   bundledSkillNames,
@@ -303,6 +304,15 @@ async function startHost(): Promise<void> {
     `skills: ${skills.skills.length} 个（${skills.skills.join(', ') || '无'}）→ ${skills.dir}${skills.changed ? ' [已更新]' : ' [无变化]'}`,
   )
   logShell(`start host: runtime=${dshRuntimeDir()} home=${dshHome()} patch=${forensicsPatchPath()}`)
+  // 随包 dsh 插件：把 bundles 补进 <DSH_HOME>/profiles/web/package.json（离线、无需 npm）。
+  const dshPlugins = process.env.SEEU_DISABLE_DSH_PLUGINS === '1'
+    ? { added: [], missing: [], changed: false, manifestPath: '(disabled)' }
+    : installBundledPluginBundles()
+  logShell(
+    `dsh plugins: ${dshPlugins.added.length > 0 ? `已补 ${dshPlugins.added.join(', ')}` : '已就绪'}` +
+      `${dshPlugins.missing.length > 0 ? `；缺少 ${dshPlugins.missing.join(', ')}` : ''}` +
+      `${dshPlugins.error !== undefined ? `；错误 ${dshPlugins.error}` : ''} → ${dshPlugins.manifestPath}`,
+  )
   void probeLocalModelGateway()
 
   const next = new DshHost({ env: mountHostEnv() })

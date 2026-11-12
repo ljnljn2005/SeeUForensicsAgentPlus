@@ -78,6 +78,17 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.2.9-x64-portable.exe` 与 `SeeUForensicsAgentPlus-0.3.0-x64-portable.exe`，因为打包时它们正在运行、文件被占用无法删除；不影响 0.3.1 的产物。
 
+### v0.3.2 改了什么（未打包）
+
+- **随包 dsh 插件（预打包，离线可用）**：安装包现在自带并默认启用 4 个 dsh 插件 —— `billion-context`（上下文压缩/ACP）、`dsh-context`（上下文洞察面板）、`dsh-better-sidebar`（侧栏/任务卡等界面增强）、`dsh-gitbash-shell`（Windows 上的 bash 工具：`bash`/`gitbash_native`/`gitbash_to_native_path`）。启动时外壳会把这些插件写进 `<DSH_HOME>/profiles/web/package.json` 的 `dsh.profile.bundles`（保留用户已有 bundle 与依赖，幂等；`SEEU_DISABLE_DSH_PLUGINS=1` 可跳过），插件代码随 `node_modules` 进 `app.asar`，不需要联网安装。
+- **实现**：新增 `tools/dsh-plugins.mjs`（纯 JS：`BUNDLED_DSH_PLUGINS`、`mergePluginBundles`、`installBundledPluginBundles`，坏清单只报错不覆盖）与 `src/dsh-plugins.ts` 薄层；`src/main.ts` 在 `startHost()` 里写清单并记录日志 `dsh plugins: … → <manifestPath>`；`electron-builder.yml` 把 `node_modules/@dsh-ops/fastctx-win32-x64/**` 放进 `asarUnpack`（`bin/fastctx.exe` 需要真实路径）。
+- **测试**：`npm test` **91/91**（新增 `tests/dsh-plugins.test.mjs` 7 例）；新增 `npm run test:e2e:plugins`（隔离 home：断言 profile bundles 含 6 项、页面出现「上下文洞察 / 插件」、外壳日志有 `dsh plugins:` 且无「缺少」，截图 `.probe/shots/plugins.png`）。
+- **适配插件的 e2e**：`local-tools-e2e` 的「精简预设」断言改为按基础工具数（剔除 MCP 与插件工具后 ≤14，实测 12）而不是原始工具总数；标题请求改用 system 里的标题指令识别（插件会给标题调用也带上工具）；任务卡在插件侧栏里默认折叠，改为「任务 N 进行中」卡片或展开后条目文本都算 todo 已落库。
+- **已知提示**：`billion-context` 对 dsh `0.2.2-rc.1` 只打警告（其最新适配版本是 `0.2.0-rc.2`），功能实测正常；`dsh-context`/`dsh-better-sidebar` 的 peer 依赖要求 `0.2.2-rc.2`，安装时用了 `--legacy-peer-deps`（运行时未发现异常）。
+- **新增三套分析预设（按预设注入技能）**：会话预设新增「流量分析（Traffic）」「日志分析（Log）」「内存分析（Memory）」。前两个带 `lovelyspark-cli` 技能（抓包/网络/日志取证），内存分析带 `lovelymem-cli`（内存镜像、进程、服务、注册表等）；原「取证分析（Forensics）」与「获取分析（本地模型精简）」不再注入这两个 CLI 技能（`lovelycarve-forensics` 仍留在取证预设，供镜像挂载后的磁盘分析使用）。
+- **实现**：随包技能拆成 `resources/forensics/skills/`（通用：案例索引、证据链、LovelyCarve 等）与 `resources/forensics/skill-sets/{traffic,log,memory}/`；新增 `tools/skill-sets.mjs` —— `installSkillSet()` 把整组复制到 `<DSH_HOME>/skill-sets/<id>`（写 `.seeu-skill-set.json` 指纹，幂等），`removeRetiredSkills()` 从旧的 `<DSH_HOME>/skills` 里清走 `lovelymem-cli`/`lovelyspark-cli`（升级迁移）；`src/skills.ts` 安装随包技能时一并安装三组并执行迁移；`src/host.ts` 注入 `SEEU_SKILL_SET_TRAFFIC` / `SEEU_SKILL_SET_LOG` / `SEEU_SKILL_SET_MEMORY`；三个预设在 overlay 里各用独立的 `skill-filesystem` 实例（`includeDefaultRoots: false` + `customSkillDirs` 指向对应环境变量），因此每个预设只看到自己那组技能。
+- **测试**：`npm test` **99/99**（新增 `tests/skill-sets.test.mjs` 4 例、`tests/presets-config.test.mjs` 4 例：用 js-yaml 自定义 `!!js` 标量解析 overlay，断言三预设的 id/名称/顺序、技能根引用、取证预设不引用分组根、随包目录布局）；`check:overlay` 扩展为逐预设校验（名称、技能根、`customSkillDirs`、`tool-fs` 只读）；`skills-check` 断言 `skillsList` 只剩 5 个通用技能、三组技能各就位且没有泄漏进默认技能根。
+
 ### v0.3.1 改了什么
 
 - **设置入口进菜单**：新增一级菜单「设置」——本地模型与工具路径…（`Ctrl+,`）、镜像挂载…（`Ctrl+Shift+M`）、技能管理器…（`Ctrl+Shift+S`）、本地模型状态、重新探测网关、打开配置文件/日志目录；主窗口菜单栏改为**常显**（`autoHideMenuBar: false` + `setMenuBarVisibility(true)`），不用再按 Alt 或记快捷键。欢迎页快捷入口新增「镜像挂载」「技能管理器」两个按钮。
@@ -738,7 +749,40 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 
 **与火眼索引的关系**：两者互补 —— 火眼/`ges` 的结果由 `ges-case-index` 建 `case-index.db`（面板检索，快）；MYOS 则是「活的取证软件」，负责接案件、跑任务、查结果库。统一的「一次入库、AI 快速读取」走同一套索引：用 MYOS MCP 取数据（不要直接读 MYOS 数据目录）→ 归一化写入 `case-index.db` 的 evidence/record/entity 表 → 面板与技能都只查索引。融合细节见 `docs/plan-case-index.md` §20.67。
 
-## 12. 许可与来源
+## 12. 随包 dsh 插件
+
+安装包自带 4 个 dsh 插件，启动即生效（无需联网 `pnpm add`）：
+
+| 插件 | 作用 | 版本 |
+| --- | --- | --- |
+| `billion-context` | 长上下文压缩 / `compress`、`decompress`、`search_context`、`acp_status` 等工具 | 0.1.213 |
+| `dsh-context` | 会话「上下文洞察」面板 | 0.83.1 |
+| `dsh-better-sidebar` | 侧栏、任务卡、插件面板等界面增强 | 0.30.1 |
+| `dsh-gitbash-shell` | Windows 上的 `bash` / `gitbash_native` / `gitbash_to_native_path` 工具 | 0.54.0 |
+
+- **写入位置**：`<DSH_HOME>/profiles/web/package.json` 的 `dsh.profile.bundles`（默认 `<userData>/dsh-home`）。外壳每次 `startHost()` 前都会补齐缺失项，保留用户自己加的 bundle 与 `dependencies`；清单损坏时只报错、不覆盖。设置 `SEEU_DISABLE_DSH_PLUGINS=1` 可跳过。
+- **解析方式**：dsh 先在自己安装目录（打包后是 `app.asar/node_modules/@deepseek-ai/dsh`）的 `node_modules` 里找 bundle，找不到才看 profile 目录，所以插件跟着安装包走、不需要 profile 级安装。
+- **额外解包**：`node_modules/@dsh-ops/fastctx-win32-x64/**` 进 `app.asar.unpacked`，因为 `bin/fastctx.exe` 需要真实文件路径才能 spawn。
+- **验收**：`npm run test:e2e:plugins`（dev 或 `--exe <安装包 exe>` 都可）断言 profile bundles、页面插件 UI、外壳日志三项。
+
+## 13. 分析预设（流量 / 日志 / 内存）
+
+新建会话时选预设即可切换「工具面 + 技能组」；预设互不影响，取证镜像类分析仍留在默认取证预设。
+
+| 预设 | 顺序 | 注入技能（技能根） | 适用 |
+| --- | --- | --- | --- |
+| 取证分析（Forensics） | 1 | 通用技能：`ges-case-index`、`lovelycarve-forensics`、`read-only-evidence-analysis` 等 | 火眼案件索引、镜像/磁盘、证据链报告 |
+| 取证分析（本地模型精简） | 2 | 同上（工具面更小，适合小模型） | 本地小模型 |
+| 流量分析（Traffic） | 3 | `lovelyspark-cli` | PCAP、会话、协议、文件提取 |
+| 日志分析（Log） | 4 | `lovelyspark-cli` | 系统/应用日志、时间线还原 |
+| 内存分析（Memory） | 5 | `lovelymem-cli` | 内存镜像、进程/服务/注册表/凭据 |
+
+- **技能目录布局**：通用技能在 `resources/forensics/skills/`；分组技能在 `resources/forensics/skill-sets/<traffic|log|memory>/`。外壳启动时把分组复制到 `<DSH_HOME>/skill-sets/<id>`，并把旧的 `lovelymem-cli` / `lovelyspark-cli` 从 `<DSH_HOME>/skills` 移走（升级迁移，不会重复出现）。
+- **按预设隔离**：三个分析预设各有一个 `skill-filesystem` 实例（`includeDefaultRoots: false`），`customSkillDirs` 指向 `SEEU_SKILL_SET_TRAFFIC` / `SEEU_SKILL_SET_LOG` / `SEEU_SKILL_SET_MEMORY`，所以流量/日志预设看不到 `lovelymem-cli`，内存预设也看不到 `lovelyspark-cli`。
+- **使用**：预设里已写明调用方式（`node "$env:SEEU_CLI_NODE" "$env:SEEU_LOVELY_CLI" lovelyspark -- <子命令>`），模型会先 `skill` 加载技能再执行；CLI 路径仍在「设置 → 本地模型与工具路径」里手动指定。
+- **校验**：`npm run check:overlay`（逐预设检查名称/技能根/`customSkillDirs`/`tool-fs` 只读）、`npm run test:e2e:skills`（安装与迁移）、`npm test`（含 `tests/presets-config.test.mjs`）。
+
+## 14. 许可与来源
 
 - 外壳代码：MIT。
 - `dsh` 运行时：来自 npm `@deepseek-ai/dsh`（DeepSeek AI 开源，MIT）；本仓库不修改其源码，仅通过官方 profile/patch 机制扩展。

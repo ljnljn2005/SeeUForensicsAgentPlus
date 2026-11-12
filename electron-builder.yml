@@ -64,6 +64,8 @@ asarUnpack:
   - "node_modules/@deepseek-ai/libreoffice-kit-win32-x64/**"
   # dsh 全文检索用 rg.exe：子进程 spawn 需要真实路径，asar 虚拟路径会 ENOENT。
   - "node_modules/@vscode/ripgrep-win32-x64/**"
+  # dsh-gitbash-shell 的 fastctx.exe（随包 bash 工具用，spawn 需要真实路径）。
+  - "node_modules/@dsh-ops/fastctx-win32-x64/**"
 
 # 原生模块均为 N-API/预编译产物；避免无 VS Build Tools 环境触发 node-gyp。
 # 若将来引入必须重编译的模块，改回 true。

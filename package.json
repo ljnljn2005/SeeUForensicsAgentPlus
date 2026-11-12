@@ -1,7 +1,7 @@
 {
   "name": "seeu-forensics-agent-plus",
   "productName": "SeeUForensicsAgentPlus",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "description": "SeeUForensicsAgentPlus — 取证专用 DeepSeek Harness 桌面版",
@@ -63,7 +63,8 @@
     "test:e2e:real-gateway": "node scripts/e2e/real-gateway-headless.mjs",
     "test:e2e:real-gateway-ui": "node scripts/e2e/real-gateway-ui.mjs",
     "test:e2e:mounts": "node scripts/e2e/mount-check.mjs",
-    "test:e2e:skills": "node scripts/e2e/skills-check.mjs"
+    "test:e2e:skills": "node scripts/e2e/skills-check.mjs",
+    "test:e2e:plugins": "node scripts/e2e/plugins-check.mjs"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.1.0",
@@ -87,7 +88,11 @@
     "@deepseek-ai/dsh-shell": "0.2.2-rc.1",
     "@deepseek-ai/dsh-spill": "0.2.2-rc.1",
     "@deepseek-ai/dsh-util-workspace-path": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-workflow": "0.2.2-rc.1"
+    "@deepseek-ai/dsh-workflow": "0.2.2-rc.1",
+    "billion-context": "0.1.213",
+    "dsh-better-sidebar": "0.30.1",
+    "dsh-context": "0.83.1",
+    "dsh-gitbash-shell": "0.54.0"
   },
   "devDependencies": {
     "@types/node": "^24.9.0",

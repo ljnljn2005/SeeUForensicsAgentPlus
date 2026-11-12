@@ -215,6 +215,11 @@ export class DshHost extends EventEmitter {
       SEEU_CROSS_DB: join(this.workspace, 'indexes', 'crosscase.db'),
       // dsh 用户级技能根（外壳启动前把随包技能复制到这里）。
       SEEU_SKILLS_DIR: join(this.homeDir, 'skills'),
+      // 按预设分组的技能根：overlay 里三个分析预设的 skill-filesystem 用
+      // customSkillDirs 指向这里，取证预设不引用（看不到 lovelymem/lovelyspark）。
+      SEEU_SKILL_SET_TRAFFIC: join(this.homeDir, 'skill-sets', 'traffic'),
+      SEEU_SKILL_SET_LOG: join(this.homeDir, 'skill-sets', 'log'),
+      SEEU_SKILL_SET_MEMORY: join(this.homeDir, 'skill-sets', 'memory'),
       // 复用 shell + 按需技能调用本机 CLI，不常驻服务、不增加模型工具 schema。
       SEEU_LOVELY_CLI: lovelyCliEntry(),
       SEEU_CLI_NODE: nodeBinary,

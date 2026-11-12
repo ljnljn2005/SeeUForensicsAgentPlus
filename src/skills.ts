@@ -13,10 +13,18 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { appRoot, dshHome } from './paths.js'
+import { SKILL_SET_IDS, installSkillSet, removeRetiredSkills, skillSetHomeDir, skillSetsHomeDir } from '../tools/skill-sets.mjs'
+
+export { SKILL_SET_IDS, skillSetHomeDir, skillSetsHomeDir }
 
 /** 随包技能目录（开发态=仓库 resources/，打包态=app.asar 内）。 */
 export function bundledSkillsDir(): string {
   return join(appRoot(), 'resources', 'forensics', 'skills')
+}
+
+/** 随包分组技能目录：`resources/forensics/skill-sets/<id>`。 */
+export function bundledSkillSetsDir(): string {
+  return join(appRoot(), 'resources', 'forensics', 'skill-sets')
 }
 
 /** dsh 用户级技能根：`<DSH_HOME>/skills`。 */
@@ -53,6 +61,10 @@ export interface SkillsInstallResult {
   readonly files: number
   /** 本次是否真的写了文件（技能内容没变时为 false）。 */
   readonly changed: boolean
+  /** 按预设分组的技能安装结果（流量/日志/内存）。 */
+  readonly sets: Array<{ id: string; dir: string; skills: string[]; files: number; changed: boolean }>
+  /** 本次从默认技能根清掉的旧技能（改为分组安装的技能）。 */
+  readonly retired: string[]
 }
 
 /**
@@ -62,7 +74,12 @@ export interface SkillsInstallResult {
 export function installBundledSkills(version: string): SkillsInstallResult {
   const src = bundledSkillsDir()
   const dest = userSkillsDir()
-  const result: SkillsInstallResult = { dir: dest, skills: [], files: 0, changed: false }
+  // 先装「按预设分组」的技能（流量/日志/内存），再清掉默认根里的旧分组技能。
+  const sets = SKILL_SET_IDS.map((id) =>
+    installSkillSet({ sourceDir: join(bundledSkillSetsDir(), id), homeDir: dshHome(), id, version }),
+  )
+  const retired = removeRetiredSkills(dshHome()).removed
+  const result: SkillsInstallResult = { dir: dest, skills: [], files: 0, changed: false, sets, retired }
   if (!existsSync(src)) return result
 
   const markerPath = join(dest, '.seeu-skills.json')

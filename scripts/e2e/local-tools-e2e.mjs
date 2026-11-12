@@ -37,6 +37,7 @@ const mock = createServer((req, res) => {
       let body = {}
       try { body = JSON.parse(raw) } catch { /* 忽略 */ }
       const messages = Array.isArray(body.messages) ? body.messages : []
+      const systemText = messages.filter((m) => m?.role === 'system').map((m) => String(m?.content ?? '')).join(String.fromCharCode(10))
       const hasToolResult = messages.some((m) => m?.role === 'tool')
       if (hasToolResult) sawToolResult = true
       shapes.push({
@@ -63,6 +64,11 @@ const mock = createServer((req, res) => {
         keys: Object.keys(body).join(','),
         roles: messages.map((m) => m?.role).join(','),
         // 工作区「案件概览」指令文件（SEEU-CASE-BRIEF.md）是否被 agent-instructions 读进上下文
+        // 会话标题生成请求：system 里带「标题 / title」指令（billion-context 等插件会给所有
+        // 模型调用注入工具，所以不能用「有无 tools」区分标题请求）
+        sysTitleMention: /concise title|Generate the session title|会话标题|标题生成/i.test(systemText),
+        // 精简预设的 persona（取证分析（本地模型精简））是否真的生效
+
         briefSeen: messages.some((m) => String(m?.content ?? '').includes('本机案件索引概览')),
         briefChars: messages.reduce((n, m) => n + (String(m?.content ?? '').includes('本机案件索引概览') ? String(m.content).length : 0), 0),
       })
@@ -281,9 +287,35 @@ for (let i = 0; i < 120; i += 1) {
   if (text.includes('MOCK-TOOLS-OK')) { gotReply = true; break }
   await sleep(1000)
 }
-const todoVisible = text.includes('验证本地模型工具调用')
+let todoVisible = text.includes('验证本地模型工具调用')
+// 随包插件（dsh-better-sidebar / dsh-context）会把任务面板做成折叠卡片，条目文本
+// 不在 body.innerText 里。这里先用 shadow DOM 深度搜索 + 点开折叠容器，再退化为
+// 「任务卡存在（N 进行中）」作为 todo_write 已落库的证据。
+if (!todoVisible) {
+  todoVisible = (await ev(`(async () => {
+    const needle = '验证本地模型工具调用'
+    const deepHas = (root) => {
+      if ((root.textContent || '').includes(needle)) return true
+      for (const el of root.querySelectorAll('*')) {
+        if (el.shadowRoot && deepHas(el.shadowRoot)) return true
+      }
+      return false
+    }
+    if (deepHas(document)) return true
+    const rows = [...document.querySelectorAll('button, [role="button"], summary')]
+      .filter((el) => /任务|待办|To-do/i.test(el.textContent || ''))
+    for (const el of rows.slice(0, 8)) {
+      try { el.click() } catch { /* 不可点 */ }
+      await new Promise((r) => setTimeout(r, 300))
+      if (deepHas(document)) return true
+    }
+    return deepHas(document)
+  })()`)) === true
+}
 const todoCard = /任务/.test(text) && /进行中|已完成/.test(text)
-const first = shapes[0] ?? {}
+const todoPersisted = todoVisible || todoCard
+// 标题请求可能排在主对话之前，first 取第一条「带工具」的请求
+const first = shapes.find((x) => (x.toolsCount ?? 0) > 0) ?? shapes[0] ?? {}
 const toolRound = shapes.find((s) => s.hasToolResult) ?? {}
 
 // 工具卡片样式：验证 theme.css 的 [data-tool] 规则（圆角 ≥10、边框不是 transparent）
@@ -302,11 +334,19 @@ const toolCardStyleOk = toolCardStyle.count === 0 ? true : (toolCardStyle.radius
 
 // usageInStreaming=true 时 pi-ai 应在流式请求里带 stream_options.include_usage
 const usageRequested = first.hasStreamOptions === true && first.streamOptions?.include_usage === true
-// 标题请求不带 tools；关掉 titleGeneration 后首轮应只剩一次带工具请求
-const titleRequests = shapes.filter((x) => (x.toolsCount ?? 0) === 0).length
+// 标题请求靠 system 里的标题指令识别（插件可能给它注入 tools）
+const titleRequests = shapes.filter((x) => x.sysTitleMention === true).length
 const titleOk = NO_TITLE ? titleRequests === 0 : titleRequests >= 1
 // 默认本地模型配置会切到「取证分析（本地模型精简）」：工具表从 27 个降到约 12 个。
-const litePresetActive = (first.toolsCount ?? 99) <= 14
+// 精简预设只裁剪「基础工具表」；随包插件（billion-context 6 个、gitbash-shell 3 个）和
+// MYOS MCP（49 个 + 资源工具）会额外加工具，所以先剔除这些再断言基础工具 ≤14。
+const PLUGIN_EXTRA_TOOLS = new Set([
+  'compress', 'decompress', 'acp_status', 'acp_cache', 'acp_read_original_image', 'search_context',
+  'gitbash_native', 'gitbash_to_native_path',
+])
+const isBaseTool = (name) => !name.startsWith('mcp__') && !/mcp_resource/.test(name) && !PLUGIN_EXTRA_TOOLS.has(name)
+const litePresetTools = first.toolsByName.filter((t) => isBaseTool(t.name)).length
+const litePresetActive = litePresetTools > 0 && litePresetTools <= 14
 // agent-instructions 应把 <工作区>/SEEU-CASE-BRIEF.md 读成会话指令（overlay 候选名之一）
 const briefSeen = shapes.some((x) => x.briefSeen === true)
 const summary = {
@@ -317,13 +357,15 @@ const summary = {
   toolResultSeen: sawToolResult,
   todoVisible,
   todoCard,
+  todoPersisted,
   toolCardStyle,
   toolCardStyleOk,
   litePresetActive,
-  litePresetTools: first.toolsCount,
+  litePresetTools,
   titleGeneration: NO_TITLE ? 'off' : 'on',
   titleRequests,
   titleOk,
+  shapeTitles: shapes.map((x) => ({ tools: x.toolsCount, sysTitle: x.sysTitleMention === true, roles: x.roles })),
   usageRequested,
   streamOptions: first.streamOptions,
   briefSeen,

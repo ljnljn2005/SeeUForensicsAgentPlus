@@ -351,6 +351,239 @@
               - id: tool-result-pruner
                 name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
 
+# ── 按分析类型拆分的新预设（流量 / 日志 / 内存）─────────────────────────────
+# 取证预设只保留通用 DFIR 技能 + 案件索引 + 镜像挂载；lovelyspark（流量/日志）与
+# lovelymem（内存）不再装进默认技能根 <DSH_HOME>/skills，而是装到 <DSH_HOME>/skill-sets/<id>，
+# 由下面三个预设各自的 skill-filesystem.customSkillDirs 引用，实现「按预设注入」。
+- insert:
+    - id: preset-traffic
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: preset-traffic
+        order: 3
+        name: 流量分析（Traffic）
+        description: 抓包/流量取证会话：解析 PCAP、会话统计、协议与文件提取，工具面与取证预设一致，额外注入 `lovelyspark-cli` 技能。
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是 SeeUForensicsAgentPlus 的流量分析助手（PCAP / 网络取证）。目标：给出可复核、可追溯的结论。
+                1. 证据优先：每条结论必须指向具体抓包文件、会话五元组（源/目的 IP+端口、协议）、时间戳与命令输出。
+                2. 工具：解析/统计/提取优先用 `lovelyspark-cli` 技能（先 load 技能拿准确参数），命令行形如 `node "$env:SEEU_CLI_NODE" "$env:SEEU_LOVELY_CLI" lovelyspark -- <子命令>`；提取物写到工作目录并记录来自哪个 pcap。
+                3. 只读：不修改原始 pcap；需要转换/切片时复制到工作目录并记录来源与哈希。
+                4. 不臆造：IP、域名、时间、协议字段必须来自工具输出；不确定标「未验证/推测」。
+                5. 报告结构：结论 → 证据（pcap 路径 + 会话/偏移/时间戳）→ 方法（命令）→ 置信度 → 局限。
+                6. 禁止全盘递归搜索（`Get-ChildItem -Recurse C:\`、`dir /s E:\`）；只列已知抓包目录、检材原始路径或工作目录。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+              instructionFileCandidates: ["AGENTS.md", "CLAUDE.md", "SEEU-CASE-BRIEF.md"]
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: true
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs: !!js "(process.env.SEU_SKILL_SET_TRAFFIC ? [process.env.SEU_SKILL_SET_TRAFFIC] : [])"
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: false
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+                config:
+                  thresholdRatio: 0.8
+                  headroomTokens: 8192
+                  retainRatio: 0.16
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+- insert:
+    - id: preset-log
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: preset-log
+        order: 4
+        name: 日志分析（Log）
+        description: 日志取证会话：系统/应用/安全日志解析与时间线重建，额外注入 `lovelyspark-cli` 技能。
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是 SeeUForensicsAgentPlus 的日志分析助手（系统/应用/安全日志）。目标：给出可复核、可追溯的结论。
+                1. 证据优先：每条结论指向具体日志文件、时间戳（含时区）、关键字段与命令输出。
+                2. 工具：日志解析/归一化/时间线优先用 `lovelyspark-cli` 技能（先 load 技能拿准确参数），命令行形如 `node "$env:SEEU_CLI_NODE" "$env:SEEU_LOVELY_CLI" lovelyspark -- <子命令>`；原始日志只读。
+                3. 时间线：先统一时区再排序，标注每条记录来源文件与行号/偏移。
+                4. 不臆造：不补全缺失字段、不猜测被截断的日志行；不确定标「未验证/推测」。
+                5. 报告结构：结论 → 证据（文件 + 时间 + 行号/偏移）→ 方法 → 置信度 → 局限。
+                6. 禁止全盘递归搜索（`Get-ChildItem -Recurse C:\`、`dir /s E:\`）；只列已知日志目录、检材原始路径或工作目录。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+              instructionFileCandidates: ["AGENTS.md", "CLAUDE.md", "SEEU-CASE-BRIEF.md"]
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: true
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs: !!js "(process.env.SEU_SKILL_SET_LOG ? [process.env.SEU_SKILL_SET_LOG] : [])"
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: false
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+                config:
+                  thresholdRatio: 0.8
+                  headroomTokens: 8192
+                  retainRatio: 0.16
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+- insert:
+    - id: preset-memory
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: preset-memory
+        order: 5
+        name: 内存分析（Memory）
+        description: 内存取证会话：内存镜像分析（starmem / vol3 引擎），额外注入 `lovelymem-cli` 技能。
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是 SeeUForensicsAgentPlus 的内存取证助手（Windows/Linux 内存镜像）。目标：给出可复核、可追溯的结论。
+                1. 证据优先：每条结论指向具体内存镜像、插件/引擎（starmem / vol3）、进程/偏移与命令输出。
+                2. 工具：镜像分析优先用 `lovelymem-cli` 技能（先 load 技能拿准确参数），命令行形如 `node "$env:SEEU_CLI_NODE" "$env:SEEU_LOVELY_CLI" lovelymem -- <子命令>`；产物（进程列表、网络连接、注册表等）写到工作目录并记录来源镜像。
+                3. 只读：不修改原始镜像；大文件按需分步导出，不整份复制。
+                4. 不臆造：PID、进程路径、网络连接、时间必须来自工具输出；不确定标「未验证/推测」。
+                5. 报告结构：结论 → 证据（镜像路径 + 插件输出/偏移）→ 方法 → 置信度 → 局限。
+                6. 禁止全盘递归搜索（`Get-ChildItem -Recurse C:\`、`dir /s E:\`）；只列已知镜像目录、检材原始路径或工作目录。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+              instructionFileCandidates: ["AGENTS.md", "CLAUDE.md", "SEEU-CASE-BRIEF.md"]
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: true
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs: !!js "(process.env.SEU_SKILL_SET_MEMORY ? [process.env.SEU_SKILL_SET_MEMORY] : [])"
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: false
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+                config:
+                  thresholdRatio: 0.8
+                  headroomTokens: 8192
+                  retainRatio: 0.16
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+
 # ---------------------------------------------------------------------------
 # 5) 外部取证软件 MCP 接入：超级取证大师（MYOS）
 #

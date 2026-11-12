@@ -128,18 +128,35 @@ try {
   report.bundledCount = report.bundled.length
   log('技能列表', `${report.skills.length} 个，随包 ${report.bundled.length} 个`)
 
-  const want = ['lovelycarve-forensics', 'lovelymem-cli', 'lovelyspark-cli']
+  // 0.3.2 起 lovelymem/lovelyspark 不再装进默认技能根，改为按预设分组
+  // （<DSH_HOME>/skill-sets/<id>，由流量/日志/内存三个预设的 customSkillDirs 引用）。
+  const want = ['ges-case-index', 'lovelycarve-forensics']
+  const folderOnly = ['lovelymem-cli', 'lovelyspark-cli']
   report.found = {}
   for (const name of want) report.found[name] = report.skills.includes(name)
   const missing = want.filter((name) => report.found[name] !== true)
-  // lovelycarve 技能由 upstream 合入随包目录；本地 0.3.0 安装后应存在
-  const skillsDir = join(REPO, 'resources', 'forensics', 'skills')
-  report.diskSkills = existsSync(skillsDir) ? readdirSync(skillsDir) : []
-  report.diskHasLovelyCarve = report.diskSkills.includes('lovelycarve-forensics')
+  report.leaked = folderOnly.filter((name) => report.skills.includes(name))
   if (missing.length > 0) {
-    // dev 模式下随包技能是从 resources/forensics/skills 安装的，缺任何一个都算失败
     throw new Error(`技能列表缺少 ${missing.join(', ')}：${JSON.stringify(report.skills)}`)
   }
+  if (report.leaked.length > 0) {
+    throw new Error(`默认技能根不该再出现分组技能 ${report.leaked.join(', ')}：${JSON.stringify(report.skills)}`)
+  }
+
+  // 分组技能应装到 <DSH_HOME>/skill-sets/{traffic,log,memory}
+  const home = join(REPO, '.dev', 'skills-home')
+  report.skillSets = {}
+  for (const [id, expected] of [
+    ['traffic', 'lovelyspark-cli'],
+    ['log', 'lovelyspark-cli'],
+    ['memory', 'lovelymem-cli'],
+  ]) {
+    const dir = join(home, 'skill-sets', id)
+    const names = existsSync(dir) ? readdirSync(dir) : []
+    report.skillSets[id] = { dir, names, ok: names.includes(expected) }
+    if (!report.skillSets[id].ok) throw new Error(`skill-sets/${id} 缺少 ${expected}：${JSON.stringify(names)}`)
+  }
+  log('分组技能', JSON.stringify(report.skillSets))
 
   const sample = skills.find((s) => s?.name === 'lovelycarve-forensics')
   report.lovelyCarve = {
