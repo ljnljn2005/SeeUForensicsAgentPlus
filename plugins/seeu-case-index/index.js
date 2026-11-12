@@ -14,6 +14,8 @@ import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, m
 
 const ROUTE = '/seeu-index';
 const jobs = new Map();
+// MYOS 批量导入：同一时间只跑一个，面板轮询进度。
+let myosBatchJob = null;
 const MAX_JOBS = 20;
 
 /** 只接受形如 <...>/.seeu-index/case-index.db 且存在的库文件。 */
@@ -232,9 +234,58 @@ async function handle(req, res) {
         const result = await myosImport(await readBody(req));
         return send(res, 200, result);
       }
+      if (req.method === 'GET' && path === '/myos/import-batch') {
+        return send(res, 200, { job: myosBatchJob });
+      }
       if (req.method === 'POST' && path === '/myos/import-batch') {
-        const result = await myosImportBatch(await readBody(req));
-        return send(res, 200, result);
+        if (myosBatchJob && myosBatchJob.status === 'running') {
+          return send(res, 409, { error: '已有批量导入在进行中，等它结束再试' });
+        }
+        const body = await readBody(req);
+        const tables = Array.isArray(body.tables) ? body.tables.filter(Boolean) : [];
+        if (!body.outDir || !body.db || tables.length === 0) {
+          return send(res, 400, { error: '缺少 outDir / db / tables' });
+        }
+        const job = {
+          id: `myos-batch-${Date.now()}`,
+          status: 'running',
+          phase: 'start',
+          index: 0,
+          total: tables.length,
+          table: '',
+          records: 0,
+          entities: 0,
+          totals: null,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          error: null,
+          result: null,
+        };
+        myosBatchJob = job;
+        void myosImportBatch({
+          ...body,
+          tables,
+          onProgress: (progress) => {
+            if (progress.phase) job.phase = progress.phase;
+            if (Number.isFinite(progress.index)) job.index = progress.index;
+            if (progress.table) job.table = progress.table;
+            if (Number.isFinite(progress.records)) job.records += progress.records;
+            if (Number.isFinite(progress.entities)) job.entities += progress.entities;
+            if (progress.totals) job.totals = progress.totals;
+          },
+        })
+          .then((result) => {
+            job.status = 'done';
+            job.result = result;
+            job.totals = result.totals;
+            job.finishedAt = new Date().toISOString();
+          })
+          .catch((error) => {
+            job.status = 'failed';
+            job.error = error instanceof Error ? error.message : String(error);
+            job.finishedAt = new Date().toISOString();
+          });
+        return send(res, 202, { jobId: job.id });
       }
       return send(res, 404, { error: `未知 MYOS 接口 ${path}` });
     }

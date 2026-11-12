@@ -2329,3 +2329,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：`tests/plugin-myos.test.mjs` 增至 10/10（两表批量 → eid 1/2、2 个检材、totals 累计、缺 tables 400）。
 - 真机：`MApps` 1 张表 5 条（eid1）；`AndroidBrowser` 2 张表 → 浏览历史 2 条（eid2）、下载表因「没有数据」跳过；合计 7 条 / 2 检材 / 2 实体。
 - 坑：JSX 结果区两个相邻三元表达式嵌套导致 `Uncaught SyntaxError: Unexpected token ')'`（插件入口 import failed，整块面板不显示）→ 改为在 `return` 前定义 `resultNode` 单一表达式；改完用 esbuild `transformSync(loader:'jsx')` + `m2-ui-check` 双验证。
+
+### 20.98 MYOS 批量导入进度与表名过滤（第 19 轮）
+
+- 需求：一个检材的 `.mfs` 往往十几到几十张表，批量导入要几十秒，面板只有一个「批量导入中…」，不知道跑到哪、也不知道会不会重复点。
+- `plugins/seeu-case-index/myos.mjs`：`myosImportBatch({ onProgress })` 回调 `{phase:'start'|'table'|'imported'|'done', index, total, table, records, entities, totals}`。
+- `plugins/seeu-case-index/index.js`：`myosBatchJob` 单任务状态（`id/status/phase/index/total/table/records/entities/totals/startedAt/finishedAt/error/result`）；`POST /myos/import-batch` 立即返回 `202 {jobId}`（已有 running 任务返回 409，缺参数 400），后台跑完写 `done/failed`；`GET /myos/import-batch` 返回 `{job}`。
+- 面板：轮询 `GET /myos/import-batch`，进度行「批量导入：第 2/5 张表 · TBL_X · 已收集 N 条记录」；新增表名过滤输入（大小写不敏感）、「全选」只勾当前过滤结果。
+- 测试：`tests/plugin-myos.test.mjs` 增至 11/11（`onProgress` 事件序列 `start→table→imported→table→imported→done`、index 递增、done 汇总）。
+- 坑：批量任务状态不能只存在 React 里（弹窗关闭就丢），必须放插件进程；`POST` 改异步后客户端必须轮询，否则 `await post` 拿不到结果。

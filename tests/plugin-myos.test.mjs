@@ -139,3 +139,26 @@ test('myosImportBatch：缺 tables 时报 400', withEnv(async () => {
     (error) => error.status === 400,
   )
 }))
+
+test('myosImportBatch：onProgress 按表回报进度', withEnv(async () => {
+  const root = mkdtempSync(join(tmpdir(), 'seeu-myos-progress-'))
+  try {
+    const events = []
+    const result = await myosImportBatch({
+      caseId: 'case-1',
+      db: 'D:/MYOS/Case/案件己/dev/手机-data.D01/data/MApps.mfs',
+      tables: ['TBL_A', 'TBL_B'],
+      outDir: join(root, '案件己'),
+      caseName: '案件己',
+      evidenceName: '手机-data.D01',
+      onProgress: (event) => events.push(event),
+    })
+    assert.deepEqual(events.map((event) => event.phase), ['start', 'table', 'imported', 'table', 'imported', 'done'])
+    assert.equal(events[1].index, 1)
+    assert.equal(events[3].index, 2)
+    assert.equal(events.at(-1).tables, 2)
+    assert.equal(result.tables.length, 2)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+}))

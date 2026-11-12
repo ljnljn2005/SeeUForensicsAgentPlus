@@ -1244,6 +1244,8 @@ window.__ModuleLoader__.load({
       const [appendMode, setAppendMode] = useState(true);
       // 批量导入：勾选多张表一次入库（每张表算一个检材，eid 递增）。
       const [pickedTables, setPickedTables] = useState([]);
+      const [tableQuery, setTableQuery] = useState('');
+      const [batchJob, setBatchJob] = useState(null);
 
       useEffect(() => {
         let alive = true;
@@ -1335,12 +1337,21 @@ window.__ModuleLoader__.load({
         setBusy('batch');
         setError('');
         setResult(null);
+        setBatchJob(null);
         try {
-          const body = await post('/myos/import-batch', {
+          await post('/myos/import-batch', {
             caseId: caseId.trim(), db: dbPath.trim(), tables: pickedTables, outDir: outDir.trim(),
             caseName: caseName.trim(), evidenceName: evidenceName.trim(), maxRows: 2000,
           });
-          setResult(body);
+          // 批量导入跑在插件侧，面板轮询进度。
+          for (;;) {
+            const { job } = await api('/myos/import-batch');
+            if (!job) throw new Error('批量导入任务丢失，请重试');
+            setBatchJob(job);
+            if (job.status === 'done') { setResult(job.result); break; }
+            if (job.status === 'failed') { throw new Error(job.error || '批量导入失败'); }
+            await new Promise((resolve) => setTimeout(resolve, 700));
+          }
         } catch (e) { setError(String(e.message ?? e)); }
         finally { setBusy(''); }
       };
@@ -1361,6 +1372,9 @@ window.__ModuleLoader__.load({
         } catch (e) { setError(String(e.message ?? e)); }
         finally { setBusy(''); }
       };
+
+      const tableFilter = tableQuery.trim().toLowerCase();
+      const filteredTables = tableFilter ? tables.filter((t) => String(t).toLowerCase().includes(tableFilter)) : tables;
 
       const row = (label, node) => h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
         h('span', { style: { ...S.muted, width: 92, flex: 'none', fontSize: 11.5 } }, label), node);
@@ -1411,12 +1425,16 @@ window.__ModuleLoader__.load({
           tables.length > 1 ? row('批量', h('div', { style: { flex: 1, display: 'flex', flexDirection: 'column', gap: 4 } },
             h('div', { style: { ...S.row, gap: 8, fontSize: 11.5 } },
               h('span', { style: S.muted }, `勾选多张表一次导入（每张表一个检材，共 ${tables.length} 张）`),
-              actionButton('全选', () => setPickedTables([...tables]), {}),
+              h('input', { style: { ...S.input, width: 150, fontSize: 11.5 }, value: tableQuery, placeholder: '按表名过滤，如 TBL_PR_', onChange: (e) => setTableQuery(e.target.value), spellCheck: false }),
+              actionButton('全选', () => setPickedTables([...new Set([...pickedTables, ...filteredTables])]), {}),
               actionButton('清空', () => setPickedTables([]), {})),
             h('div', { className: 'seeu-scroll', style: { maxHeight: 120, overflow: 'auto', border: '1px solid ' + C_L2, borderRadius: 6, padding: '4px 8px' } },
-              ...tables.map((t) => h('label', { key: t, style: { ...S.row, gap: 6, fontSize: 11.5, color: C_FG2, padding: '2px 0' } },
+              ...(filteredTables.length ? filteredTables.map((t) => h('label', { key: t, style: { ...S.row, gap: 6, fontSize: 11.5, color: C_FG2, padding: '2px 0' } },
                 h('input', { type: 'checkbox', checked: pickedTables.includes(t), onChange: () => toggleTable(t) }),
-                h('span', null, t)))),
+                h('span', null, t))) : [h('span', { key: 'none', style: { ...S.muted, fontSize: 11.5 } }, '没有匹配的表名')])),
+            batchJob && batchJob.status === 'running' ? h('div', { style: { ...S.muted, fontSize: 11 } },
+              `批量导入：第 ${Math.max(batchJob.index, 1)}/${batchJob.total} 张表${batchJob.table ? ' · ' + batchJob.table : ''} · 已收集 ${batchJob.records} 条记录` +
+              (batchJob.phase === 'start' ? ' · 正在准备…' : '')) : null,
             h('div', { style: { ...S.row, gap: 8 } },
               actionButton(busy === 'batch' ? '批量导入中…' : `批量导入选中 ${pickedTables.length} 张表`, doImportBatch, { disabled: busy === 'batch' || !pickedTables.length })))) : null,
           row('SQL', h('textarea', { style: { ...S.input, flex: 1, minHeight: 54, fontFamily: 'ui-monospace, monospace', fontSize: 11.5 }, value: sql, onChange: (e) => setSql(e.target.value), spellCheck: false })),

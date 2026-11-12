@@ -109,7 +109,8 @@ export async function myosImport({ caseId, db, sql, outDir, caseName, evidenceNa
  * 批量导入：一次把结果库里选中的多张表写入同一个 SeeU 索引（追加模式）。
  * 每张表各算一个检材（eid 递增），面板显示每张表的记录数。
  */
-export async function myosImportBatch({ caseId, db, tables, outDir, caseName, evidenceName, app = '', maxRows = 2000 } = {}) {
+export async function myosImportBatch({ caseId, db, tables, outDir, caseName, evidenceName, app = '', maxRows = 2000, onProgress = null } = {}) {
+  const progress = typeof onProgress === 'function' ? onProgress : () => {};
   const caseDir = resolve(String(outDir ?? ''))
   if (!outDir) throw fail('缺少 outDir（案件目录）')
   const dbPath = String(db ?? '').trim()
@@ -132,7 +133,9 @@ export async function myosImportBatch({ caseId, db, tables, outDir, caseName, ev
     const skipped = []
     let dbFile = ''
     let totals = null
-    for (const table of list) {
+    progress({ phase: 'start', index: 0, total: list.length })
+    for (const [offset, table] of list.entries()) {
+      progress({ phase: 'table', index: offset + 1, total: list.length, table })
       const statement = `select * from ${JSON.stringify(table)} limit ${limit}`
       let payload
       try {
@@ -159,9 +162,12 @@ export async function myosImportBatch({ caseId, db, tables, outDir, caseName, ev
       })
       dbFile = imported.dbFile
       totals = imported.totals
-      items.push({ table, records: imported.records, entities: imported.entities, eid: imported.eid, truncated: payload.truncated })
+      const item = { table, records: imported.records, entities: imported.entities, eid: imported.eid, truncated: payload.truncated }
+      items.push(item)
+      progress({ phase: 'imported', index: offset + 1, total: list.length, table, records: item.records, entities: item.entities, totals })
     }
     if (items.length === 0) throw fail('选中的表都没有数据（可换表或调大 SQL）', 422)
+    progress({ phase: 'done', index: list.length, total: list.length, tables: items.length, skipped: skipped.length, totals })
     return { ok: true, dbFile, caseDir, caseName, evidenceName: baseName, mode: 'append', tables: items, skipped, totals }
   })
 }
