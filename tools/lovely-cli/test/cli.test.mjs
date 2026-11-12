@@ -112,9 +112,23 @@ test('缺失程序和坏配置明确报错，不退回其它版本', async (t) =
   const { env, root } = setup(t);
   env.SEEU_LOVELYMEM_EXE = join(root, 'missing.exe');
   assert.equal(resolveExecutable('lovelymem', env).found, false);
-  await assert.rejects(runCli('lovelymem', ['doctor'], { env }), /找不到.*V3/);
+  await assert.rejects(runCli('lovelymem', ['doctor'], { env }), /配置的 lovelymem 路径不存在/);
   writeFileSync(env.SEEU_LOVELY_CONFIG, 'not json');
   assert.throws(() => resolveExecutable('lovelymem', env));
+});
+
+test('未配置时提示去设置窗口指定，不做自动发现', async (t) => {
+  const { env } = setup(t);
+  delete env.SEEU_LOVELYMEM_EXE;
+  delete env.SEEU_LOVELYSPARK_EXE;
+  const state = resolveExecutable('lovelymem', env);
+  assert.equal(state.found, false);
+  assert.equal(state.source, 'unconfigured');
+  assert.equal(state.configured, false);
+  await assert.rejects(runCli('lovelymem', ['doctor'], { env }), /未配置 lovelymem 路径.*本机取证工具路径/);
+  const status = await main(['status'], env);
+  assert.equal(status.lovelymem.found, false);
+  assert.match(status.note, /不做自动发现/);
 });
 
 test('配置按调用重读，环境变量优先；支持 BOM，status 不启动进程', async (t) => {

@@ -16,7 +16,6 @@ for (const packaged of [false, true]) {
     if (packaged) {
       mkdirSync(dirname(script), { recursive: true });
       copyFileSync(join(repo, 'tools/lovely-cli/cli.mjs'), script);
-      copyFileSync(join(repo, 'tools/lovely-cli/discovery.mjs'), join(dirname(script), 'discovery.mjs'));
     }
     const hostModule = join(root, 'host.mjs');
     await build({ entryPoints: [join(repo, 'src/host.ts')], outfile: hostModule, bundle: true, platform: 'node', format: 'esm',

@@ -136,31 +136,38 @@ const dismissed = await ev(`(() => {
 })()`)
 await sleep(800)
 
-// 点击 composer 聚焦 + 原生输入
-const box = await ev(`(() => {
-  const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 40 && r.height > 10 }
-  const list = [...document.querySelectorAll('textarea,[contenteditable="true"]')].filter(visible)
-  const el = list[list.length - 1]
-  if (!el) return null
-  el.focus()
-  const r = el.getBoundingClientRect()
-  return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
-})()`)
-if (!box) await finish({ ok: false, stage: 'no-box', ui, appLog: appLog.slice(-1200) }, 1)
-await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: box.x, y: box.y, button: 'left', clickCount: 1 })
-await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: box.x, y: box.y, button: 'left', clickCount: 1 })
-await sleep(300)
-await send('Input.insertText', { text: PROMPT })
-await sleep(500)
-const typed = await ev(`(() => {
-  const el = document.activeElement
-  return { tag: el?.tagName, text: (el?.innerText ?? '').slice(0, 120) }
-})()`)
-if (!String(typed?.text ?? '').includes('案件概览')) await finish({ ok: false, stage: 'type-failed', typed, ui, appLog: appLog.slice(-1200) }, 1)
+// 输入并回车：两轮都复用；每轮重新算坐标（回复后页面会滚动/布局变化）。
+const ask = async (prompt) => {
+  const box = await ev(`(() => {
+    const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 40 && r.height > 10 }
+    const list = [...document.querySelectorAll('textarea,[contenteditable="true"]')].filter(visible)
+    const el = list[list.length - 1]
+    if (!el) return null
+    el.focus()
+    const r = el.getBoundingClientRect()
+    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+  })()`)
+  if (!box) return { box: null }
+  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: box.x, y: box.y, button: 'left', clickCount: 1 })
+  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: box.x, y: box.y, button: 'left', clickCount: 1 })
+  await sleep(300)
+  await send('Input.insertText', { text: prompt })
+  await sleep(500)
+  const typed = await ev(`(() => {
+    const el = document.activeElement
+    return { tag: el?.tagName, text: (el?.innerText ?? '').slice(0, 120) }
+  })()`)
+  const t0 = Date.now()
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, text: '\\r' })
+  await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 })
+  return { box, typed, t0 }
+}
 
-const t0 = Date.now()
-await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, text: '\r' })
-await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 })
+const first = await ask(PROMPT)
+const box = first.box
+const typed = first.typed
+if (!String(typed?.text ?? '').includes('案件概览')) await finish({ ok: false, stage: 'type-failed', typed, ui, appLog: appLog.slice(-1200) }, 1)
+const t0 = first.t0
 
 // 轮询：思考块出现时间、首段文字时间、全文
 let firstSignalMs = null
@@ -176,10 +183,13 @@ for (let i = 0; i < 300; i += 1) {
   }))()`)
   text = String(state?.body ?? '')
   if (state?.thinking && !thinkingSeen) { thinkingSeen = true; firstSignalMs = firstSignalMs ?? Date.now() - t0 }
-  const hasName = EVIDENCE_NAMES.some((n) => text.includes(n))
-  if (hasName && firstTextMs === null) firstTextMs = Date.now() - t0
-  if (hasName) settledHits += 1
+  const hits = EVIDENCE_NAMES.filter((n) => text.includes(n)).length
+  if (hits > 0 && firstTextMs === null) firstTextMs = Date.now() - t0
+  // 模型可能分两段输出：先给 4 个名字、再补最后一个。等到「全 5 个名字都在」再停；
+  // 90 s 还没齐就放弃（不能为了一个漏写的名字挂 5 分钟）。
+  if (hits === EVIDENCE_NAMES.length) settledHits += 1
   if (settledHits >= 2) break
+  if (Date.now() - t0 > 90_000) break
   await sleep(1000)
 }
 
@@ -190,6 +200,45 @@ const usage = await ev(`(() => {
   return m ? m[0] : null
 })()`)
 
+// 可选第二轮（SEEU_UI_TOOL=1）：让模型真的调一次 pwsh，确认桌面 UI 里工具卡片出现并完成。
+let toolTurn = null
+if (process.env.SEEU_UI_TOOL === '1') {
+  const TOOL_PROMPT = '请用 pwsh 工具执行 node -v，然后只回复版本号。'
+  const second = await ask(TOOL_PROMPT)
+  let toolText = ''
+  let toolCards = 0
+  let toolSeen = false
+  let versionSeen = false
+  let toolMs = null
+  if (second.box) {
+    const t1 = Date.now()
+    for (let i = 0; i < 240; i += 1) {
+      const st = await ev(`(() => ({
+        body: document.body.innerText,
+        cards: document.querySelectorAll('[data-tool]').length,
+      }))()`)
+      toolText = String(st?.body ?? '')
+      toolCards = Math.max(toolCards, Number(st?.cards ?? 0))
+      if (/pwsh|node -v/i.test(toolText)) toolSeen = true
+      if (/v24\.18\.0/.test(toolText)) { versionSeen = true; toolMs = Date.now() - t1; break }
+      await sleep(1000)
+    }
+  }
+  toolTurn = {
+    asked: Boolean(second.box),
+    typed: second.typed,
+    toolCards,
+    toolSeen,
+    versionSeen,
+    elapsedMs: toolMs,
+    bodyTail: toolText.slice(-600),
+  }
+  const shot2 = await send('Page.captureScreenshot', { format: 'png' })
+  if (shot2.result?.data) {
+    writeFileSync(join(root, 'docs', 'screenshots', '11-real-gateway-tool.png'), Buffer.from(shot2.result.data, 'base64'))
+  }
+}
+
 const shot = await send('Page.captureScreenshot', { format: 'png' })
 if (shot.result?.data) {
   mkdirSync(join(root, 'docs', 'screenshots'), { recursive: true })
@@ -197,7 +246,7 @@ if (shot.result?.data) {
 }
 
 const report = {
-  ok: names.length === EVIDENCE_NAMES.length,
+  ok: names.length === EVIDENCE_NAMES.length && (!process.env.SEEU_UI_TOOL || (toolTurn?.toolSeen && toolTurn?.versionSeen)),
   stage: 'done',
   model: GW_MODEL,
   baseURL: GW_BASE,
@@ -212,6 +261,7 @@ const report = {
   namesOk: names.length === EVIDENCE_NAMES.length,
   usage,
   bodyTail: text.slice(-700),
+  tool: toolTurn,
   consoleErrors,
   appLogTail: appLog.slice(-800),
 }

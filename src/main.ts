@@ -34,6 +34,7 @@ import {
   gatewayContextReported,
   writeLocalModelConfig,
 } from './local-model.js'
+import { lovelyToolsView, saveLovelyToolPaths } from './lovely-tools.js'
 import { installBundledSkills } from './skills.js'
 import {
   dshHome,
@@ -645,6 +646,29 @@ function registerIpc(): void {
     const file = localModelConfigFile()
     if (existsSync(file)) shell.showItemInFolder(file)
     else void shell.openPath(userDataDir())
+  })
+
+  // 本机取证工具路径：不自动发现，路径只来自设置窗口（写 <DSH_HOME>/lovely-cli.json）。
+  ipcMain.handle('seeu:lovely-tools:get', () => lovelyToolsView(process.env))
+  ipcMain.handle('seeu:lovely-tools:pick', async (_event, tool: unknown) => {
+    const id = tool === 'lovelyspark' ? 'lovelyspark' : 'lovelymem'
+    const label = id === 'lovelyspark' ? 'LovelySpark' : 'LovelyMem V3'
+    const result = await dialog.showOpenDialog({
+      title: `选择 ${label} 的 exe`,
+      properties: ['openFile'],
+      filters: [{ name: '可执行文件', extensions: ['exe'] }],
+    })
+    if (result.canceled || result.filePaths.length === 0) return { ok: false, canceled: true }
+    return { ok: true, path: result.filePaths[0] }
+  })
+  ipcMain.handle('seeu:lovely-tools:save', (_event, input: unknown) => {
+    try {
+      const res = saveLovelyToolPaths(input, process.env)
+      logShell(`lovely tools: 已保存工具路径（${res.saved.map((item) => `${item.id}:${item.action}`).join(', ')}）`)
+      return res
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
   })
 }
 

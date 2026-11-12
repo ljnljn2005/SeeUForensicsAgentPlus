@@ -333,6 +333,58 @@ try {
   if (reread?.config?.baseURL !== `http://127.0.0.1:${MOCK_PORT}/v1`) throw new Error('重新读取的 baseURL 不一致')
   log('重新读取', '一致')
 
+  // 本机取证工具路径：只支持手动指定（不做自动发现），写 <DSH_HOME>/lovely-cli.json
+  const TOOLS_CONFIG = join(HOME, 'lovely-cli.json')
+  const toolsView = await evaluate(client, 'window.seeu.lovelyTools.get()')
+  report.toolsConfigFile = toolsView?.configFile ?? null
+  report.toolsRows = Array.isArray(toolsView?.tools) ? toolsView.tools.length : 0
+  report.toolsSectionVisible = await evaluate(client, `(() => {
+    const rows = document.querySelectorAll('.tools .tool')
+    const ids = [...rows].map((row) => row.getAttribute('data-tool'))
+    return rows.length === 2 && ids.join(',') === 'lovelymem,lovelyspark' && document.getElementById('btn-tools-save') !== null
+  })()`)
+  if (report.toolsRows !== 2 || report.toolsSectionVisible !== true) {
+    throw new Error('工具路径区渲染异常：rows=' + report.toolsRows + ' visible=' + report.toolsSectionVisible)
+  }
+  const memExe = join(HOME, 'fake-lovelymem.exe')
+  const sparkExe = join(HOME, 'fake-lovelyspark.exe')
+  writeFileSync(memExe, 'MZ')
+  writeFileSync(sparkExe, 'MZ')
+  const apiSaved = await evaluate(client, `window.seeu.lovelyTools.save({ lovelymem: ${JSON.stringify(memExe)} })`)
+  report.toolsApiSaved = apiSaved?.ok === true && (apiSaved.tools ?? []).some((tool) => tool.id === 'lovelymem' && tool.found === true)
+  if (!report.toolsApiSaved) throw new Error('lovelyTools.save 失败：' + JSON.stringify(apiSaved))
+  // 再走真实 UI：填 LovelySpark 路径 → 点「保存工具路径」→ 等提示
+  report.toolsUiSaved = await evaluate(client, `(async () => {
+    document.querySelector('[data-tool-path="lovelymem"]').value = ${JSON.stringify(memExe)}
+    document.querySelector('[data-tool-path="lovelyspark"]').value = ${JSON.stringify(sparkExe)}
+    document.getElementById('btn-tools-save').click()
+    const t0 = Date.now()
+    while (Date.now() - t0 < 5000) {
+      if (/已保存工具路径/.test(document.getElementById('tools-status').textContent)) return true
+      await new Promise((r) => setTimeout(r, 100))
+    }
+    return false
+  })()`)
+  if (report.toolsUiSaved !== true) throw new Error('点「保存工具路径」后没有出现成功提示')
+  const toolsWritten = JSON.parse(readFileSync(TOOLS_CONFIG, 'utf8'))
+  report.toolsFile = toolsWritten
+  report.toolsFileOk = toolsWritten.lovelymem === memExe && toolsWritten.lovelyspark === sparkExe
+  if (!report.toolsFileOk) throw new Error('工具配置文件内容不符：' + JSON.stringify(toolsWritten))
+  // 清空一项：走 UI 清空 + 保存，配置里应删键
+  await evaluate(client, `document.querySelector('[data-tool-path="lovelymem"]').value = '', document.getElementById('btn-tools-save').click(), true`)
+  let clearedWritten = null
+  for (let i = 0; i < 50; i += 1) {
+    await sleep(100)
+    try {
+      clearedWritten = JSON.parse(readFileSync(TOOLS_CONFIG, 'utf8'))
+      if (!Object.hasOwn(clearedWritten, 'lovelymem')) break
+    } catch { /* 文件正被写入，重试 */ }
+  }
+  report.toolsAfterClear = clearedWritten
+  report.toolsClearOk = Boolean(clearedWritten) && !Object.hasOwn(clearedWritten, 'lovelymem') && clearedWritten.lovelyspark === sparkExe
+  if (!report.toolsClearOk) throw new Error('清除工具路径后配置不符：' + JSON.stringify(clearedWritten))
+  log('工具路径', '分区可见，保存/清除后 ' + TOOLS_CONFIG)
+
   // 真实点「从网关拉取模型列表」按钮：应把 /v1/models 的 id 填进 textarea（保留已有显示名）
   await evaluate(client, `document.getElementById('btn-models').click(), true`)
   const pulled = await evaluate(client, `(async () => {
@@ -473,6 +525,7 @@ try {
   }
   // 清理测试写入的配置，避免影响下次开发启动
   try { rmSync(CONFIG, { force: true }) } catch { /* ignore */ }
+  try { rmSync(join(HOME, 'lovely-cli.json'), { force: true }) } catch { /* ignore */ }
 }
 
 console.log(`REPORT ${JSON.stringify(report)}`)

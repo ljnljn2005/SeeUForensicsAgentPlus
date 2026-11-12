@@ -1,6 +1,6 @@
 # 本机 LovelyMem / LovelySpark CLI
 
-复用现有 shell 工具与技能发现机制，只增加纯 Node 调用/发现模块和两个按需技能。
+复用现有 shell 工具与技能机制，只增加纯 Node 调用/配置模块和两个按需技能。
 无新增 npm/Python 依赖、服务、端口或 MCP 工具 schema；不打包取证程序本体。
 桌面版与 `npm run dev:web` 均自动提供调用器路径和 Node 运行时，无需用户另外安装 Node。
 本接入使用 LovelyMem V3 的 `--cli` 协议。本机 Luxe 2.5.0 实测该参数会启动 GUI，
@@ -24,25 +24,11 @@ npm run lovely -- lovelyspark -- --version
 & $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelyspark -- analyze 'D:\case\capture.pcapng'
 ```
 
-默认自动寻找 CLI，无须先配置路径，也不携带开发机器上的安装路径。
-查找顺序：`SEEU_LOVELYMEM_EXE` / `SEEU_LOVELYSPARK_EXE` 环境变量 →
-`<DSH_HOME>/lovely-cli.json` 中仍有效的路径 → PATH → 本机发现缓存 → 标准安装目录 →
-Windows 安装记录、已运行程序和桌面/开始菜单快捷方式 → 各本地盘的常见工具目录、
-用户桌面/下载/文档目录与盘根浅层查找。盘符由系统枚举，不假定存在 D 盘。
+**路径由用户在桌面端手动指定，不做自动发现。** 打开设置窗口（托盘菜单「本地模型设置」或欢迎页「本地模型」chip）→「本机取证工具路径」→ 为 LovelyMem V3 / LovelySpark 各点「选择…」选 exe → 点「保存工具路径」。路径写入 `<DSH_HOME>/lovely-cli.json`（桌面版即 `%APPDATA%\SeeUForensicsAgentPlus\dsh-home\lovely-cli.json`，`SEEU_LOVELY_CONFIG` 可覆盖）；技能调用时每次重读，不需要重启。
 
-发现过程只读取目录和安装信息，不启动候选程序；自动选择 `lovelymem.v3.exe` 或
-`lovelyspark.exe`，不会选择旧版 `lovelymem.exe` / `lovelymemluxe.exe`。
-Windows 安装信息查询最多等待 6 秒；常见目录查找最多 5 层、3000 个目录、2 秒，
-盘根补查最多 3 层、1500 个目录、1 秒。不跟随目录链接，不扫描文件内容或网络盘。
-成功路径缓存在配置文件旁的 `lovely-cli.json.discovery.json`，每次使用前检查文件是否存在；
-换机器或程序搬家后重新发现。发现缓存和本机配置均不进入安装包。
+程序不会去 PATH、注册表、快捷方式、安装记录或常见目录里搜索 exe：没有配置就明确报「未配置」，让用户去设置窗口指定。`status` 里 `source: "unconfigured"` 表示还没指定；`staleConfigPath` 表示配置的路径已不存在，重新选一次即可。`SEEU_LOVELYMEM_EXE` / `SEEU_LOVELYSPARK_EXE` 环境变量仍优先，仅供开发与排查。
 
-从旧电脑复制的配置路径失效时自动重新查找，`status` 用 `staleConfigPath` 指出旧路径。
-显式设置的环境变量路径失效仍明确报错，以免覆盖有意指定的程序。
-超出自动查找范围或程序被改名时，可用 `configure lovelymem '<V3 exe绝对路径>'` /
-`configure lovelyspark '<exe绝对路径>'` 指定；`configure <工具> auto` 清除手工配置、恢复自动寻找。
-配置每次调用重读，无需重启。
-可用 `SEEU_LOVELY_CONFIG` 指定配置文件。
+命令行也能写同一份配置：`configure lovelymem '<V3 exe绝对路径>'` / `configure lovelyspark '<exe绝对路径>'`，`configure <工具> clear` 清除；**不支持 `auto`**（不存在自动寻找）。
 独立命令行未设置 DSH_HOME 时使用 `~/.dsh/lovely-cli.json`；要与桌面共享设置，先把 DSH_HOME
 设为 `%APPDATA%\SeeUForensicsAgentPlus\dsh-home`（开发预览默认是项目 `.dev/dsh-home`）。
 

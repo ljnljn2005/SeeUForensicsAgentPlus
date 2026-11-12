@@ -1822,3 +1822,24 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 顺带修：`wrapperUsed` 原先只匹配 `lovely-cli` 字面量，而模型用的是 `$env:SEEU_LOVELY_CLI`，会误报 false；改成两条都认。
 - 回归：`npm test` 80/80、`npm run check:overlay` OK；本轮只动 e2e 脚本与文档，未改产品代码，无需重新打包。
 - 遗留：真实内存镜像分析（`doctor`/`plugins`/`run`）仍未跑，取决于本机 V3 授权与耗时；`qwen3.8-flash-next` 仍未做真机会话；`GW_LOVELYMEM_EXE` 属机器相关参数，换机器要么靠自动发现、要么显式给路径。
+
+---
+
+## 20.62 本机取证工具路径改为手动指定（删除自动发现）
+
+- 用户要求（本轮指令）：「手动在 dsh 界面里指定两款工具路径就行，别做自动发现」。原实现（20.58 合并的 `feat/local-lovely-cli`）依赖 `discovery.mjs` 在 PATH / 注册表 / 已运行进程 / 快捷方式 / 常见目录里找 exe，机器换了或安装位置特殊时行为不可预期，也不符合「用户自己说了算」。
+- 删除：`tools/lovely-cli/discovery.mjs` 与其 8 个单测；`electron-builder.yml` 的 `files` / `asarUnpack` 里的 discovery 条目；`host.test.mjs` 复制 discovery 的那行。
+- 新增 `tools/lovely-tools.mjs`（主进程/命令行共用，纯 Node）：
+  - `LOVELY_TOOL_SPECS`（`lovelymem` / `lovelyspark`，含 label、env 名、选择提示）；
+  - `lovelyConfigFile(env)`：`SEEU_LOVELY_CONFIG` → `SEEU_DSH_HOME`（外壳注入）→ `DSH_HOME` → `~/.dsh`，文件名 `lovely-cli.json`；
+  - `readLovelyConfig`（去 BOM、空文件 `{}`、非对象抛错）、`toolState`、`lovelyToolsView`（坏 JSON 只放在 `error` 字段，界面可显示）；
+  - `saveLovelyToolPaths(input, env)`：只处理传入的 id，空串→删键，校验绝对路径 / 文件存在 / `.exe` 后缀，写缩进 JSON 并返回最新视图。
+- `tools/lovely-cli/cli.mjs`：删 `import … from './discovery.mjs'`（内联 `isFile`）；`resolveExecutable` 只读 env → config，返回 `{path, source:'env'|'config'|'unconfigured', configured, found, envVar?, staleConfigPath?}`；未配置报「未配置 X 路径：打开外壳「设置 → 本机取证工具路径」选择 exe（或设置 `SEEU_*_EXE` 环境变量）」，配置失效报「配置的 X 路径不存在：<path>；请重新选择」；`configure` 只接受绝对路径或 `clear`（拒绝 `auto`），`status`/`--help` 都带 `note: 路径请在外壳「设置 → 本机取证工具路径」里指定；不做自动发现。`
+- `src/lovely-tools.ts` 包装并 re-export 类型；`src/main.ts` 新增 IPC `seeu:lovely-tools:get` / `:pick`（`dialog.showOpenDialog` 只选 `.exe`）/ `:save`（catch → `{ok:false,error}`）；`src/preload.ts` 暴露 `window.seeu.lovelyTools.{get,pick,save}` 与类型。
+- `renderer/local-model.html` 新增「本机取证工具路径（手动指定，不做自动发现）」卡片：两行（状态点 + 名称 + 只读路径 + 选择… + 清除）、说明、`#btn-tools-save`、`#tools-status`、`#tools-config`（显示配置文件路径）；启动时 `loadTools()`，工具路径输入框不触发模型预览。
+- 两个 SKILL.md 去掉「自动寻找 / `configure auto` / 默认无需配置」，改成「路径只能由用户在设置窗口指定，`found:false` 就让用户去设置，不要自己找 exe」；`docs/lovely-cli.md` 的发现/缓存段落整体改写为手动配置。
+- 验证：`npm run test:lovely` **22/22**（新增 `config.test.mjs` 6 例：视图/保存/清除/三类校验失败不动原配置/env 优先/坏 JSON；`cli.test.mjs` 新增「未配置时提示去设置窗口指定，不做自动发现」）；`npm test` **79/79**；`node scripts/build.mjs` OK。
+- `settings-check` e2e 新增：`toolsRows:2`、`toolsSectionVisible:true`、`toolsApiSaved:true`、真实点「保存工具路径」→ `toolsFile` 两项都在、`toolsFileOk:true`、清空 LovelyMem 后 `toolsAfterClear` 只剩 LovelySpark、`toolsClearOk:true`，`ok:true`、`errors:[]`。
+- 踩坑：① `saveLovelyToolPaths` 里 `.exe` 判断误写成 `/\\\\.exe$/i`（正则里是「反斜杠 + .exe」），所有 exe 都报「需要选择 .exe 文件」；② 配置默认路径先只认 `DSH_HOME`，而外壳用 `SEEU_DSH_HOME`，e2e 里写到了 `C:\Users\ASUS\.dsh` 导致读不到 → 改成三个变量按序回退；③ e2e 先用 API 只保存 LovelyMem，页面输入框不会自动刷新，接着点 UI 保存会把 LovelyMem 清掉（UI 是整个表单的真相）→ 断言前把两行输入都填好。
+- 顺带提交：`scripts/e2e/real-gateway-ui.mjs` 的工具轮补丁（`ask()` 复用、`SEEU_UI_TOOL=1` 第二轮 `pwsh node -v`、`[data-tool]` 卡片断言、截图 `11-real-gateway-tool.png`）。
+- 遗留：手动路径只存在用户机器上，打包/换机不会带；真实镜像分析（`doctor`/`plugins`/`run`）仍未跑；等用户视觉验收后再打 v0.2.9。

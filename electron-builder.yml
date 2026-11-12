@@ -21,7 +21,6 @@ files:
   - plugins/**
   - tools/ges-index/**
   - tools/lovely-cli/cli.mjs
-  - tools/lovely-cli/discovery.mjs
   - build/icon.ico
   - build/tray.ico
   - build/icon.png
@@ -52,7 +51,6 @@ asar: true
 # 来源：node_modules 内 *.node 扫描结果 + dsh 运行时依赖清单。
 asarUnpack:
   - tools/lovely-cli/cli.mjs
-  - tools/lovely-cli/discovery.mjs
   - "**/*.node"
   - "node_modules/**/prebuilds/**"
   - "node_modules/node-pty/**"

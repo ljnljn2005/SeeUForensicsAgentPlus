@@ -6,7 +6,12 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, sta
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { discoverExecutable, isFile } from './discovery.mjs';
+
+// 只做手动配置（设置窗口写 lovely-cli.json），不做 PATH/注册表/全盘自动发现：
+// 自动发现会误命中旧版 Lite/Luxe GUI，在负载高时还会拖慢第一次调用。
+function isFile(path) {
+  try { return statSync(path).isFile(); } catch { return false; }
+}
 
 const TOOLS = {
   lovelymem: { env: 'SEEU_LOVELYMEM_EXE', names: ['lovelymem.v3.exe'], prefix: ['--cli'], timeout: 1800,
@@ -35,13 +40,12 @@ function readConfig(env) {
 export function resolveExecutable(tool, env = process.env) {
   const spec = definition(tool);
   const config = readConfig(env);
-  const configured = env[spec.env] || config[tool];
-  if (configured) {
-    if (typeof configured !== 'string' || !isAbsolute(configured)) throw new Error(`${spec.env} / ${tool} 配置必须是绝对文件路径`);
-    if (env[spec.env] || isFile(configured)) return { path: configured, source: env[spec.env] ? 'env' : 'config', found: isFile(configured) };
-  }
-  const discovered = discoverExecutable(tool, spec.names, env, `${configPath(env)}.discovery.json`);
-  return configured ? { ...discovered, staleConfigPath: configured } : discovered;
+  const fromEnv = env[spec.env];
+  const configured = fromEnv || config[tool];
+  if (!configured) return { path: null, source: 'unconfigured', found: false, configured: false, envVar: spec.env };
+  if (typeof configured !== 'string' || !isAbsolute(configured)) throw new Error(`${spec.env} / ${tool} 配置必须是绝对文件路径`);
+  const found = isFile(configured);
+  return { path: configured, source: fromEnv ? 'env' : 'config', found, configured: true, ...(found ? {} : { staleConfigPath: configured }) };
 }
 
 function positiveInt(value, fallback, max, name) {
@@ -114,7 +118,11 @@ export async function runCli(tool, args, options = {}) {
   const timeout = positiveInt(options.timeout, spec.timeout, 86400, 'timeout');
   const maxChars = positiveInt(options.maxChars, 2000, 8000, 'max-chars');
   const executable = resolveExecutable(tool, env);
-  if (!executable.found) throw new Error(`找不到 ${tool} CLI。用 configure ${tool} <exe绝对路径> 或 ${spec.env} 配置${tool === 'lovelymem' ? '支持 --cli 的 LovelyMem V3' : 'lovelyspark.exe'}。`);
+  if (!executable.found) {
+    const guide = '打开外壳「设置 → 本机取证工具路径」选择 exe';
+    if (!executable.configured) throw new Error(`未配置 ${tool} 路径：${guide}（或设置 ${spec.env} 环境变量）。`);
+    throw new Error(`配置的 ${tool} 路径不存在：${executable.path}；请重新选择（${guide}）。`);
+  }
   const workspace = resolve(env.SEEU_WORKSPACE || process.cwd());
   const dir = join(workspace, 'lovely-runs', `${tool}-${randomUUID()}`);
   mkdirSync(dir, { recursive: true });
@@ -182,14 +190,16 @@ export async function runCli(tool, args, options = {}) {
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const [command, ...rest] = argv;
-  if (!command || command === '--help') return { usage: ['status', 'configure <lovelymem|lovelyspark> <auto|exe绝对路径>', '<lovelymem|lovelyspark> [--timeout 秒] [--max-chars 字符] -- <原生CLI参数>'], config: configPath(env) };
-  if (command === 'status') return { config: configPath(env), ...Object.fromEntries(Object.keys(TOOLS).map((tool) => [tool, resolveExecutable(tool, env)])) };
+  if (!command || command === '--help') return { usage: ['status', 'configure <lovelymem|lovelyspark> <exe绝对路径>', 'configure <lovelymem|lovelyspark> clear', '<lovelymem|lovelyspark> [--timeout 秒] [--max-chars 字符] -- <原生CLI参数>'], config: configPath(env), note: '路径请在外壳「设置 → 本机取证工具路径」里指定；不做自动发现。' };
+  if (command === 'status') return { config: configPath(env), note: '路径请在外壳「设置 → 本机取证工具路径」里指定；不做自动发现。', ...Object.fromEntries(Object.keys(TOOLS).map((tool) => [tool, resolveExecutable(tool, env)])) };
   if (command === 'configure') {
     const [tool, file] = rest;
     definition(tool);
-    if (rest.length !== 2 || (file !== 'auto' && (!isAbsolute(file || '') || !isFile(file)))) throw new Error('configure 需要 auto 或存在的 exe 绝对路径');
+    if (rest.length !== 2 || file === 'auto' || (file !== 'clear' && (!isAbsolute(file || '') || !isFile(file)))) {
+      throw new Error('configure 需要 clear 或存在的 exe 绝对路径（不支持自动发现）');
+    }
     const config = readConfig(env);
-    if (file === 'auto') delete config[tool];
+    if (file === 'clear') delete config[tool];
     else config[tool] = file;
     const target = configPath(env);
     mkdirSync(dirname(target), { recursive: true });

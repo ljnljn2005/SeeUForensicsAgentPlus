@@ -69,6 +69,15 @@
   button.primary { background: var(--accent); border-color: var(--accent); color: #04121A; font-weight: 600; }
   button.primary:hover { filter: brightness(1.06); }
   button:disabled { opacity: .5; cursor: default; }
+  /* 本机取证工具路径：手动指定，不做自动发现 */
+  .tools .tool { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .tools .tool-name { width: 108px; flex: none; color: var(--muted); font-size: 12px; }
+  .tools .tool-path { flex: 1; font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+  .tools .tool-path.missing { border-color: rgba(248,113,113,.55); }
+  .tools .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--dim); }
+  .tools .dot.ok { background: var(--ok); }
+  .tools .dot.bad { background: var(--err); }
+  #tools-status { min-height: 16px; }
   #status { min-height: 40px; border-radius: 8px; padding: 9px 12px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; line-height: 1.7; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
   #status.ok { border-color: rgba(52,211,153,.35); color: var(--ok); }
   #status.warn { border-color: rgba(251,191,36,.35); color: var(--warn); }
@@ -252,6 +261,28 @@
   </div>
 
   <div class="hint" id="budget" style="margin:2px 0 10px"></div>
+
+  <div class="field tools">
+    <label>本机取证工具路径（手动指定，不做自动发现）</label>
+    <div class="tool" data-tool="lovelymem">
+      <span class="dot" data-tool-dot></span>
+      <span class="tool-name">LovelyMem V3</span>
+      <input type="text" class="tool-path" data-tool-path="lovelymem" readonly placeholder="未指定：点「选择…」选 lovelymem.v3.exe" />
+      <button data-tool-pick="lovelymem">选择…</button>
+      <button data-tool-clear="lovelymem">清除</button>
+    </div>
+    <div class="tool" data-tool="lovelyspark">
+      <span class="dot" data-tool-dot></span>
+      <span class="tool-name">LovelySpark</span>
+      <input type="text" class="tool-path" data-tool-path="lovelyspark" readonly placeholder="未指定：点「选择…」选 lovelyspark.exe" />
+      <button data-tool-pick="lovelyspark">选择…</button>
+      <button data-tool-clear="lovelyspark">清除</button>
+    </div>
+    <div class="hint">只支持手动指定：程序不会去 PATH / 注册表 / 快捷方式里找 exe。选好后点下面的「保存工具路径」，新会话生效。LovelyMem 请选支持 <code>--cli</code> 的 v3 主程序，不要选 Lite / Luxe 的 GUI。</div>
+    <div class="actions" style="margin:10px 0 6px"><button id="btn-tools-save">保存工具路径</button></div>
+    <div id="tools-status" class="hint"></div>
+    <div id="tools-config" class="hint"></div>
+  </div>
 
   <div class="actions">
     <button class="primary" id="btn-save">保存</button>
@@ -471,6 +502,98 @@
     }
   }
 
+  // ── 本机取证工具路径（手动指定） ────────────────────────────────────────
+  const toolsApi = window.seeu && window.seeu.lovelyTools
+  let toolsView = null
+
+  function toolRow(id) { return document.querySelector('[data-tool="' + id + '"]') }
+
+  function renderTools(view) {
+    toolsView = view || null
+    const list = (view && Array.isArray(view.tools)) ? view.tools : []
+    for (const tool of list) {
+      const row = toolRow(tool.id)
+      if (!row) continue
+      const input = row.querySelector('[data-tool-path]')
+      const dot = row.querySelector('[data-tool-dot]')
+      input.value = tool.path || ''
+      const bad = Boolean(tool.configured) && !tool.found
+      input.classList.toggle('missing', bad)
+      dot.className = 'dot' + (tool.found ? ' ok' : (bad ? ' bad' : ''))
+      dot.title = tool.found ? '文件存在（' + tool.source + '）' : (bad ? '配置的路径不存在' : '未指定')
+    }
+    const status = $('tools-status')
+    if (view && view.error) {
+      status.textContent = '配置文件读取失败：' + view.error
+      status.style.color = 'var(--err)'
+    } else {
+      status.textContent = ''
+    }
+    const cfg = $('tools-config')
+    if (cfg) cfg.textContent = view && view.configFile ? '配置文件：' + view.configFile : ''
+  }
+
+  async function loadTools() {
+    if (!toolsApi) {
+      $('tools-status').textContent = '预加载桥不可用（window.seeu.lovelyTools 缺失），无法在这里指定工具路径。'
+      $('tools-status').style.color = 'var(--err)'
+      return
+    }
+    try {
+      renderTools(await toolsApi.get())
+    } catch (error) {
+      $('tools-status').textContent = '读取工具路径失败：' + (error && error.message ? error.message : error)
+      $('tools-status').style.color = 'var(--err)'
+    }
+  }
+
+  async function saveTools() {
+    if (!toolsApi) return
+    const payload = {}
+    for (const id of ['lovelymem', 'lovelyspark']) {
+      const row = toolRow(id)
+      payload[id] = row ? row.querySelector('[data-tool-path]').value : ''
+    }
+    $('btn-tools-save').disabled = true
+    try {
+      const res = await toolsApi.save(payload)
+      if (!res.ok) {
+        $('tools-status').textContent = '保存失败：' + res.error
+        $('tools-status').style.color = 'var(--err)'
+        return
+      }
+      renderTools(res)
+      $('tools-status').textContent = '已保存工具路径，新会话生效。'
+      $('tools-status').style.color = 'var(--ok)'
+    } finally {
+      $('btn-tools-save').disabled = false
+    }
+  }
+
+  for (const id of ['lovelymem', 'lovelyspark']) {
+    const row = toolRow(id)
+    if (!row) continue
+    row.querySelector('[data-tool-pick]').addEventListener('click', async () => {
+      if (!toolsApi) return
+      const res = await toolsApi.pick(id)
+      if (res && res.ok && res.path) {
+        const input = row.querySelector('[data-tool-path]')
+        input.value = res.path
+        input.classList.remove('missing')
+        $('tools-status').textContent = '已选择 ' + res.path + '（记得点「保存工具路径」）'
+        $('tools-status').style.color = 'var(--muted)'
+      }
+    })
+    row.querySelector('[data-tool-clear]').addEventListener('click', () => {
+      const input = row.querySelector('[data-tool-path]')
+      input.value = ''
+      input.classList.remove('missing')
+      $('tools-status').textContent = '已清空（记得点「保存工具路径」才会删掉配置）'
+      $('tools-status').style.color = 'var(--muted)'
+    })
+  }
+  $('btn-tools-save').addEventListener('click', () => { void saveTools() })
+
   async function load() {
     if (!api) {
       setStatus('预加载桥不可用（window.seeu.localModel 缺失），请从桌面版菜单打开本页。', 'err')
@@ -660,6 +783,7 @@
   $('btn-open').addEventListener('click', () => api.openFile())
 
   for (const el of document.querySelectorAll('input, textarea')) {
+    if (el.classList.contains('tool-path')) continue
     el.addEventListener('input', () => { void renderPreview() })
     el.addEventListener('change', () => { void renderPreview() })
   }
@@ -669,6 +793,7 @@
     api.onProbe((probe) => { renderProbe(probe) })
   }
 
+  void loadTools()
   void load()
 </script>
 </body>

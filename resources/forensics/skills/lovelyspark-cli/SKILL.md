@@ -3,7 +3,7 @@ name: lovelyspark-cli
 description: 用本机 LovelySpark CLI 分析 PCAP/PCAPNG 流量、查询分析库并导出证据。
 ---
 
-通过现有 PowerShell 工具调用，自动寻找本机 CLI。LovelySpark 原生参数不加 `--cli`。
+通过现有 PowerShell 工具调用。LovelySpark 原生参数不加 `--cli`。工具路径**只能由用户在桌面端设置窗口手动指定**（设置 → 本机取证工具路径），不做自动发现。
 
 ```powershell
 & $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelyspark -- --version
@@ -21,5 +21,5 @@ JSON 参数优先用 `--args-file` 避免 Windows 引号转义；路径使用绝
 完整 stdout/stderr 与命令记录保存在工作区 `lovely-runs/`，默认仅返回 2000 字符 stdout 和 500 字符 stderr 预览。
 `truncated: true` 不是完整结果，按返回路径检索/局部读取或缩小查询；不要整文件回灌。`ok: false` / 超时须说明，保留退出码和错误定位。
 
-默认无需配置路径；`status` 查看自动发现结果。仅发现失败时用 `configure lovelyspark '<exe绝对路径>'` 指定，`configure lovelyspark auto` 恢复自动寻找。
+路径只来自用户手动指定（桌面端「设置 → 本机取证工具路径」写入 `<DSH_HOME>/lovely-cli.json`），**不要自己去找 exe**。`status` 的 `found:false` 表示未配置：请用户去设置窗口指定路径，不要尝试自动发现或 `configure auto`。脚本里临时指定用 `configure lovelyspark '<exe绝对路径>'`，`configure lovelyspark clear` 清除。
 使用现有许可证；不默认导入授权或执行网络回放。结论引用源抓包、db_path 与具体记录位置。

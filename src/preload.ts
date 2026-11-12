@@ -32,6 +32,31 @@ export interface SeeuInfo {
   readonly hostLog: string
 }
 
+export interface LovelyToolState {
+  readonly id: 'lovelymem' | 'lovelyspark'
+  readonly label: string
+  readonly env: string
+  readonly hint: string
+  readonly path: string
+  readonly source: 'env' | 'config' | 'unset'
+  readonly configured: boolean
+  readonly found: boolean
+}
+
+export interface LovelyToolsView {
+  readonly configFile: string
+  readonly tools: LovelyToolState[]
+  readonly error?: string
+}
+
+export interface LovelyToolsSaveResult {
+  readonly ok: boolean
+  readonly error?: string
+  readonly saved?: { id: 'lovelymem' | 'lovelyspark'; action: 'set' | 'cleared' }[]
+  readonly configFile?: string
+  readonly tools?: LovelyToolState[]
+}
+
 export interface LocalModelProbeState {
   readonly ok: boolean
   readonly baseURL: string
@@ -167,6 +192,14 @@ const api = {
     },
     restart: (): void => { ipcRenderer.send('seeu:local-model:restart') },
     openFile: (): void => { ipcRenderer.send('seeu:local-model:open-file') },
+  },
+  // 本机取证工具路径：只支持手动指定（不自动发现）。
+  lovelyTools: {
+    get: (): Promise<LovelyToolsView> => ipcRenderer.invoke('seeu:lovely-tools:get') as Promise<LovelyToolsView>,
+    pick: (tool: 'lovelymem' | 'lovelyspark'): Promise<{ ok: boolean; path?: string; canceled?: boolean }> =>
+      ipcRenderer.invoke('seeu:lovely-tools:pick', tool) as Promise<{ ok: boolean; path?: string; canceled?: boolean }>,
+    save: (paths: Partial<Record<'lovelymem' | 'lovelyspark', string>>): Promise<LovelyToolsSaveResult> =>
+      ipcRenderer.invoke('seeu:lovely-tools:save', paths) as Promise<LovelyToolsSaveResult>,
   },
 }
 
