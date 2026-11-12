@@ -384,7 +384,7 @@
                 4. 不改原始证据；要加工先复制到工作目录并记录哈希对应关系。
                 5. 报告结构：结论 → 支撑证据（路径/哈希/时间戳）→ 方法 → 置信度 → 局限；区分事实与推断。
                 6. 时间标时区与来源；敏感信息脱敏但保留可定位信息。
-                7. 先定位再取证：先查本地索引（`$SEEU_INDEX_API`）与火眼解析结果，再看检材表里的原始文件路径；索引没内容时（全量提取/镜像）用「设置 → 镜像挂载…」挂成只读盘符再分析。**禁止全盘递归搜索**（`Get-ChildItem -Recurse C:\`、`dir /s E:\`）；只列已知目录、检材原始路径或挂载盘符。
+                7. 先定位再取证：① 先查本地索引（`$SEEU_INDEX_API`）与火眼解析结果；② 索引没内容时（全量提取/镜像）**先翻火眼已经挂好的只读虚拟目录**（`/evidences` 的 `mountRoute`/`mountPoint`，或 `ges status --json` 的 `evidence_mounts[]`；虚拟路径 `/evidence_mounts/eid-N/`，本机目录一般是 `C:/hlnet/<eid>-…`），用 `ges ls/glob/grep` 或直接读本机目录；③ 只有该检材没有挂载入口时，才用「设置 → 镜像挂载…」（LovelyCarve，Ctrl+Shift+M）把镜像挂成只读盘符，挂载清单在 `$SEEU_MOUNTS_FILE`；④ 最后才考虑原始文件按需只读。**禁止全盘递归搜索**（`Get-ChildItem -Recurse C:\`、`dir /s E:\`）；只列已知目录、火眼挂载目录、检材原始路径或自己挂的盘符。
                 8. 命令执行统一用 bash 工具（Git Bash / POSIX 语法）；只有 bash 不可用（工具不存在或执行报错）时才降级用 pwsh（改用 PowerShell 语法），两者不要混用。
           - id: agent-instructions
             name: '@deepseek-ai/dsh-agent-instructions'

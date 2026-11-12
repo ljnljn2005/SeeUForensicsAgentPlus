@@ -83,7 +83,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
   - 新增随包技能 `resources/forensics/skill-sets/memory/starmem-cli/SKILL.md`（`starmem.exe [--json] <命令> <镜像文件>`、常用命令表、`collect` 落 SQLite、`--csv/--limit/--raw-objects`、符号参数与证据纪律）；
   - 内存 persona 改为「统一走 `starmem-cli`，`"$SEEU_TOOL_STARMEM" --json <命令> <镜像文件>`；`$SEEU_TOOL_STARMEM` 为空先按 PATH 试 `starmem`，仍不可用才退回 lovelymem-cli」；
   - `tools/tool-paths.mjs` 新增第 13 项 `starmem`（`SEEU_TOOL_STARMEM`、`command: starmem`、默认路径），设置页「外部取证工具路径」随之 13 行；`scripts/e2e/settings-check.mjs` 增加 StarMem 默认路径断言。
-- **LovelyCarve CLI 默认路径改为 `D:/Programs/LovelyCarve/lovelycarve-cli.exe`**（用户指定）：镜像挂载解析候选第一位；`tools/lovely-tools.mjs` 给 `lovelycarve` 增加 `defaultPath`（设置页未指定时显示/使用该路径，清空后回落到它）。
+- **LovelyCarve CLI 默认路径改为 `D:/Programs/LovelyCarve/lovelycarve-cli.exe`**（用户指定）：只是 CLI 可执行文件的默认解析位置（`tools/lovely-tools.mjs` 的 `defaultPath`，设置页未指定时显示/使用该路径，清空后回落到它）——**不改变检材定位优先级：火眼已挂载的虚拟目录/本机 `C:/hlnet/…` 永远优先，LovelyCarve 只在检材没有火眼挂载入口时才用来挂镜像**。
 - 验证：`npm test` **122/122**；`check:overlay` OK；`settings-check` `ok:true`（`toolPathsRows:13`、`toolPathsStarmem:"…starmem-v0.2.2…"`、`errors:[]`）；`skills-check` `ok:true`（`skill-sets/memory` 同时装 `starmem-cli` 与 `lovelymem-cli`，`leaked:[]`）；`starmem.exe build-info --json` 可执行（`version 0.2.2`）。
 
 ### v0.3.4 改了什么
