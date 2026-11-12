@@ -20,7 +20,15 @@ import {
   PRODUCT_NAME,
 } from './brand.js'
 import { DshHost, type HostState } from './host.js'
-import { installBundledSkills } from './skills.js'
+import { bundledSkillsDir, installBundledSkills, userSkillsDir } from './skills.js'
+import {
+  bundledSkillNames,
+  importSkillFolder,
+  importSkillZip,
+  listInstalledSkills,
+  removeInstalledSkill,
+  type ImportResult,
+} from './skill-upload.js'
 import {
   dshHome,
   dshRuntimeDir,
@@ -46,6 +54,7 @@ interface StatusPayload {
 }
 
 let mainWindow: BrowserWindow | undefined
+let skillsWindow: BrowserWindow | undefined
 let tray: Tray | undefined
 let host: DshHost | undefined
 let quitting = false
@@ -277,6 +286,135 @@ function createTray(): void {
   }
 }
 
+// ── 技能上传 / 管理 ─────────────────────────────────────────────────────────
+//
+// 入口：应用菜单「技能」与技能管理器窗口。导入的 ZIP/文件夹经 skill-upload.ts
+// 校验（SKILL.md + frontmatter + 路径消毒）后写入 `<DSH_HOME>/skills/<name>`；
+// dsh-skill-filesystem 默认 watch=true，写入即失效重扫，新会话立即可见。
+
+function skillsImportOptions(overwrite?: boolean) {
+  return {
+    userSkillsDir: userSkillsDir(),
+    bundledNames: bundledSkillNames(bundledSkillsDir()),
+    ...(overwrite === undefined ? {} : { overwrite }),
+  }
+}
+
+/** 菜单直导：选文件夹 → 安装 → 弹结果。 */
+async function importSkillFromFolderDialog(): Promise<void> {
+  const win = mainWindow !== undefined && !mainWindow.isDestroyed() ? mainWindow : undefined
+  const picked = await dialog.showOpenDialog({
+    ...(win === undefined ? {} : { parent: win }),
+    title: '选择技能文件夹（含 SKILL.md）',
+    properties: ['openDirectory'],
+  })
+  if (picked.canceled || picked.filePaths.length === 0) return
+  const result = importSkillFolder(picked.filePaths[0], skillsImportOptions())
+  await reportImportResult(result, async () => {
+    // 同名用户技能：询问是否覆盖
+    const answer = await dialog.showMessageBox({
+      type: 'question',
+      title: '覆盖技能',
+      message: result.message ?? '同名技能已存在',
+      buttons: ['覆盖', '取消'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    if (answer.response === 0) {
+      const retry = importSkillFolder(picked.filePaths[0], skillsImportOptions(true))
+      await reportImportResult(retry)
+    }
+  })
+}
+
+/** 菜单直导：选 ZIP → 安装 → 弹结果。 */
+async function importSkillFromZipDialog(): Promise<void> {
+  const win = mainWindow !== undefined && !mainWindow.isDestroyed() ? mainWindow : undefined
+  const picked = await dialog.showOpenDialog({
+    ...(win === undefined ? {} : { parent: win }),
+    title: '选择技能 ZIP 包',
+    filters: [{ name: '技能包', extensions: ['zip'] }],
+    properties: ['openFile'],
+  })
+  if (picked.canceled || picked.filePaths.length === 0) return
+  const result = importSkillZip(picked.filePaths[0], skillsImportOptions())
+  await reportImportResult(result, async () => {
+    const answer = await dialog.showMessageBox({
+      type: 'question',
+      title: '覆盖技能',
+      message: result.message ?? '同名技能已存在',
+      buttons: ['覆盖', '取消'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    if (answer.response === 0) {
+      const retry = importSkillZip(picked.filePaths[0], skillsImportOptions(true))
+      await reportImportResult(retry)
+    }
+  })
+}
+
+async function reportImportResult(result: ImportResult, onAlreadyExists?: () => Promise<void>): Promise<void> {
+  if (result.ok && result.skill !== undefined) {
+    logShell(`skill imported: ${result.skill.name} (${String(result.skill.files)} files)`)
+    await dialog.showMessageBox({
+      type: 'info',
+      title: '技能已导入',
+      message: `技能 "${result.skill.name}" 已安装`,
+      detail: `共 ${String(result.skill.files)} 个文件。新会话立即可用；进行中的会话在下一次检索技能时也会发现它。`,
+      buttons: ['确定'],
+    })
+    broadcastSkillsChanged()
+    return
+  }
+  if (result.code === 'alreadyExists' && onAlreadyExists !== undefined) {
+    await onAlreadyExists()
+    return
+  }
+  logShell(`skill import failed: ${result.code ?? ''} ${result.message ?? ''}`)
+  await dialog.showMessageBox({
+    type: 'warning',
+    title: '技能导入失败',
+    message: result.message ?? '未知错误',
+    buttons: ['确定'],
+  })
+}
+
+/** 技能变化后通知管理器窗口刷新。 */
+function broadcastSkillsChanged(): void {
+  if (skillsWindow !== undefined && !skillsWindow.isDestroyed()) {
+    skillsWindow.webContents.send('seeu:skills-changed')
+  }
+}
+
+function openSkillsWindow(): void {
+  if (skillsWindow !== undefined && !skillsWindow.isDestroyed()) {
+    skillsWindow.focus()
+    return
+  }
+  const win = new BrowserWindow({
+    width: 820,
+    height: 660,
+    minWidth: 640,
+    minHeight: 480,
+    backgroundColor: COLORS.background,
+    title: `${PRODUCT_NAME} — 技能管理器`,
+    icon: existsSync(windowIconPath()) ? windowIconPath() : undefined,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: preloadFile(),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+    },
+  })
+  skillsWindow = win
+  win.on('closed', () => { skillsWindow = undefined })
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  void win.loadFile(join(rendererDir(), 'skills.html'))
+}
+
 function showAbout(): void {
   void dialog.showMessageBox({
     type: 'info',
@@ -333,6 +471,17 @@ function buildMenu(): void {
       ],
     },
     {
+      label: '技能',
+      submenu: [
+        { label: '技能管理器…', accelerator: 'Ctrl+Shift+S', click: () => openSkillsWindow() },
+        { type: 'separator' },
+        { label: '导入技能包（文件夹）…', click: () => void importSkillFromFolderDialog() },
+        { label: '导入技能包（ZIP）…', click: () => void importSkillFromZipDialog() },
+        { type: 'separator' },
+        { label: '打开技能目录', click: () => void shell.openPath(userSkillsDir()) },
+      ],
+    },
+    {
       label: '帮助',
       submenu: [
         { label: `关于 ${PRODUCT_NAME}`, click: () => showAbout() },
@@ -366,6 +515,53 @@ function registerIpc(): void {
   ipcMain.on('seeu:open-logs', () => { void shell.openPath(logDir()) })
   ipcMain.on('seeu:open-workspace', () => { void shell.openPath(workspaceDir()) })
   ipcMain.on('seeu:quit', () => { void requestQuit() })
+
+  // ── 技能管理 IPC（供技能管理器页面调用；文件选择仍在主进程弹原生对话框）──
+  ipcMain.handle('seeu:skills:list', () => listInstalledSkills(userSkillsDir(), bundledSkillsDir()))
+  ipcMain.handle('seeu:skills:import-folder', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const picked = await dialog.showOpenDialog({
+      ...(win === null ? {} : { parent: win }),
+      title: '选择技能文件夹（含 SKILL.md）',
+      properties: ['openDirectory'],
+    })
+    if (picked.canceled || picked.filePaths.length === 0) return { ok: false, code: 'cancelled' } satisfies ImportResult
+    const result = importSkillFolder(picked.filePaths[0], skillsImportOptions())
+    if (result.ok) { logShell(`skill imported: ${result.skill?.name ?? ''}`); broadcastSkillsChanged() }
+    return { ...result, sourcePath: picked.filePaths[0] }
+  })
+  ipcMain.handle('seeu:skills:import-zip', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const picked = await dialog.showOpenDialog({
+      ...(win === null ? {} : { parent: win }),
+      title: '选择技能 ZIP 包',
+      filters: [{ name: '技能包', extensions: ['zip'] }],
+      properties: ['openFile'],
+    })
+    if (picked.canceled || picked.filePaths.length === 0) return { ok: false, code: 'cancelled' } satisfies ImportResult
+    const result = importSkillZip(picked.filePaths[0], skillsImportOptions())
+    if (result.ok) { logShell(`skill imported: ${result.skill?.name ?? ''}`); broadcastSkillsChanged() }
+    return { ...result, sourcePath: picked.filePaths[0] }
+  })
+  // 管理器确认覆盖后走这里。
+  ipcMain.handle('seeu:skills:import-folder-overwrite', async (_event, folder: string) => {
+    if (typeof folder !== 'string' || folder === '') return { ok: false, code: 'notFound' } satisfies ImportResult
+    const result = importSkillFolder(folder, skillsImportOptions(true))
+    if (result.ok) { logShell(`skill imported(overwrite): ${result.skill?.name ?? ''}`); broadcastSkillsChanged() }
+    return result
+  })
+  ipcMain.handle('seeu:skills:import-zip-overwrite', async (_event, zipPath: string) => {
+    if (typeof zipPath !== 'string' || zipPath === '') return { ok: false, code: 'notFound' } satisfies ImportResult
+    const result = importSkillZip(zipPath, skillsImportOptions(true))
+    if (result.ok) { logShell(`skill imported(overwrite): ${result.skill?.name ?? ''}`); broadcastSkillsChanged() }
+    return result
+  })
+  ipcMain.handle('seeu:skills:remove', (_event, name: string) => {
+    const result = removeInstalledSkill(userSkillsDir(), String(name), bundledSkillNames(bundledSkillsDir()))
+    if (result.ok) { logShell(`skill removed: ${name}`); broadcastSkillsChanged() }
+    return result
+  })
+  ipcMain.on('seeu:skills:open-dir', () => { void shell.openPath(userSkillsDir()) })
 }
 
 // ── 启动 ────────────────────────────────────────────────────────────────────

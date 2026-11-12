@@ -259,9 +259,15 @@ dump 注释标注被 overlay 覆盖的行（4 个注释块，覆盖 6 行）：
 1. **推荐**：Electron 外壳启动 dsh 前，把 `resources/forensics/skills/*` 复制到
    `$DSH_HOME/skills/`（dsh 默认 skill root，优先级 400，无需改 overlay）。之后每个会话
    都能看到这些技能（`skill-filesystem` 已在 preset 内挂载）。
-2. 把技能目录放到用户工作区的 `<projectRoot>/.dsh/skills/` 或 `.agents/skills/`
+2. **用户上传导入（v0.2.0 新增）**：应用菜单「技能 → 技能管理器 / 导入技能包（文件夹|ZIP）」，
+   由 `src/skill-upload.ts` 校验（SKILL.md + frontmatter `name`/`description`、kebab-case、
+   ZIP 条目逐段消毒防 `..` 穿越、随包同名拒绝覆盖）后写入 `$DSH_HOME/skills/<name>`。
+   `skill-filesystem` 默认 `watch: true`，写入即失效重扫，新会话立即可见；管理器页面
+   `renderer/skills.html` 支持列出（随包/用户标记）与卸载用户技能。回归测试：
+   `npm run test:skill-upload`（22 条断言，含恶意 ZIP 穿越用例）。
+3. 把技能目录放到用户工作区的 `<projectRoot>/.dsh/skills/` 或 `.agents/skills/`
    （`projectRoot` = 最近含 `.git` 的祖先目录，否则为 cwd）。
-3. 有稳定安装路径时，在 `preset-standard` 的 `skill-filesystem` 子项加
+4. 有稳定安装路径时，在 `preset-standard` 的 `skill-filesystem` 子项加
    `config.customSkillDirs: [<path>]`，并保留 `includeDefaultRoots` 默认 true。
 
 技能与 preset 的关系：`@deepseek-ai/dsh-skill` 的 registry 分层，host 行与 preset 行都会

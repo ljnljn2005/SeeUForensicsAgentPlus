@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:;" />
+<title>技能管理器</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0B1220;
+    --surface: #111C31;
+    --surface-2: #16233C;
+    --accent: #22D3EE;
+    --accent-soft: #164E63;
+    --text: #E2E8F0;
+    --muted: #94A3B8;
+    --danger: #F87171;
+    --ok: #34D399;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+    padding: 20px 24px 32px;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  button {
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid #263553; border-radius: 8px;
+    padding: 7px 14px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  button.primary:hover { background: var(--accent); color: #04202b; }
+  button.danger:hover { border-color: var(--danger); color: var(--danger); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .card {
+    background: var(--surface); border: 1px solid #1E2C47; border-radius: 12px;
+    padding: 12px 16px; display: flex; align-items: flex-start; gap: 12px;
+  }
+  .meta { flex: 1; min-width: 0; }
+  .name { font-size: 14px; font-weight: 600; word-break: break-all; }
+  .tag {
+    display: inline-block; font-size: 11px; border-radius: 999px; padding: 1px 8px; margin-left: 8px;
+    vertical-align: 2px; border: 1px solid #263553; color: var(--muted);
+  }
+  .tag.bundled { border-color: var(--accent-soft); color: var(--accent); }
+  .desc { color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.5; word-break: break-all; }
+  .files { color: var(--muted); font-size: 11px; margin-top: 4px; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; font-size: 13px; }
+  #toast {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+    background: var(--surface-2); border: 1px solid var(--accent-soft); border-radius: 8px;
+    color: var(--text); font-size: 12px; padding: 8px 16px; max-width: 90%;
+    display: none; white-space: pre-wrap; word-break: break-all;
+  }
+  #toast.ok { border-color: var(--ok); }
+  #toast.err { border-color: var(--danger); }
+</style>
+</head>
+<body>
+  <h1>技能管理器</h1>
+  <div class="sub">技能安装到运行时的用户技能根，导入后新会话立即可用；进行中的会话在下一次检索技能时也会发现它。</div>
+  <div class="toolbar">
+    <button class="primary" id="btnZip">导入 ZIP 技能包…</button>
+    <button class="primary" id="btnFolder">导入技能文件夹…</button>
+    <button id="btnRefresh">刷新</button>
+    <button id="btnOpenDir">打开技能目录</button>
+  </div>
+  <div class="list" id="list"><div class="empty">加载中…</div></div>
+  <div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var seeu = window.seeu;
+  var listEl = document.getElementById('list');
+  var toastEl = document.getElementById('toast');
+  var toastTimer = null;
+
+  function toast(msg, kind) {
+    toastEl.textContent = msg;
+    toastEl.className = msg.startsWith('✓') ? 'ok' : (kind || '');
+    toastEl.style.display = 'block';
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.style.display = 'none'; }, 5200);
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function refresh() {
+    seeu.skillsList().then(function (skills) {
+      if (!skills.length) {
+        listEl.innerHTML = '<div class="empty">还没有任何技能。点击上方按钮导入 ZIP 包或文件夹。</div>';
+        return;
+      }
+      listEl.innerHTML = skills.map(function (s) {
+        var tag = s.bundled
+          ? '<span class="tag bundled">随包</span>'
+          : '<span class="tag">用户导入</span>';
+        var removeBtn = s.bundled
+          ? ''
+          : '<button class="danger" data-remove="' + esc(s.name) + '">卸载</button>';
+        return '<div class="card">' +
+          '<div class="meta">' +
+            '<div class="name">' + esc(s.name) + tag + '</div>' +
+            '<div class="desc">' + esc(s.description || '(无描述)') + '</div>' +
+            '<div class="files">' + s.files + ' 个文件</div>' +
+          '</div>' + removeBtn +
+        '</div>';
+      }).join('');
+    }).catch(function (e) { toast('加载失败：' + e, 'err'); });
+  }
+
+  function handleImportResult(r, retryOverwrite) {
+    if (!r) return;
+    if (r.ok && r.skill) {
+      toast('✓ 已导入 "' + r.skill.name + '"（' + r.skill.files + ' 个文件），新会话立即可用', 'ok');
+      refresh();
+      return;
+    }
+    if (r.code === 'cancelled') return;
+    if (r.code === 'alreadyExists' && retryOverwrite) {
+      if (confirm((r.message || '同名技能已存在') + '\n\n确定覆盖吗？')) {
+        retryOverwrite().then(function (r2) { handleImportResult(r2, null); });
+      }
+      return;
+    }
+    toast('导入失败：' + (r.message || r.code || '未知错误'), 'err');
+  }
+
+  document.getElementById('btnZip').addEventListener('click', function () {
+    seeu.skillsImportZip().then(function (r) {
+      var retry = (r && r.code === 'alreadyExists' && r.sourcePath)
+        ? function () { return seeu.skillsImportZipOverwrite(r.sourcePath); }
+        : null;
+      handleImportResult(r, retry);
+    });
+  });
+
+  document.getElementById('btnFolder').addEventListener('click', function () {
+    seeu.skillsImportFolder().then(function (r) {
+      var retry = (r && r.code === 'alreadyExists' && r.sourcePath)
+        ? function () { return seeu.skillsImportFolderOverwrite(r.sourcePath); }
+        : null;
+      handleImportResult(r, retry);
+    });
+  });
+
+  document.getElementById('btnRefresh').addEventListener('click', refresh);
+  document.getElementById('btnOpenDir').addEventListener('click', function () { seeu.skillsOpenDir(); });
+
+  listEl.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (!t || !t.getAttribute) return;
+    var name = t.getAttribute('data-remove');
+    if (!name) return;
+    if (!confirm('确定卸载技能 "' + name + '" 吗？\n（随包技能不可卸载；此操作只删除用户导入的副本）')) return;
+    seeu.skillsRemove(name).then(function (r) {
+      if (r && r.ok) { toast('✓ 已卸载 "' + name + '"', 'ok'); refresh(); }
+      else toast('卸载失败：' + ((r && r.message) || '未知错误'), 'err');
+    });
+  });
+
+  if (seeu.onSkillsChanged) seeu.onSkillsChanged(refresh);
+  refresh();
+})();
+</script>
+</body>
+</html>

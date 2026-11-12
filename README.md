@@ -25,6 +25,7 @@
 ```
 
 - **外壳职责**：窗口、托盘、中文菜单、单实例、权限收紧（全部拒绝）、外链走系统浏览器、加载页/故障页、优雅退出。
+- **技能上传（v0.2.0）**：菜单「技能 → 技能管理器」支持导入技能文件夹 / ZIP 包（SKILL.md + frontmatter 校验、ZIP 路径消毒、随包同名保护）、列出与卸载用户技能；写入 `<DSH_HOME>/skills/` 后由 dsh 的文件监听自动生效，新会话即可使用，无需重启。
 - **运行时职责**：agent 循环、模型接入、工具（文件/搜索/shell/技能/session 等）、会话存储、Web UI。
 - **取证职责**：`resources/forensics/cordis.patch.yml` 以 dsh 官方 patch-list 机制叠加在 `web` profile 之上——关闭遥测/产品分析行，注入中文取证 persona，并把会话 preset（`preset-standard`）改成**取证专用工具面**：保留官方 22 项里的 19 项（子代理 / 工作流 / 后台作业 / 定时任务 / 目标 / plan / todo 都可用），去掉 `tool-web`（取证会话不联网）、`tool-plugin-manager`（可联网安装/移除插件包）与 `tool-plugin-market`（插件市场），`tool-fs` 收成只读。详见 [docs/forensics-profile.md](docs/forensics-profile.md)。
 
@@ -45,6 +46,7 @@ npm start          # 构建 dist/ 并启动桌面版
 | `npm start` | build + `electron .` |
 | `npm run verify` | 无人工点击的启动验证：拉 Electron，经 CDP 确认窗口真的加载了 dsh Web UI |
 | `npm run check:overlay` | 离线校验取证 overlay（`--dump-config`），确认可解析、工具面符合设计；已挂到打包前置钩子 |
+| `npm run test:skill-upload` | 技能上传模块回归测试（22 条断言：真实技能夹/ZIP、一层包装目录、恶意 `..` 穿越 ZIP、随包同名保护、覆盖与卸载） |
 | `npm run package:dir` | 产出免安装目录版 `release/win-unpacked/`（用于快速验证） |
 | `npm run package:win` | 产出 NSIS 安装包 + portable exe（需签名时另配证书） |
 
