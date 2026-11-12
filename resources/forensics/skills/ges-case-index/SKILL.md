@@ -27,6 +27,13 @@ curl -s "$SEEU_INDEX_API/list" | head -c 500
 
 `/list` 返回 `indexes[]`，每项含 `caseDir`、`dbPath`、`caseNumber`、`caseName`、`builtAt`、`sizeBytes`。
 **后续所有查询都带上 `db=<dbPath>`**（URL 编码交给 `--data-urlencode`/`-G` 即可）。
+如果 `db` 路径含中文、被 shell/HTTP 转码后报 `索引库不存在`，别折腾路径——改用 `caseNumber`（`/list` 里的字段）：
+
+```bash
+curl -s "$SEEU_INDEX_API/evidences?caseNumber=<案号>"
+```
+
+其余接口同理（`db` 或 `caseNumber` 二选一）。
 
 ## 先认检材（用户说检材名时必查）
 

@@ -24,6 +24,30 @@ function safeDb(param) {
   return abs;
 }
 
+/**
+ * 从 query 里解析索引库：`db` 优先；也接受 `caseNumber` / `case` / `caseDir`。
+ * 中文路径经 shell → HTTP 传输时可能被按 GBK 编码，服务端按 UTF-8 解码后
+ * 「索引库不存在」；模型/脚本可以只传 /list 里的 caseNumber 避开中文路径。
+ */
+function resolveDbParam(query) {
+  const dbParam = query.get('db');
+  if (dbParam) return safeDb(dbParam);
+  const key = String(query.get('caseNumber') ?? query.get('case') ?? query.get('caseDir') ?? '').trim();
+  if (!key) throw Object.assign(new Error('缺少 db 参数（也可以传 caseNumber，见 /list）'), { status: 400 });
+  const indexes = findIndexes(briefDirs());
+  const wantedDir = resolve(key).toLowerCase();
+  const hit = indexes.find((ix) => {
+    if (String(ix.caseNumber ?? '') === key) return true;
+    if (String(ix.caseName ?? '') === key) return true;
+    if (resolve(ix.caseDir ?? '\u0000').toLowerCase() === wantedDir) return true;
+    return resolve(ix.dbPath ?? '\u0000').toLowerCase() === wantedDir;
+  });
+  if (!hit) {
+    throw Object.assign(new Error('找不到案件索引：' + key + '（用 /list 查看 caseNumber）'), { status: 404 });
+  }
+  return safeDb(hit.dbPath);
+}
+
 /** 跨案中央库位置：SEEU_CROSS_DB 优先，否则 <工作区>/indexes/crosscase.db。 */
 function crossPath() {
   if (process.env.SEEU_CROSS_DB) return resolve(process.env.SEEU_CROSS_DB);
@@ -145,16 +169,15 @@ async function handle(req, res) {
         const result = await refreshBrief();
         return send(res, 200, { result, state: briefState });
       }
-      const dbParam = url.searchParams.get('db') ?? '';
       let current = null;
-      if (dbParam) {
-        try {
-          const abs = safeDb(dbParam);
+      try {
+        {
+          const abs = resolveDbParam(url.searchParams);
           const list = findIndexes(briefDirs());
           current = { dbPath: abs, included: list.some((i) => resolve(i.dbPath) === abs) };
-        } catch {
-          current = null;
         }
+      } catch {
+        current = null;
       }
       return send(res, 200, { state: briefState, current, dshHome: process.env.DSH_HOME ?? null });
     }
@@ -195,7 +218,7 @@ async function handle(req, res) {
 
     if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
 
-    const dbPath = safeDb(url.searchParams.get('db'));
+    const dbPath = resolveDbParam(url.searchParams);
     const db = openIndex(dbPath);
     try {
       if (path === '/tree') return send(res, 200, tree(db, url.searchParams.get('node') || 'root'));
@@ -346,6 +369,7 @@ function briefText(indexes, mounts = []) {
   }
   lines.push(
     '查询入口：环境变量 SEEU_INDEX_API（如 curl -s "$SEEU_INDEX_API/list"）。',
+    '若 db 路径含中文、在 shell 里被转码成「索引库不存在」，改用 caseNumber：curl -s "$SEEU_INDEX_API/evidences?caseNumber=<案号>"（案号见 /list）。',
     '规则：用户说检材名时，用下表把名称对应到 eid 再查，**不要猜 eid**；表里没有就问用户。',
     '',
   );
@@ -494,6 +518,8 @@ function rememberDirs(dirs) {
     /* 状态文件写不了不影响查询 */
   }
 }
+
+export { resolveDbParam };
 
 export function apply(ctx) {
   void refreshBrief().catch(() => { /* 启动期失败不影响查库 */ });

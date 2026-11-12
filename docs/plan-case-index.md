@@ -1984,3 +1984,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 验证：`node --test tests/ges-mounts.test.mjs` 4/4；`npm test` 106/106；真实案件重生成概览 → 2400 字符（原 1740），含四行挂载映射（eid2 无映射、不出现）；`check:overlay` OK。
 - 坑：① 索引 eid 与火眼 eid 可能错位（索引残留已删检材），匹配必须以**名称**为主；② `ges status --json` 不含案件目录，无法强校验「当前案件=索引案件」，只能按名称匹配，匹配不上就不写；③ `briefText` 原本同步、`writeCaseBrief` 被 4 处同步调用，改 async 时注意 `apply()` 不能 await。
 - 遗留：真实 LovelyCarve 挂载仍未验证（本机未装）；火眼挂载目录生命周期由 GES 管理（关闭火眼案件即失效），概览里的路径可能过期，用户重开案件后刷新概览即可。
+
+## §20.73 索引接口支持 caseNumber（绕开中文路径乱码）
+
+- 用户现场：会话里 `curl -G /evidences --data-urlencode "db=E:/forensics/W盘_…/.seeu-index/case-index.db"` 返回「索引库不存在」；同一路径在 python 里 `existsSync` 为 true。
+- 根因：`safeDb()` 只看 `resolve(param)` + `existsSync`，逻辑没问题；问题在**传输编码**——中文路径经 shell（GBK 控制台）→ curl → HTTP 服务端（UTF-8 解码）后字节不一致，服务端拿到的是坏路径。`/list` 不受影响是因为它不接收 `db` 参数。
+- 实现：`plugins/seeu-case-index/index.js` 新增 `resolveDbParam(query)`：`db` 优先走原 `safeDb`；否则接受 `caseNumber` / `case` / `caseDir`，用 `findIndexes(briefDirs())` 反查（匹配 caseNumber、caseName、caseDir、dbPath），命中后仍走 `safeDb` 做 `.seeu-index` 与存在性校验；未命中 404「找不到案件索引：…（用 /list 查看 caseNumber）」，完全缺参 400。所有 GET 路由统一改用 `resolveDbParam(url.searchParams)`（原来只有 `/brief` GET 与统一入口两处）；`/brief` GET 也支持 caseNumber。
+- 文案：案件概览（briefText）在「查询入口」下加一行「db 含中文被转码就改用 caseNumber」；`ges-case-index` 技能的「后续查询都带 db」段落补 `caseNumber` 用法。
+- 测试：`tests/db-param.test.mjs` 4 例（临时中文目录 + node:sqlite 造 meta：db 直传、caseNumber、case/caseDir/案件名、未知 404/缺参 400）——4/4；`npm test` 111/111。
+- 坑：插件里 `resolve(ix.caseDir ?? ' ')` 这种兜底字符串若写成真实 NUL 会让源文件二进制化（git 显示 binary），要写转义文本。
+- 遗留：面板仍传完整 `db`（浏览器 fetch 是 UTF-8，没问题）；脚本/模型建议走 caseNumber。

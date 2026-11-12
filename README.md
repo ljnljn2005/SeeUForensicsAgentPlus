@@ -85,7 +85,8 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 - `scripts/e2e/plugins-check.mjs` 增加三条真实断言（插件包存在、外壳日志「插件包 N 个」、dsh 子进程日志无导入失败）；v0.3.2 的旧断言只看页面文案，属误判。
 - **案件概览新增「原始检材只读挂载」映射**：火眼（GES）会为检材挂出原始只读文件系统（`ges status --json` 的 `evidence_mounts[]`：虚拟路径 `/evidence_mounts/eid-N/` + 本机目录 `C:\hlnet\<eid>-<hash>`）。现在 `plugins/seeu-case-index` 的概览把「检材名 → 虚拟路径/本机目录」写进 `<DSH_HOME>/AGENTS.md`，`/evidences` 也返回 `mountRoute`/`mountPoint`/`mountEid`；`ges-case-index` 技能与取证定位规则同步改成「**先翻火眼已挂载目录，不要用 LovelyCarve 重复挂载**；只有火眼没给挂载时才自己挂镜像」。设备/系统类问题仍优先看检材备注。
 - 新增 `tools/ges-index/mounts.mjs`（`parseEvidenceMounts` / `attachMounts` / `loadEvidenceMounts`，5 秒缓存、失败降级为空表）与 `tests/ges-mounts.test.mjs` 4 例。
-- `npm test` 106/106（新增依赖闭包、包复制、挂载映射用例）、`check:overlay` OK。
+- **索引接口支持 `caseNumber`**：中文案件路径经 shell → HTTP 传输时可能被按 GBK 转码，服务端收到的 `db` 路径与磁盘不一致 → 报「索引库不存在」。现在 `/evidences`、`/tree`、`/search`、`/records`、`/export/*` 等 GET 路由既接受 `db`，也接受 `caseNumber`（或 `case` / `caseDir`，取 `/list` 里的 `caseNumber` 最稳）；`/list` 与概览里也补了提示。新增 `resolveDbParam()` 与 `tests/db-param.test.mjs` 4 例（中文路径 + 临时案件库、未知案件号 404、缺参 400）。
+- `npm test` 111/111（新增依赖闭包、包复制、挂载映射、caseNumber 解析用例）、`check:overlay` OK。
 
 - **打包与打包态回归（v0.3.3）**：NSIS `281,470,879 B`（blockmap 293,467 B）、portable `236,209,035 B`、`app.asar` `425,056,883 B`（34,072 entries —— 比 0.3.2 少 22 条是删掉了旧技能目录）；`.probe/asar-033-check.mjs` 全项 true（新增 `pluginPackagesCopy` / `pluginsActivationAssert` / `version033`）；**打包态 `plugins-check --exe` 首次拿到 `ok:true`**：profile 下 175 个插件包、外壳日志「插件包 175 个（已复制 175 个…）」、dsh 子进程日志 `activationFailures:[]`（从 asar 逐文件复制可行）；打包态 `m2-ui-check`（`m2ok:true, errors:[]`）；目录版冷启动 **7128 ms**、portable **49.8 s**；`npm test` **106/106**、`npm run check:overlay` OK。
 
