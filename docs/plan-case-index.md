@@ -2040,3 +2040,16 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试与校验：`tests/presets-config.test.mjs` 改为断言 memory persona 含 `starmem-cli`（并保留 `lovelymem-cli` 兜底）、技能目录同时含 `starmem-cli` 与 `lovelymem-cli`；`tests/image-mount.test.mjs` 与 `tools/lovely-cli/test/config.test.mjs` 适配「本机已装 → 走 auto/default 来源」；`scripts/e2e/settings-check.mjs` 的 `toolPathsRows` 12→13 并新增 `toolPathsStarmem` 断言；`scripts/e2e/skills-check.mjs` 的 memory 组同时断言 `starmem-cli`/`lovelymem-cli`。实测：`npm test` **122/122**、`check:overlay` OK、`build` OK、`settings-check` `ok:true`（`toolPathsRows:13`、`toolPathsStarmem` 正确）、`skills-check` `ok:true`、`starmem.exe build-info --json` 通过。
 - 坑：① `starmem.exe` 是 UPX 打包，Git Bash 直接执行可能 `Permission denied`，用 `pwsh -Command "& '...starmem.exe' --help"` 或 node `execFileSync` 正常；② 旧的 `tests/image-mount` 断言「无配置 → unset」在本机会因内置候选命中而失败，已改为按来源分支断言；③ `tools/lovely-tools.mjs` 增加 `defaultPath` 后，设置页「未配置」语义从「空路径」变成「显示默认路径」，测试与文案同步。
 - 遗留：真实内存镜像分析尚未跑（本机 `E:\forensics` 下未找到可用内存镜像）；`starmem` 的符号下载需要联网，离线环境只能靠自动解析/本地 PDB；v0.3.5 未打包。
+
+### 20.78 新增「数据库取证（Database）」会话预设（0.3.5，未打包）
+
+- 需求（用户 2026-11-12）：「接下来加入数据库取证专家，位置在相同位置」——`E:\取证桌面` 新增 `数据库取证专家.txt`（39,887 B，19:35 落盘），与前 7 份同源（弘连「取证桌面」SOP + 技能清单）。
+- 来源结构：SOP 角色=数据库数字取证分析师（DatabaseRecovery 工具体系：`database-view-data` / `database-search` / `database-rebuild` / `database-export` / `sqlite-view-data` / `database-forensics-report`）；流程=受理与完整性 → 识别/目录读取 → 查看/检索/完整重构/SQLite 独立解析 → 导出与报告；红线=原件只读、不写库、不建服务、不猜密钥、命中≠事实、动态分析与删除恢复互斥。
+- SeeU 适配（`resources/forensics/cordis.patch.yml` 新增 `- insert:` 块 `preset-db`，order 9，名称「数据库取证（Database）」，工具面复制 `preset-exe` 结构=persona + agent-instructions + time-context + tool-bash(win 禁用)/tool-pwsh + tool-fs 只读 + tool-fs-search + tool-jobs + skill-filesystem（不注入分组技能根）+ tool-skill + tool-ask-user + tool-todo + compaction，persona 约 7.6 KB：
+  - 定位顺序改为 SeeU 实际：① 火眼索引 `/tables` 等已解析表 → ② 火眼只读挂载目录 `/evidence_mounts/eid-N/` / `mountPoint`（`ges ls/glob/grep`）→ ③ 无挂载才 LovelyCarve 镜像挂载 → ④ 原始文件按需只读；禁止全盘递归。
+  - 只读复制：SQLite 连同 `-wal/-shm/-journal` 复制到 `$SEEU_WORKSPACE/db/<检材>/` 再分析；连接用 `file:…?mode=ro&immutable=1`；只读 SQL（仅 SELECT、分页、固定表/字段/时间范围）。
+  - 恢复：`.recover`、freelist/overflow 页、WAL/journal 回放；MySQL InnoDB 无解析器时只对派生副本按页解析或 strings，标「部分恢复/未覆盖」，不启动数据库服务。
+  - 工具现状（本机实测 2026-11-12）：python 3.13.14 + sqlite3 3.50.4；`sqlite3.exe` = `E:/CTFTools/Forensics/7-物联网取证/SQLite/sqlite3.exe`；7z 绝对路径；`strings/xxd/file` 在 PATH；路径解析 设置 → PATH → 默认，`$SEEU_TOOL_SQLITE3/PYTHON/SEVENZIP`；bash 优先、pwsh 降级。
+- 校验与测试适配：`scripts/check-overlay.mjs` 的 `expertPresets` 增加 `['preset-db','数据库取证（Database）']`（名称 + tool-fs 只读）；`tests/presets-config.test.mjs` 的专项预设循环加 order 9、persona 关键词（`数据库`/`sqlite_master`/`evidence_mounts`）、bash/本机实测/`SEEU_TOOL_` 断言集合都加入 `preset-db`。
+- README：§13 标题与表格加「数据库取证（Database）」行；「### v0.3.5 待发布」段加本预设说明。
+- 验证：`check:overlay` OK、`npm test` 122/122。

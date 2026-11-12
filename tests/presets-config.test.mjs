@@ -97,11 +97,12 @@ test('随包技能目录：通用技能在 skills/，lovelyspark/starmem 在 ski
   }
 })
 
-test('新增三个专项预设（数据/APK/EXE），顺序、名称与只读工具面正确', () => {
+test('新增四个专项预设（数据/APK/EXE/数据库），顺序、名称与只读工具面正确', () => {
   for (const [id, name, order] of [
     ['preset-data', '数据分析（网钜资金）', 6],
     ['preset-apk', 'APK 分析', 7],
     ['preset-exe', 'EXE 逆向分析', 8],
+    ['preset-db', '数据库取证（Database）', 9],
   ]) {
     const preset = byId.get(id)
     assert.ok(preset, `缺少 ${id}`)
@@ -124,6 +125,7 @@ test('persona 已改造成各专业专家的精简版（含关键纪律与工具
     ['preset-data', /网钜/, /\$SEEU_WORKSPACE/],
     ['preset-apk', /APK/, /\$SEEU_WORKSPACE/],
     ['preset-exe', /PE/, /Import|导入/],
+    ['preset-db', /数据库/, /sqlite_master/, /evidence_mounts/],
   ]
   for (const [id, ...patterns] of cases) {
     const text = persona(id)
@@ -134,7 +136,7 @@ test('persona 已改造成各专业专家的精简版（含关键纪律与工具
 })
 
 test('命令执行统一优先 bash 工具，pwsh 仅作降级', () => {
-  for (const id of ['preset-standard', 'preset-traffic', 'preset-memory', 'preset-data', 'preset-apk', 'preset-exe']) {
+  for (const id of ['preset-standard', 'preset-traffic', 'preset-memory', 'preset-data', 'preset-apk', 'preset-exe', 'preset-db']) {
     const text = byId.get(id).config.plugins[0].config.prefix
     assert.match(text, /bash/, `${id} 的 persona 没写 bash 优先`)
     assert.match(text, /pwsh/, `${id} 的 persona 没写 pwsh 降级`)
@@ -154,7 +156,7 @@ test('分析预设写明本机实测工具与 lovelyspark 优先', () => {
   assert.ok(!/Get-Command tshark/.test(traffic), 'traffic persona 不应再写 PWsh 探测空话')
   const memory = byId.get('preset-memory').config.plugins[0].config.prefix
   assert.match(memory, /优先且默认走 `starmem`/)
-  for (const id of ['preset-standard','preset-apk','preset-exe','preset-data','preset-memory']) {
+  for (const id of ['preset-standard','preset-apk','preset-exe','preset-data','preset-memory','preset-db']) {
     assert.match(byId.get(id).config.plugins[0].config.prefix, /本机实测/, `${id} 缺少本机实测工具说明`)
     assert.match(byId.get(id).config.plugins[0].config.prefix, /2026-11-12/, `${id} 缺少实测日期`)
   }
@@ -166,7 +168,7 @@ test('专家 persona 指向外部工具默认路径，并说明可在设置里�
   assert.match(exe, /analyzeHeadless\.bat/, 'exe persona 缺少 Ghidra 批处理入口')
   assert.match(exe, /SEEU_TOOL_GHIDRA/, 'exe persona 缺少 $SEEU_TOOL_GHIDRA')
   assert.match(exe, /外部取证工具路径/, 'exe persona 未说明设置里可改路径')
-  for (const id of ['preset-standard', 'preset-traffic', 'preset-log', 'preset-memory', 'preset-data', 'preset-apk', 'preset-exe']) {
+  for (const id of ['preset-standard', 'preset-traffic', 'preset-log', 'preset-memory', 'preset-data', 'preset-apk', 'preset-exe', 'preset-db']) {
     assert.match(byId.get(id).config.plugins[0].config.prefix, /SEEU_TOOL_/, `${id} 未提到 $SEEU_TOOL_* 环境变量`)
   }
 })

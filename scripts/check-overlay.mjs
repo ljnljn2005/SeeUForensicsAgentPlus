@@ -129,6 +129,7 @@ function main() {
       ['preset-data', '数据分析（网钜资金）'],
       ['preset-apk', 'APK 分析'],
       ['preset-exe', 'EXE 逆向分析'],
+      ['preset-db', '数据库取证（Database）'],
     ]
     for (const [id, label] of expertPresets) {
       const section = presetSection(dump, id)

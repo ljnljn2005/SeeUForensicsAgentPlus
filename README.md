@@ -79,6 +79,8 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 ### v0.3.5 待发布（未打包）
 
+- **新增「数据库取证（Database）」预设**（来源：`E:\取证桌面\数据库取证专家.txt`，39.9 KB → 精简到约 7.6 KB）：顺序 9，按「受理与完整性 → 定位数据库文件（先火眼索引 `/tables` → 火眼只读挂载目录 → 无挂载才 LovelyCarve 镜像挂载 → 原始文件）→ 只读导出（SQLite 连 `-wal/-shm/-journal` 一起）→ 结构与表核验 → 只读 SQL 分页检索 → 删除恢复/备份解析（受限）→ 交叉验证 → 报告分层」作业；红线为原件只读、只读 SQL、不建服务、不猜密钥/口令、命中不等于事实；工具现状写明 python 3.13 + `sqlite3` 3.50.4、`sqlite3.exe` 与 7z 的绝对路径（`$SEEU_TOOL_*`），并保留 bash 优先、禁止全盘递归。
+
 - **内存分析预设改用 StarMem 0.2.2**（`E:/CTFTools/Forensics/1-ComputerAnalysis/3-MemAnalysis/Lovelymem/starmem-v0.2.2-windows-x64-upx/starmem.exe`；用户指定：后续用 starmem，lovelymem 退为兜底）：
   - 新增随包技能 `resources/forensics/skill-sets/memory/starmem-cli/SKILL.md`（`starmem.exe [--json] <命令> <镜像文件>`、常用命令表、`collect` 落 SQLite、`--csv/--limit/--raw-objects`、符号参数与证据纪律）；
   - 内存 persona 改为「统一走 `starmem-cli`，`"$SEEU_TOOL_STARMEM" --json <命令> <镜像文件>`；`$SEEU_TOOL_STARMEM` 为空先按 PATH 试 `starmem`，仍不可用才退回 lovelymem-cli」；
@@ -798,7 +800,7 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 - **额外解包**：`node_modules/@dsh-ops/fastctx-win32-x64/**` 进 `app.asar.unpacked`，因为 `bin/fastctx.exe` 需要真实文件路径才能 spawn。
 - **验收**：`npm run test:e2e:plugins`（dev 或 `--exe <安装包 exe>` 都可）断言四件事：profile bundles、`<profile>/node_modules` 下四个插件包、页面插件 UI（「上下文洞察」「插件」）、以及 dsh 子进程日志不得出现 `did not activate` / `failed to import` / `ERR_MODULE_NOT_FOUND`。
 
-## 13. 分析预设（取证 / 流量 / 日志 / 内存 / 数据 / APK / EXE）
+## 13. 分析预设（取证 / 流量 / 日志 / 内存 / 数据 / APK / EXE / 数据库）
 
 新建会话时选预设即可切换「工具面 + 技能组」；预设互不影响，取证镜像类分析仍留在默认取证预设。
 
@@ -812,6 +814,7 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 | 数据分析（网钜资金） | 6 | 通用技能 | 网钜导出的流水/账户/交易数据清洗与资金分析 |
 | APK 分析 | 7 | 通用技能 | Android 应用静态分析、权限/组件/签名/IOC |
 | EXE 逆向分析 | 8 | 通用技能 | Windows PE 结构、导入导出、查壳、静态行为研判 |
+| 数据库取证（Database） | 9 | 通用技能 | SQLite/MySQL 等数据库原件、备份与日志的只读核验、结构查看、检索与受限恢复 |
 
 - **persona**：取证/流量/内存/数据/APK/EXE 六个预设都带精简版专家 persona（来源见「v0.3.4 改了什么」），日志预设沿用原有 persona。
 - **外部工具（开发机实测 2026-11-12）**：`python 3.13.14`（`D:/Programming/Python31314/python.exe`）已装 pandas/openpyxl/pefile/capstone/lief/pyelftools/yara/scapy/dpkt/pyshark；Wireshark 3.4.0 的 `tshark`/`capinfos`/`editcap`/`mergecap` 已装但**不在 PATH**（`E:/CTFTools/Forensics/4-其他工具/【15】网络分析/Wireshark/`）；`7z`、`sqlite3.exe`、`jadx 1.1.0`、`apktool.jar`、`adb` 在 `E:/CTFTools/…` 下；`frida 17.17.0` 在 PATH；IDA Professional 9.4（`idat.exe`）在 `D:/Programs/IDA Professional 9.4/`；`nfdump`/`zeek`/`suricata`/`snort`/`androguard` 未装；Ghidra 12.1.4 已装（默认 `C:/Users/ASUS/.dsh/plugins/dsh-infinite-gen-5/third_party/sources/ghidra-12.1.4`，源码树，批处理入口 `Ghidra/RuntimeScripts/Windows/support/analyzeHeadless.bat`）。**流量/日志分析一律先 lovelyspark-cli**，tshark 等只在技能覆盖不到时用绝对路径补充或做交叉复核。
