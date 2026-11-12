@@ -3,12 +3,13 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
-import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
+import { discoverExecutable, isFile } from './discovery.mjs';
 
 const TOOLS = {
-  lovelymem: { env: 'SEEU_LOVELYMEM_EXE', names: ['lovelymem.v3.exe', 'lovelymem.exe'], prefix: ['--cli'], timeout: 1800,
+  lovelymem: { env: 'SEEU_LOVELYMEM_EXE', names: ['lovelymem.v3.exe'], prefix: ['--cli'], timeout: 1800,
     commands: ['help', 'version', 'doctor', 'plugins', 'describe', 'run', 'native', 'artifacts', 'sql', 'query', 'read', '--help', '--version'] },
   lovelyspark: { env: 'SEEU_LOVELYSPARK_EXE', names: ['lovelyspark.exe'], prefix: [], timeout: 600,
     commands: ['help', '--help', '--version', 'license', 'tools', 'analyze', 'config', 'capture', 'prepare', 'tshark', 'traffic', 'investigate', 'call'] },
@@ -31,37 +32,16 @@ function readConfig(env) {
   return value;
 }
 
-function isFile(file) {
-  try { return statSync(file).isFile(); } catch { return false; }
-}
-
 export function resolveExecutable(tool, env = process.env) {
   const spec = definition(tool);
   const config = readConfig(env);
   const configured = env[spec.env] || config[tool];
   if (configured) {
     if (typeof configured !== 'string' || !isAbsolute(configured)) throw new Error(`${spec.env} / ${tool} 配置必须是绝对文件路径`);
-    return { path: configured, source: env[spec.env] ? 'env' : 'config', found: isFile(configured) };
+    if (env[spec.env] || isFile(configured)) return { path: configured, source: env[spec.env] ? 'env' : 'config', found: isFile(configured) };
   }
-  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path');
-  const dirs = (env[pathKey] || '').split(delimiter).filter(Boolean).map((dir) => dir.replace(/^"|"$/g, ''));
-  for (const dir of dirs) {
-    for (const name of spec.names) {
-      const file = resolve(dir, name);
-      if (isFile(file)) return { path: file, source: 'PATH', found: true };
-    }
-  }
-  // 只检查少数常见安装目录，不扫描磁盘、不把旧版 GUI 当作 V3 CLI。
-  const roots = [env.ProgramFiles, env.LOCALAPPDATA && join(env.LOCALAPPDATA, 'Programs'), 'D:/Programs'].filter(Boolean);
-  for (const root of roots) {
-    for (const sub of tool === 'lovelymem' ? ['Lovelymem', 'Lovelymem/V3', 'Lovelymem/LovelymemV3'] : ['LovelySpark']) {
-      for (const name of spec.names) {
-        const file = resolve(root, sub, name);
-        if (isFile(file)) return { path: file, source: 'install', found: true };
-      }
-    }
-  }
-  return { path: null, source: 'missing', found: false };
+  const discovered = discoverExecutable(tool, spec.names, env, `${configPath(env)}.discovery.json`);
+  return configured ? { ...discovered, staleConfigPath: configured } : discovered;
 }
 
 function positiveInt(value, fallback, max, name) {
@@ -202,14 +182,15 @@ export async function runCli(tool, args, options = {}) {
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const [command, ...rest] = argv;
-  if (!command || command === '--help') return { usage: ['status', 'configure <lovelymem|lovelyspark> <exe绝对路径>', '<lovelymem|lovelyspark> [--timeout 秒] [--max-chars 字符] -- <原生CLI参数>'], config: configPath(env) };
+  if (!command || command === '--help') return { usage: ['status', 'configure <lovelymem|lovelyspark> <auto|exe绝对路径>', '<lovelymem|lovelyspark> [--timeout 秒] [--max-chars 字符] -- <原生CLI参数>'], config: configPath(env) };
   if (command === 'status') return { config: configPath(env), ...Object.fromEntries(Object.keys(TOOLS).map((tool) => [tool, resolveExecutable(tool, env)])) };
   if (command === 'configure') {
     const [tool, file] = rest;
     definition(tool);
-    if (rest.length !== 2 || !isAbsolute(file || '') || !isFile(file)) throw new Error('configure 需要存在的 exe 绝对路径');
+    if (rest.length !== 2 || (file !== 'auto' && (!isAbsolute(file || '') || !isFile(file)))) throw new Error('configure 需要 auto 或存在的 exe 绝对路径');
     const config = readConfig(env);
-    config[tool] = file;
+    if (file === 'auto') delete config[tool];
+    else config[tool] = file;
     const target = configPath(env);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, JSON.stringify(config, null, 2) + '\n');

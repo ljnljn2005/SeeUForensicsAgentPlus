@@ -1,6 +1,6 @@
 # 本机 LovelyMem / LovelySpark CLI
 
-复用现有 shell 工具与技能发现机制，只增加一个纯 Node 调用器和两个按需技能。
+复用现有 shell 工具与技能发现机制，只增加纯 Node 调用/发现模块和两个按需技能。
 无新增 npm/Python 依赖、服务、端口或 MCP 工具 schema；不打包取证程序本体。
 桌面版与 `npm run dev:web` 均自动提供调用器路径和 Node 运行时，无需用户另外安装 Node。
 本接入使用 LovelyMem V3 的 `--cli` 协议。本机 Luxe 2.5.0 实测该参数会启动 GUI，
@@ -12,8 +12,6 @@
 
 ```powershell
 npm run lovely -- status
-npm run lovely -- configure lovelymem 'D:\Tools\LovelyMem\lovelymem.v3.exe'
-npm run lovely -- configure lovelyspark 'D:\Programs\LovelySpark\lovelyspark.exe'
 npm run lovely -- lovelymem -- doctor
 npm run lovely -- lovelyspark -- --version
 ```
@@ -22,14 +20,28 @@ npm run lovely -- lovelyspark -- --version
 
 ```powershell
 & $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI status
-& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI configure lovelymem 'D:\Tools\LovelyMem\lovelymem.v3.exe'
 & $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelymem -- run --engine starmem --image 'D:\case\memory.mem' --plugin pslist
 & $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelyspark -- analyze 'D:\case\capture.pcapng'
 ```
 
-可执行文件解析顺序：`SEEU_LOVELYMEM_EXE` / `SEEU_LOVELYSPARK_EXE` 环境变量 →
-`<DSH_HOME>/lovely-cli.json` → PATH → 少数常见安装目录。
-环境变量或配置指定了失效路径时明确报错，不静默换用别的版本。配置每次调用重读，无需重启。
+默认自动寻找 CLI，无须先配置路径，也不携带开发机器上的安装路径。
+查找顺序：`SEEU_LOVELYMEM_EXE` / `SEEU_LOVELYSPARK_EXE` 环境变量 →
+`<DSH_HOME>/lovely-cli.json` 中仍有效的路径 → PATH → 本机发现缓存 → 标准安装目录 →
+Windows 安装记录、已运行程序和桌面/开始菜单快捷方式 → 各本地盘的常见工具目录、
+用户桌面/下载/文档目录与盘根浅层查找。盘符由系统枚举，不假定存在 D 盘。
+
+发现过程只读取目录和安装信息，不启动候选程序；自动选择 `lovelymem.v3.exe` 或
+`lovelyspark.exe`，不会选择旧版 `lovelymem.exe` / `lovelymemluxe.exe`。
+Windows 安装信息查询最多等待 6 秒；常见目录查找最多 5 层、3000 个目录、2 秒，
+盘根补查最多 3 层、1500 个目录、1 秒。不跟随目录链接，不扫描文件内容或网络盘。
+成功路径缓存在配置文件旁的 `lovely-cli.json.discovery.json`，每次使用前检查文件是否存在；
+换机器或程序搬家后重新发现。发现缓存和本机配置均不进入安装包。
+
+从旧电脑复制的配置路径失效时自动重新查找，`status` 用 `staleConfigPath` 指出旧路径。
+显式设置的环境变量路径失效仍明确报错，以免覆盖有意指定的程序。
+超出自动查找范围或程序被改名时，可用 `configure lovelymem '<V3 exe绝对路径>'` /
+`configure lovelyspark '<exe绝对路径>'` 指定；`configure <工具> auto` 清除手工配置、恢复自动寻找。
+配置每次调用重读，无需重启。
 可用 `SEEU_LOVELY_CONFIG` 指定配置文件。
 独立命令行未设置 DSH_HOME 时使用 `~/.dsh/lovely-cli.json`；要与桌面共享设置，先把 DSH_HOME
 设为 `%APPDATA%\SeeUForensicsAgentPlus\dsh-home`（开发预览默认是项目 `.dev/dsh-home`）。
@@ -55,7 +67,7 @@ LovelyMem 的 partial / exit 5 保留为部分结果；显式 ok=false / success
 
 `npm run test:lovely` 使用真实子进程夹具覆盖参数透传、中文/空格路径、输出截断、完整落盘、
 超时与取消、缺失程序、失败信封和 partial。`npm run build` 与 `npm run check:overlay` 验证应用接入。
-CLI 脚本通过 `asarUnpack` 使用真实路径，可用随包 Electron Node 模式或回退的系统 Node 执行。
+CLI 调用与发现模块通过 `asarUnpack` 使用真实路径，可用随包 Electron Node 模式或回退的系统 Node 执行。
 真实取证需要目标程序版本、有效许可证和检材；发现程序路径不等于许可证/分析已验证。
 
 2026-11-11 开发验证：15 项自动测试通过（含开发/asar 路径与 dsh 子进程环境过滤），构建、overlay 检查、开发态与打包目录版的桌面启动检查通过。
@@ -68,7 +80,7 @@ CLI 脚本通过 `asarUnpack` 使用真实路径，可用随包 Electron Node �
 根据 LovelyMem 官方仓库 README 提供的 V3 下载地址，另行保存 V3 3.1.11 到
 `D:\Programs\Lovelymem\V3\lovelymem.v3.exe`，原有 Lite/Luxe 保持原样。
 
-本机独立命令行、开发预览和桌面版的 `lovely-cli.json` 均已配置：
+此前实机验证所用路径如下；仅为测试记录，运行时不会使用此表作为固定配置：
 
 | 工具 | 本机程序 |
 | --- | --- |
@@ -96,3 +108,9 @@ LovelyMem 的 `version` 和 `help` 已经由真实程序成功返回，原生参
 
 引擎测试未接入自动回退，也不会将 MemProcFS 的成功标记为 LovelyMem 原生 CLI 成功。
 快照文件大小与修改时间在直接引擎测试前后保持一致；未做全文件哈希比对。
+
+自动发现回归覆盖不同盘符的便携目录、中文/空格路径、安装记录和快捷方式、缓存搬家、
+跨机器缓存隔离、旧配置失效、恢复自动模式，以及跳过旧 GUI 和目录链接。
+合入远端 v0.2.7 更新后，全项目 `npm test` 的 79 项检查通过；构建、overlay 校验与目录打包通过。
+本机使用空配置成功自动发现两款 CLI 并调用版本命令；额外移除 PATH 和系统安装记录输入，
+仅通过本地盘目录查找也找到两款程序。此验证仅证明发现和调用可用，不改变上文的授权检查结论。

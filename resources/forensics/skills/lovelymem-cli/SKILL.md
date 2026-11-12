@@ -3,7 +3,7 @@ name: lovelymem-cli
 description: 用本机 LovelyMem V3 CLI 分析内存镜像，查询进程、网络与插件产物。
 ---
 
-通过现有 PowerShell 工具调用；运行器自动添加 `--cli`，不启动 GUI。
+通过现有 PowerShell 工具调用；自动寻找本机 V3 CLI、添加 `--cli`，不启动 GUI。
 
 ```powershell
 & $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelymem -- doctor
@@ -23,5 +23,5 @@ description: 用本机 LovelyMem V3 CLI 分析内存镜像，查询进程、网�
 预览有 `truncated: true` 时不是完整结果；按输出路径搜索/局部读取，禁止把完整大文件回灌上下文。
 `status: partial` 表示可用的部分结果，保留警告；`ok: false` 或超时不得当作成功。
 
-找不到 CLI 时调用 `status`，用 `configure lovelymem '<V3 exe绝对路径>'` 或 `SEEU_LOVELYMEM_EXE` 设置；不把 Lite/Luxe GUI 当作 V3。
+默认无需配置路径；`status` 查看自动发现结果。仅发现失败时用 `configure lovelymem '<V3 exe绝对路径>'` 指定，`configure lovelymem auto` 恢复自动寻找；不把 Lite/Luxe GUI 当作 V3。
 分析使用已有证据副本，产物独立落盘，结论引用源镜像、插件和产物位置。
