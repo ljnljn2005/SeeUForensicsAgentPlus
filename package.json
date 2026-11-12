@@ -66,7 +66,8 @@
     "test:e2e:skills": "node scripts/e2e/skills-check.mjs",
     "test:e2e:plugins": "node scripts/e2e/plugins-check.mjs",
     "test:e2e:real-tools": "node scripts/e2e/real-tools-bench.mjs",
-    "test:e2e:auth-cookies": "node scripts/e2e/auth-cookie-check.mjs"
+    "test:e2e:auth-cookies": "node scripts/e2e/auth-cookie-check.mjs",
+    "myos:import": "node tools/myos-index/cli.mjs"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.1.0",

@@ -2256,3 +2256,18 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 2. 半成品 `release-037/win-unpacked` 残留导致第二次构建 `ENOENT rename electron.exe`；打包前必须清输出目录。
 3. asar 内的 `package.json` 不含 `scripts`，检查 `test:e2e:*` 脚本是否存在要读仓库 `package.json`。
 4. hero e2e 匹配 URL 要同时接受 `/?token=…` 与 `/`（页面加载后前端 replaceState 会去掉 token）。
+
+### 20.92 MYOS 取证结果 → SeeU 索引库导入器（第 13 轮）
+
+**需求**：用户早前要求「超级取证大师（MYOS）与火眼两个软件融合，最后数据入库，AI 能快速读取」；MYOS 的结果库是加密 `.mfs`，只能经 MCP 的 `sqlite_query` 读，因此需要一个导入器把行写进 SeeU 统一的 `case-index.db`。
+
+**实现**：新增 `tools/myos-index/`：
+- `mcp.mjs`：`MyosMcpClient`（stdio 行 JSON-RPC、`initialize`/`tools/list`/`tools/call`、`isError` 抛错、`withMyosClient`），服务端默认 `D:/Programs/MYOS/Client/tools/mcp/myos_mcp_server.exe`（`SEEU_MYOS_MCP` 覆盖）；`.mjs` 服务端用 `SEEU_MYOS_NODE`/node 跑，作为测试缝。
+- `import.mjs`：`listMyosCases`/`listMyosMaterials`/`readMyosRows`（经 `myos-forensics.query_cases|query_materials|sqlite_query`），`mapMyosRow` 按列名猜 app/account/time/正文，`importMyosRows` 复用 `tools/ges-index/parse.mjs` 的 `DDL`/`SCHEMA_VERSION`/`extractEntities` 整库重建写 `case-index.db` + `manifest.json`（meta 记 `tool=seeu-myso-import`、`source_db`、`source_sql`；evidence `type=myos`；artifact `virtual_path=myos://<案件>/<表>`）。
+- `cli.mjs`：`cases` / `materials` / `tables` / `import`，`package.json` 加 `myos:import`。
+
+**验证**：`tests/fixtures/fake-myos-mcp.mjs` 假服务端 + `tests/myos-index.test.mjs` **9/9**（握手、错误、案件/检材归一、行读取、字段映射、建库+FTS+实体、`findIndexes` 能发现导入的索引、参数解析）；`npm test` **150/150**。
+
+**坑**：① MYOS 未启动时所有工具返回「请先运行 MYOS 取证软件」，真机端到端要用户先开软件；② `.mfs` 用 `node:sqlite` 直接打开报 `file is not a database`，必须走 MCP；③ `extractEntities` 的 kind 是英文（email/url/ip/phone/wallet），不要再用中文 `ENTITY_TYPES` 过滤；④ manifest 不写则面板只能显示库大小、没有规模/建库时间。
+
+**遗留**：面板里的「从 MYOS 导入」入口（选案件/检材/表可视化）与真机导入端到端尚未做；下一步可在 `plugins/seeu-case-index` 增加 `/myos/*` 路由与面板按钮。

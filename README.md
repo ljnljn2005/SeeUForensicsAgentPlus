@@ -77,6 +77,10 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
+### v0.3.8 待发布（未打包）
+
+- **MYOS 取证结果导入 SeeU 索引（第 13 轮）**：新增 `tools/myos-index/`（MCP 客户端 `mcp.mjs`、导入器 `import.mjs`、命令行 `cli.mjs`）与 `npm run myos:import`。经 MYOS MCP 的 `query_cases` / `query_materials` / `sqlite_query` 读取加密 `.mfs` 结果库，按 SeeU 表结构写入 `<案件目录>/.seeu-index/case-index.db`（record + `record_fts` + entity 抽取 + `manifest.json`），导入后面板与 `ges-case-index` 技能可直接检索；假 MCP 服务端 + `tests/myos-index.test.mjs` 9 例，`npm test` 150/150。用法见 §11「把 MYOS 取证结果导入 SeeU 索引」。
+
 ### v0.3.7 改了什么
 
 - **建库进度可读化（第 8 轮）**：新增 `tools/ges-index/progress.mjs`（`buildPhaseLabel` / `formatDuration` / `describeBuildProgress` 纯函数），服务端 `GET /seeu-index/build` 在原有 job 上附加 `progress` 字段：阶段中文名（探测案件 / 枚举检材 / 读取检材数据 / 校验与替换 / 完成 / 失败）、**实时已用时间**（运行中按 `startedAt` 现算，不再只在结束时才有 `elapsedMs`）、`已完成/总数 条 · 百分比`、按吞吐估算的**剩余时间**；运行超过 90 秒时给「可以先切到其他视图，任务会在后台继续」提示；完成后给出「建库完成：N 条记录 · M 个实体 · 用时 X · 索引 Y MiB」摘要，失败时给出错误码与原因。
@@ -834,6 +838,24 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 工具面较长（49 个），dsh 会把过长的公开名截断并加短哈希后缀，例如 `mcp__myos-forensics__myos-forensics_add_disk_materi_12e5a19cef61`；以工具列表里实际显示的名字为准。
 
 **与火眼索引的关系**：两者互补 —— 火眼/`ges` 的结果由 `ges-case-index` 建 `case-index.db`（面板检索，快）；MYOS 则是「活的取证软件」，负责接案件、跑任务、查结果库。统一的「一次入库、AI 快速读取」走同一套索引：用 MYOS MCP 取数据（不要直接读 MYOS 数据目录）→ 归一化写入 `case-index.db` 的 evidence/record/entity 表 → 面板与技能都只查索引。融合细节见 `docs/plan-case-index.md` §20.67。
+
+**把 MYOS 取证结果导入 SeeU 索引（第 13 轮）**：新增 `tools/myos-index/`（MCP 客户端 + 导入器 + 命令行），复用 MYOS 的 `sqlite_query` 只读查询结果库（`.mfs` 是加密/专有格式，**不能用 sqlite 直接打开**），再按 SeeU 的表结构写入 `<案件目录>/.seeu-index/case-index.db`（含 `record_fts` 全文索引与 `entity` 实体抽取，写 `manifest.json`），导入后面板 `/seeu-index`、会话概览与 `ges-case-index` 技能都能直接检索。
+
+```bash
+# 0. 先启动「超级取证大师」——所有 MYOS 工具都要求它在运行
+# 1. 列案件 / 检材
+npm run myos:import -- cases
+npm run myos:import -- materials --case <caseId>
+# 2. 看结果库里有哪些表
+npm run myos:import -- tables --db "D:/Programs/MYOS/Case/<案件>/dev/<检材>/data/MApps.mfs"
+# 3. 选一张表导入（整库重建；--out 指向案件目录即可被面板发现）
+npm run myos:import -- import --case <caseId> \
+  --db "D:/Programs/MYOS/Case/<案件>/dev/<检材>/data/MApps.mfs" \
+  --sql "select * from TBL_APPDATA_MANAGER limit 2000" \
+  --out "D:/cases/<案件目录>" --case-name "<案件名>" --evidence "<检材名>"
+```
+
+导入器会记录来源（`meta.source_db` / `meta.source_sql`、`artifact.virtual_path = myos://<案件>/<表>`），实体按 email/url/ip/phone/wallet 抽取；真机端到端需要用户先启动 MYOS（未启动时工具会返回「请先运行 MYOS 取证软件」）。实现与单测见 `tools/myos-index/**`、`tests/myos-index.test.mjs`（9 例，含假 MCP 服务端 `tests/fixtures/fake-myos-mcp.mjs`）。
 
 - **「测试连接」升级为五项能力自检（第 6 轮）**：设置页能力自检从「模型列表 / 基础对话 / 工具调用」扩展到五项——新增**流式输出**（首字延迟、流式字符数）与**思考流**（是否返回 `reasoning_content`/`reasoning`，按高级区的思考流格式带 `enable_thinking` 或 `reasoning_effort`）；任一项标红时汇总行给出对应排查建议，诊断文本一并带出。
 - **思考流（reasoning）格式可配（第 5 轮）**：本地网关对推理内容的暴露方式不同。设置页「高级：超时与重试」新增「思考流格式」下拉 + `chat_template_kwargs`（JSON）：`deepseek`（流式 `reasoning_content`，dsv4.1-flash）、`qwen-chat-template`（带 `enable_thinking`，qwen3.8-flash-next）、`qwen`/`chat-template`/`string-thinking`，默认 `auto` 交给运行时判断。Spark 单机预设自动填 `qwen-chat-template` + `{"enable_thinking": true}`，双机预设填 `deepseek`；patch 写进 provider `compat.thinkingFormat` 与 `compat.chatTemplateKwargs`，设置页保存/回填、`settings-check` 断言均覆盖。
