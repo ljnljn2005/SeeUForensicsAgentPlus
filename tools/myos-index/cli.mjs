@@ -20,7 +20,9 @@ const USAGE = `用法：
   node tools/myos-index/cli.mjs cases [--keyword 关键字]
   node tools/myos-index/cli.mjs materials --case <caseId>
   node tools/myos-index/cli.mjs tables --db <结果库.mfs>
-  node tools/myos-index/cli.mjs import --case <caseId> --db <结果库.mfs> --sql "<select ...>" --out <案件目录> [--case-name 名称] [--evidence 检材名] [--max-rows 2000] [--app 应用]
+  node tools/myos-index/cli.mjs import --case <caseId> --db <结果库.mfs> --sql "<select ...>" --out <案件目录> [--append] [--case-name 名称] [--evidence 检材名] [--max-rows 2000] [--app 应用]
+
+说明：--append 追加到已有索引（同一案件多个检材/多张表）；不带时整库重建。
 
 说明：先启动「超级取证大师」；路径可用 SEEU_MYOS_MCP 覆盖（默认 D:/Programs/MYOS/Client/tools/mcp/myos_mcp_server.exe）。`
 
@@ -105,6 +107,7 @@ async function main() {
         sql: String(args.sql),
         app: typeof args.app === 'string' ? args.app : '',
         casePath: typeof args['case-path'] === 'string' ? args['case-path'] : '',
+        mode: args.append ? 'append' : 'rebuild',
       })
       console.log(JSON.stringify({ ok: true, truncated, ...result }, null, 2))
       return

@@ -8,7 +8,7 @@
  * 这里只做「结构映射 + 落库」，不做业务判断；MYOS 的 .mfs 是加密/专有格式，
  * 直接读会报「file is not a database」，必须走 MCP。
  */
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { DDL, SCHEMA_VERSION, extractEntities } from '../ges-index/parse.mjs'
@@ -105,35 +105,57 @@ export function importMyosRows(options) {
   if (!Array.isArray(rows) || rows.length === 0) throw new Error('没有可导入的行')
   const dbFile = /\.db$/i.test(dbPath) ? dbPath : join(dbPath, '.seeu-index', 'case-index.db')
   mkdirSync(dirname(dbFile), { recursive: true })
-  // 导入是「整库重建」，避免旧记录与新结果混在一起。
-  if (existsSync(dbFile)) rmSync(dbFile, { force: true })
+  const mode = options.mode === 'append' ? 'append' : 'rebuild'
+  const appending = mode === 'append' && existsSync(dbFile)
+  if (!appending) {
+    // 重建：旧库直接删掉，避免旧记录与新结果混在一起。
+    if (existsSync(dbFile)) rmSync(dbFile, { force: true })
+  }
 
   const db = new DatabaseSync(dbFile)
   try {
     db.exec('pragma journal_mode = wal;')
     db.exec(DDL)
     const now = new Date().toISOString()
-    const cn = caseNumber || `myos-${Date.now()}`
+    const existingMeta = appending ? new Map(db.prepare('select k,v from meta').all().map((row) => [row.k, row.v])) : new Map()
+    const readNumber = (key) => Number(existingMeta.get(key) ?? 0) || 0
+    const previous = appending
+      ? {
+          counts: {
+            records: Number(db.prepare('select count(*) c from record').get()?.c ?? 0),
+            entities: Number(db.prepare('select count(*) c from entity').get()?.c ?? 0),
+            artifacts: Number(db.prepare('select count(*) c from artifact').get()?.c ?? 0),
+            evidences: Number(db.prepare('select count(*) c from evidence').get()?.c ?? 0),
+          },
+          leaves: {
+            total: existingMeta.has('leaves_total') ? readNumber('leaves_total') : Number(db.prepare('select count(*) c from ingest_log').get()?.c ?? 0),
+            ok: existingMeta.has('leaves_ok') ? readNumber('leaves_ok') : Number(db.prepare("select count(*) c from ingest_log where status='ok'").get()?.c ?? 0),
+          },
+        }
+      : { counts: { records: 0, entities: 0, artifacts: 0, evidences: 0 }, leaves: { total: 0, ok: 0 } }
+    const eid = appending ? Number(db.prepare('select coalesce(max(eid),0)+1 n from evidence').get()?.n ?? 1) : 1
+    const cn = caseNumber || existingMeta.get('case_number') || `myos-${Date.now()}`
     const meta = db.prepare('insert or replace into meta(k,v) values(?,?)')
     meta.run('tool', TOOL)
     meta.run('tool_version', TOOL_VERSION)
     meta.run('schema_version', String(SCHEMA_VERSION))
     meta.run('case_number', cn)
-    meta.run('case_name', caseName ?? '')
+    const finalCaseName = caseName || existingMeta.get('case_name') || ''
+    meta.run('case_name', finalCaseName)
     meta.run('source', 'myos')
-    meta.run('source_db', sourceDb ?? '')
+    meta.run('source_db', sourceDb ?? existingMeta.get('source_db') ?? '')
     meta.run('source_sql', String(sql ?? ''))
     meta.run('built_at', now)
     const caseInfo = db.prepare('insert or replace into case_info(k,v) values(?,?)')
     caseInfo.run('case_number', cn)
-    caseInfo.run('name', caseName ?? '')
+    caseInfo.run('name', finalCaseName)
     caseInfo.run('location', casePath ?? '')
 
     db.prepare(
       `insert or replace into evidence(eid,name,holder,platform,type,timezone,md5,sha1,sha256,size_bytes,source_path,storage_path,created,updated,raw_json,person_name,remark,evidence_number,record_count)
        values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).run(
-      1,
+      eid,
       evidenceName ?? 'MYOS 检材',
       '',
       'myos',
@@ -161,7 +183,7 @@ export function importMyosRows(options) {
           `insert into artifact(eid,app,account,category,subcat,virtual_path,kind,base_handle,node_id,line_count,record_count,citable,citable_reason,ingested_at)
            values(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         )
-        .run(1, app ?? '', '', 'myos', table, `myos://${cn}/${table}`, 'myos', `myos:${cn}`, table, rows.length, rows.length, 1, '', now)
+        .run(eid, app ?? '', '', 'myos', table, `myos://${cn}/${table}#${eid}`, 'myos', `myos:${cn}`, table, rows.length, rows.length, 1, '', now)
         .lastInsertRowid,
     )
 
@@ -177,7 +199,7 @@ export function importMyosRows(options) {
       const mapped = mapMyosRow(row, columns)
       const result = insertRecord.run(
         artifactId,
-        1,
+        eid,
         mapped.app,
         mapped.account,
         'myos',
@@ -199,12 +221,13 @@ export function importMyosRows(options) {
         const key = `${entity.kind}\u0000${entity.value}`
         if (entitySeen.has(key)) continue
         entitySeen.add(key)
-        insertEntity.run(entity.kind, entity.value, recordId, 1)
+        insertEntity.run(entity.kind, entity.value, recordId, eid)
         entities += 1
       }
     })
-    db.prepare('insert into ingest_log(leaf,kind,status,lines,records,ms,error,base_handle,citable) values(?,?,?,?,?,?,?,?,?)').run(
-      sourceDb ?? table,
+    const leafKey = appending ? `${sourceDb ?? table}#${eid}` : sourceDb ?? table
+    db.prepare('insert or replace into ingest_log(leaf,kind,status,lines,records,ms,error,base_handle,citable) values(?,?,?,?,?,?,?,?,?)').run(
+      leafKey,
       'myos',
       'ok',
       rows.length,
@@ -217,21 +240,49 @@ export function importMyosRows(options) {
     db.exec('pragma wal_checkpoint(truncate);')
     // 写 manifest.json，让面板/会话概览能显示规模与建库时间（与 ges 建库同一口径）。
     const builtAt = new Date().toISOString()
+    const manifestPath = join(dirname(dbFile), 'manifest.json')
+    let previousManifest = {}
+    if (appending && existsSync(manifestPath)) {
+      try {
+        previousManifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+      } catch {
+        previousManifest = {}
+      }
+    }
+    const totals = {
+      records: previous.counts.records + rows.length,
+      entities: previous.counts.entities + entities,
+      artifacts: previous.counts.artifacts + 1,
+      evidences: previous.counts.evidences + 1,
+    }
+    const sourceEntry = { kind: 'myos', dbPath: sourceDb ?? '', table, records: rows.length, importedAt: builtAt }
+    const sources = Array.isArray(previousManifest.sources) ? [...previousManifest.sources] : previousManifest.source ? [previousManifest.source] : []
+    sources.push(sourceEntry)
     const manifest = {
       tool: TOOL,
       toolVersion: TOOL_VERSION,
       schemaVersion: SCHEMA_VERSION,
       builtAt,
       durationMs: 0,
-      counts: { records: rows.length, entities, artifacts: 1, evidences: 1 },
-      leaves: { total: 1, ok: 1, failed: 0 },
+      counts: totals,
+      leaves: { total: previous.leaves.total + 1, ok: previous.leaves.ok + 1, failed: 0 },
       coverageOk: true,
       integrityOk: true,
-      source: { kind: 'myos', dbPath: sourceDb ?? '', table },
+      mode,
+      sources,
+      source: sourceEntry,
     }
-    writeFileSync(join(dirname(dbFile), 'manifest.json'), `${JSON.stringify(manifest, null, 2)}
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}
 `)
-    return { dbFile, records: rows.length, entities, evidenceName: evidenceName ?? 'MYOS 检材' }
+    return {
+      dbFile,
+      mode,
+      eid,
+      records: rows.length,
+      entities,
+      totals,
+      evidenceName: evidenceName ?? 'MYOS 检材',
+    }
   } finally {
     db.close()
   }

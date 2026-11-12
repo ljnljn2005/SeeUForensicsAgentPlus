@@ -67,7 +67,7 @@ export async function myosResultDbs({ caseId = '', materialId = '' } = {}) {
  * 把一张表的查询结果导入 SeeU 索引库。
  * outDir 是案件目录（会写 `<outDir>/.seeu-index/case-index.db`）。
  */
-export async function myosImport({ caseId, db, sql, outDir, caseName, evidenceName, app = '', maxRows = 2000 } = {}) {
+export async function myosImport({ caseId, db, sql, outDir, caseName, evidenceName, app = '', maxRows = 2000, mode = 'rebuild' } = {}) {
   const caseDir = resolve(String(outDir ?? ''))
   if (!outDir) throw fail('缺少 outDir（案件目录）')
   const dbPath = String(db ?? '').trim()
@@ -98,6 +98,7 @@ export async function myosImport({ caseId, db, sql, outDir, caseName, evidenceNa
       sourceDb: dbPath,
       sql: statement,
       app: String(app ?? ''),
+      mode: mode === 'append' ? 'append' : 'rebuild',
     })
     return { ...imported, truncated, rows: rows.length, caseDir }
   })

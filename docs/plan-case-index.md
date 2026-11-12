@@ -2310,3 +2310,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 真实导入：`MApps.mfs` 的 `TBL_APPDATA_MANAGER` → 5 条；`AndroidBrowser{…}.mfs` 的 `TBL_PR_ANDROIDBROWSER_BROWSE_HISTORY` → 2 条、2 个实体（`URL` 被识别为 url）；`findIndexes` 能发现 `.dev/myos-real*`。`M盘` 案件 `LEUNG_YL_mobile.zip` 的 MApps 导入 10 条。
 - 新增 `scripts/e2e/myos-real-import.mjs`（`npm run test:e2e:myos`）：自动选案件/检材/结果库/表 → 导入 → 断言记录数与 `findIndexes` 发现；MYOS 未运行时 `skipped:true` 且 ok（不阻断回归）。
 - `npm test` **162/162**、`check:overlay` OK、build OK。
+
+### 20.96 MYOS 增量导入（第 18 轮）
+
+- 需求：同一案件往往有多个检材/多张结果表，之前每次导入整库重建，后一次会覆盖前一次。
+- `tools/myos-index/import.mjs`：`importMyosRows({ mode:'append' })`——已有库时不删除，`eid = max(eid)+1`，artifact 的 `virtual_path` 带 `#eid` 避免 unique 冲突，ingest_log 的 leaf 用 `<sourceDb>#<eid>`，meta/case_info 保留原 `case_number`/`case_name`（除非显式传新值），manifest 累计 `counts/leaves/sources` 并记 `mode`；返回新增 `eid` 与 `totals`。
+- CLI：`--append`；面板弹窗新增「写入方式：追加 / 整库重建」勾选（默认追加），导入结果提示「索引现有 N 条记录 / M 个检材」。
+- 测试：新增「append 模式：同一案件追加第二个检材/表不覆盖已有记录」→ `tests/myos-index.test.mjs` 13/13、`npm test` 162/162（含数组行/真实路径等前序用例）。
+- 真实 MYOS 复跑：`.dev/myos-merge` 先导 `MApps` 5 条（eid 1），再 `--append` 导 `TBL_PR_ANDROIDBROWSER_BROWSE_HISTORY` 2 条（eid 2）→ `records 7 / entities 2 / artifacts 2 / evidences 2`，manifest 同步。
+- 坑：`ingest_log.leaf` 是主键，追加时必须带 eid 前缀；`artifact.virtual_path` 是 unique，追加时必须区分检材。

@@ -3,7 +3,7 @@
  * 用 tests/fixtures/fake-myos-mcp.mjs 作为假服务端，不需要真实 MYOS。
  */
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -182,6 +182,59 @@ test('导入后的索引能被面板发现（findIndexes + manifest）', withCli
     rmSync(root, { recursive: true, force: true })
   }
 }))
+
+test('append 模式：同一案件追加第二个检材/表不覆盖已有记录', () => {
+  const root = mkdtempSync(join(tmpdir(), 'seeu-myos-append-'))
+  try {
+    const caseDir = join(root, '案件丁')
+    const columns = ['appName', 'time', 'content', 'uin']
+    const first = importMyosRows({
+      dbPath: caseDir,
+      caseName: '案件丁',
+      caseNumber: 'myos-case-4',
+      evidenceName: '手机-data.D01',
+      columns,
+      rows: [
+        { appName: '微信', time: '2026-01-01 10:00:00', content: 'wxid_abc 转账 100 元', uin: 'wxid_abc' },
+        { appName: '微信', time: '2026-01-01 10:01:00', content: 'wxid_abc 收到 50 元', uin: 'wxid_abc' },
+      ],
+      sourceDb: 'D:/MYOS/Case/案件丁/dev/手机-data.D01/data/MApps.mfs',
+      sql: 'select * from TBL_APPDATA_MANAGER limit 2',
+    })
+    assert.equal(first.mode, 'rebuild')
+    assert.equal(first.totals.records, 2)
+    const second = importMyosRows({
+      dbPath: caseDir,
+      caseName: '',
+      caseNumber: '',
+      evidenceName: '手机-sdcard.D01',
+      columns,
+      rows: [{ appName: 'QQ', time: '2026-01-02 09:00:00', content: 'qq 邮箱 a@b.com', uin: '10001' }],
+      sourceDb: 'D:/MYOS/Case/案件丁/dev/手机-data.D01/data/MApps/AndroidBrowser{1}.mfs',
+      sql: 'select * from TBL_PR_ANDROIDBROWSER_BROWSE_HISTORY limit 1',
+      mode: 'append',
+    })
+    assert.equal(second.mode, 'append')
+    assert.equal(second.eid, 2)
+    assert.deepEqual(second.totals, { records: 3, entities: second.totals.entities, artifacts: 2, evidences: 2 })
+    const db = new DatabaseSync(second.dbFile, { readOnly: true })
+    try {
+      assert.equal(db.prepare('select count(*) n from record').get().n, 3)
+      assert.equal(db.prepare('select count(*) n from evidence').get().n, 2)
+      const meta = Object.fromEntries(db.prepare('select k, v from meta').all().map((row) => [row.k, row.v]))
+      assert.equal(meta.case_number, 'myos-case-4')
+      assert.equal(meta.case_name, '案件丁')
+      const manifest = JSON.parse(readFileSync(join(caseDir, '.seeu-index', 'manifest.json'), 'utf8'))
+      assert.equal(manifest.counts.records, 3)
+      assert.equal(manifest.counts.evidences, 2)
+      assert.equal(manifest.sources.length, 2)
+    } finally {
+      db.close()
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
 
 test('collectMfsPaths：深度收集 .mfs 路径与 sqliteQueryHints', () => {
   const payload = {

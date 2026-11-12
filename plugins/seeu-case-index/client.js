@@ -1240,6 +1240,8 @@ window.__ModuleLoader__.load({
       const [busy, setBusy] = useState('');
       const [error, setError] = useState('');
       const [result, setResult] = useState(null);
+      // 追加模式：同一案件导多个检材/多张表时不要互相覆盖（取消勾选=整库重建）。
+      const [appendMode, setAppendMode] = useState(true);
 
       useEffect(() => {
         let alive = true;
@@ -1330,6 +1332,7 @@ window.__ModuleLoader__.load({
           const body = await post('/myos/import', {
             caseId: caseId.trim(), db: dbPath.trim(), sql: sql.trim(), outDir: outDir.trim(),
             caseName: caseName.trim(), evidenceName: evidenceName.trim(),
+            mode: appendMode ? 'append' : 'rebuild',
           });
           setResult(body);
         } catch (e) { setError(String(e.message ?? e)); }
@@ -1366,12 +1369,17 @@ window.__ModuleLoader__.load({
           row('输出目录', h('input', { style: { ...S.input, flex: 1 }, value: outDir, placeholder: '案件目录（索引写到 .seeu-index/case-index.db）', onChange: (e) => setOutDir(e.target.value), spellCheck: false })),
           row('案件名', h('input', { style: { ...S.input, flex: 1 }, value: caseName, onChange: (e) => setCaseName(e.target.value), spellCheck: false })),
           row('检材名', h('input', { style: { ...S.input, flex: 1 }, value: evidenceName, onChange: (e) => setEvidenceName(e.target.value), spellCheck: false })),
+          row('写入方式', h('label', { style: { ...S.row, gap: 6, fontSize: 11.5, color: C_FG2 } },
+            h('input', { type: 'checkbox', checked: appendMode, onChange: (e) => setAppendMode(e.target.checked) }),
+            h('span', null, appendMode ? '追加到已有索引（同一案件多个检材/多张表）' : '整库重建（会清掉这个索引目录里已导入的内容）'))),
           h('div', { style: S.row },
             actionButton(busy === 'import' ? '导入中…' : '导入为 SeeU 索引', doImport, { primary: true, disabled: busy === 'import' }),
-            h('span', { style: { ...S.muted, fontSize: 11 } }, '只读 MYOS 结果库，不改 MYOS 数据；重复导入会整库重建。')),
+            h('span', { style: { ...S.muted, fontSize: 11 } }, '只读 MYOS 结果库，不改 MYOS 数据；默认追加，取消勾选可整库重建。')),
           error ? h('div', { style: S.noticeErr }, error) : null,
           result ? h('div', { style: S.noticeOk },
-            `已导入 ${result.records} 条记录 · ${result.entities} 个实体 → ${result.dbFile}`,
+            `已导入 ${result.records} 条记录 · ${result.entities} 个实体` +
+              (result.totals ? `（索引现有 ${result.totals.records} 条记录 / ${result.totals.evidences} 个检材）` : '') +
+              ` → ${result.dbFile}`,
             result.truncated ? '（查询结果被截断，可调大 SQL 的 limit 后重导）' : '',
             h('div', { style: { ...S.row, marginTop: 6 } },
               actionButton('完成并查看索引', () => onImported(result), { primary: true }))) : null));
