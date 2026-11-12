@@ -119,7 +119,7 @@ curl -s -G "$SEEU_INDEX_API/cross/files" --data-urlencode "sha256=<64位十六�
 2. **先翻火眼已经挂好的原始只读目录（优先，不用再挂载）**：火眼会为检材挂出原始只读文件系统，映射在 `/evidences` 的 `mountRoute` / `mountPoint`（也可用 `ges status --json` 的 `evidence_mounts[]` 查）：
    - 虚拟路径 `/evidence_mounts/eid-<n>/`：`ges ls /evidence_mounts/eid-<n>/`、`ges glob -p "**/*.db" --path /evidence_mounts/eid-<n>/`、`ges grep "关键词" --path /evidence_mounts/eid-<n>/`；
    - 本机目录（`mountPoint`，如 `C:/hlnet/1-1794226157`）：可以直接 `ls` / 读文件；需要本地工具处理时先 `ges copy <路径> --dest <目录>`；
-   - `sourcePath` 是检材盘上的原始文件（如 `W:\CHAN_MH_mobile.zip`），只在挂载不可用时才考虑；
+   - `sourcePath` 是检材盘上的原始文件（如 `W:\CHAN_MH_mobile.zip`），**只在挂载不可用时才考虑**；`W:\` 上的原始 `.zip`/`.E01`/`.dd` 禁止直接解压或整份读取（几 GB、易污染现场）；确实没有挂载入口时才按需只读单个条目，并在答复里说明“火眼未提供该检材挂载入口”；
 3. **只有火眼没给挂载时才自己挂镜像**：`mountRoute`/`mountPoint` 为 null 且检材是镜像（`.E01/.dd/.raw`）时，才让用户打开外壳「设置 → 镜像挂载…」（`Ctrl+Shift+M`）挂成只读盘符，挂载清单在 `$SEEU_MOUNTS_FILE`；**不要对已挂载的检材重复挂载**；
 4. **禁止全盘递归搜索**：不要执行 `Get-ChildItem -Recurse C:\`、`dir /s E:\`、`find / -name …` —— 会卡死、污染现场，也违反取证规范。找不到就明确告诉用户"索引里没有该检材内容，需要挂载镜像/提供原始文件"，并给出下一步操作建议。
 

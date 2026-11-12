@@ -1992,5 +1992,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 实现：`plugins/seeu-case-index/index.js` 新增 `resolveDbParam(query)`：`db` 优先走原 `safeDb`；否则接受 `caseNumber` / `case` / `caseDir`，用 `findIndexes(briefDirs())` 反查（匹配 caseNumber、caseName、caseDir、dbPath），命中后仍走 `safeDb` 做 `.seeu-index` 与存在性校验；未命中 404「找不到案件索引：…（用 /list 查看 caseNumber）」，完全缺参 400。所有 GET 路由统一改用 `resolveDbParam(url.searchParams)`（原来只有 `/brief` GET 与统一入口两处）；`/brief` GET 也支持 caseNumber。
 - 文案：案件概览（briefText）在「查询入口」下加一行「db 含中文被转码就改用 caseNumber」；`ges-case-index` 技能的「后续查询都带 db」段落补 `caseNumber` 用法。
 - 测试：`tests/db-param.test.mjs` 4 例（临时中文目录 + node:sqlite 造 meta：db 直传、caseNumber、case/caseDir/案件名、未知 404/缺参 400）——4/4；`npm test` 111/111。
-- 坑：插件里 `resolve(ix.caseDir ?? ' ')` 这种兜底字符串若写成真实 NUL 会让源文件二进制化（git 显示 binary），要写转义文本。
+- 坑：插件里 `resolve(ix.caseDir ?? '\u0000')` 这种兜底字符串若写成真实 NUL 会让源文件二进制化（git 显示 binary），要写转义文本。
 - 遗留：面板仍传完整 `db`（浏览器 fetch 是 UTF-8，没问题）；脚本/模型建议走 caseNumber。
+
+
+### 20.74 专家 persona 改造：每个会话预设变成对应领域的精简专家提示词
+
+- 需求来源：用户要求把 `E:\取证桌面` 下 7 份弘连「取证桌面」专家提示词（火眼 36,600 B、服务器 33,804 B、流量 32,903 B、内存 33,336 B、网钜资金 35,955 B、APK 37,162 B、EXE 33,809 B）「简单修改后作为各 profile 的提示词」。
+- 映射（用户确认）：火眼 + 服务器 → 取证分析（standard）；流量 → 流量分析；内存 → 内存分析；网钜 → 新增数据分析（order 6）；APK → 新增 APK 分析（order 7）；EXE → 新增 EXE 逆向分析（order 8）；日志分析暂无对应文件，保持原 persona（工具面仍带 `lovelyspark-cli`）。
+- 精简原则：删掉「取证桌面」外壳段落、`Active expert:` 行、末尾 user 会话尾巴、`D:\Programs\Honglian\GoldenEyesV4\skills\…` 等本机不存在的技能清单；保留角色定位、能力范围、工作流程、取证红线、输出规范；并把工具入口改成 SeeU 实际可用的（`$SEEU_INDEX_API` + `caseNumber`、`ges` CLI、`/evidence_mounts/eid-N/`、`$SEEU_MOUNTS_FILE`、`$SEEU_CLI_NODE` + `$SEEU_LOVELY_CLI`、`$SEEU_WORKSPACE`）。成品 8.7–13.7 KB/份。
+- 实现：`.probe/apply-personas.py`（仅脚本，不入库）按 `- id: preset-X` 找 `prefix: |` 并按缩进替换正文；`preset-data`/`preset-apk`/`preset-exe` 三块以 `NEW_TEMPLATE` 整块插入（工具面复制 seeu-lite：tool-fs 只读、tool-todo、compaction 等，`skill-filesystem` 不设 `customSkillDirs`）。
+- 提示词再加固（回答用户「为什么直接读 W:\ 原始 zip 而不是先看火眼虚拟目录」）：`plugins/seeu-case-index/index.js` 的概览规则 1 增「备注没有时先 `ges status --json` 查 `evidence_mounts` 并翻挂载目录，不要解压 W:\ 原始压缩包」；规则 2 增「禁止在 `W:\` 上直接解压/整份读取原始 `.zip`/`.E01`/`.dd`，确实没有挂载入口时才按需只读单条目并说明」；规则 4 增「读原始文件前先确认已查过挂载且不可用」；`ges-case-index` 技能同步同一句硬规则。
+- 校验：`npm test` 112/112（`tests/presets-config.test.mjs` 增至 6 例：三预设顺序/名称/只读工具面、6 份 persona 长度与关键词）；`npm run check:overlay` 扩展逐预设校验 `preset-data`/`preset-apk`/`preset-exe`（存在、名称、tool-fs 只读）；`node scripts/build.mjs` OK。
+- 坑：① overlay 里现有分析预设的 `customSkillDirs` 必须写成带引号的 `!!js` 标量，否则 js-yaml 报 unknown tag / bad indentation；② 计划文档里写 `' '` 时若写成真实 NUL，会让整个 md 变 binary（本次已修复为转义文本）；③ persona 文本较长（单份 13.7 KB），替换脚本必须按缩进边界截断，不能按空行。
+- 遗留：日志分析预设尚无专家 persona（用户未提供对应文件）；真实观看效果需重启 dev 预览/重新打包，打包前先 `npm run check:overlay`。

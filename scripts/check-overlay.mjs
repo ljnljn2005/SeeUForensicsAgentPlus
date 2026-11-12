@@ -124,6 +124,22 @@ function main() {
       const fsBlock = section.split(/^(?=\s*- id: )/m).map((block) => block.trimStart()).find((block) => block.startsWith('- id: tool-fs')) ?? ''
       if (!/write: false/.test(fsBlock) || !/edit: false/.test(fsBlock)) fail(`${id} 的 tool-fs 未收敛为只读`)
     }
+    // 三个专项预设（专家 persona 改造）：工具面同样只读，技能根走默认技能目录。
+    const expertPresets = [
+      ['preset-data', '数据分析（网钜资金）'],
+      ['preset-apk', 'APK 分析'],
+      ['preset-exe', 'EXE 逆向分析'],
+    ]
+    for (const [id, label] of expertPresets) {
+      const section = presetSection(dump, id)
+      if (section === '') {
+        fail(`dump 里找不到 ${id}`)
+        continue
+      }
+      if (!section.includes(label)) fail(`${id} 名称不是「${label}」`)
+      const fsBlock = section.split(/^(?=\s*- id: )/m).map((block) => block.trimStart()).find((block) => block.startsWith('- id: tool-fs')) ?? ''
+      if (!/write: false/.test(fsBlock) || !/edit: false/.test(fsBlock)) fail(`${id} 的 tool-fs 未收敛为只读`)
+    }
     // 取证预设不应引用分组技能根（lovelyspark/lovelymem 只属于分析预设）。
     for (const id of ['preset-standard', 'preset-seeu-lite']) {
       if (/SEEU_SKILL_SET_/.test(presetSection(dump, id))) fail(`${id} 不应引用分组技能根`)

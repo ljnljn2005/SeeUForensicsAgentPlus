@@ -94,3 +94,39 @@ test('随包技能目录：通用技能在 skills/，lovelyspark/lovelymem 在 s
     assert.ok(existsSync(join(dir, skill, 'SKILL.md')), `skill-sets/${id}/${skill}/SKILL.md 不存在`)
   }
 })
+
+test('新增三个专项预设（数据/APK/EXE），顺序、名称与只读工具面正确', () => {
+  for (const [id, name, order] of [
+    ['preset-data', '数据分析（网钜资金）', 6],
+    ['preset-apk', 'APK 分析', 7],
+    ['preset-exe', 'EXE 逆向分析', 8],
+  ]) {
+    const preset = byId.get(id)
+    assert.ok(preset, `缺少 ${id}`)
+    assert.equal(preset.config.name, name)
+    assert.equal(preset.config.order, order)
+    assert.ok(preset.config.description.length > 10)
+    assert.equal(skillPlugin(preset).config?.customSkillDirs, undefined, `${id} 不应注入分组技能根`)
+    const fs = preset.config.plugins.find((item) => item.id === 'tool-fs')
+    assert.equal(fs.config.write, false, `${id} 的 tool-fs.write 应为 false`)
+    assert.equal(fs.config.edit, false, `${id} 的 tool-fs.edit 应为 false`)
+  }
+})
+
+test('persona 已改造成各专业专家的精简版（含关键纪律与工具入口）', () => {
+  const persona = (id) => byId.get(id).config.plugins[0].config.prefix
+  const cases = [
+    ['preset-standard', /Goldeneyes:\/\//, /evidence_mounts/, /禁止全盘递归搜索/, /元数据/],
+    ['preset-traffic', /lovelyspark-cli/, /\$SEEU_WORKSPACE/],
+    ['preset-memory', /lovelymem-cli/, /\$SEEU_WORKSPACE/],
+    ['preset-data', /网钜/, /\$SEEU_WORKSPACE/],
+    ['preset-apk', /APK/, /\$SEEU_WORKSPACE/],
+    ['preset-exe', /PE/, /Import|导入/],
+  ]
+  for (const [id, ...patterns] of cases) {
+    const text = persona(id)
+    assert.ok(text.length >= 2400, `${id} 的 persona 太短（${text.length}）`)
+    assert.match(text, /角色定位/, `${id} 的 persona 缺少「角色定位」`)
+    for (const pattern of patterns) assert.match(text, pattern, `${id} 的 persona 缺少 ${pattern}`)
+  }
+})

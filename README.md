@@ -79,6 +79,16 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 > 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.3.1-x64-portable.exe`，因为打包时它正在运行、文件被占用无法删除；不影响 0.3.3 的产物。
 
+### v0.3.4 改了什么（未打包）
+
+- **每个会话预设换成精简版专家 persona**（来源：`E:\取证桌面` 下 7 份弘连「取证桌面」专家提示词，约 33–37 KB/份 → 精简到 8.7–13.7 KB，删掉本机不存在的 `D:\Programs\Honglian\GoldenEyesV4\skills\…` 技能清单与「取证桌面」外壳指令，保留取证纪律、溯源红线与三分结论要求）：
+  - 取证分析（Forensics）：火眼 + 服务器/主机取证合并稿（认环境 → 索引 → 火眼挂载目录 → 镜像挂载 → `ges read` 角标 → 三分强度 → 服务器 Windows/Linux 排查子段）；
+  - 流量分析（Traffic）、内存分析（Memory）：分别写清 `lovelyspark-cli` / `lovelymem-cli` 的调用方式与证据链要求；
+  - 日志分析（Log）：暂无对应专家文件，保持原 persona；
+  - 新增三个预设：**数据分析（网钜资金）**（order 6，资金流水清洗/口径/可疑特征/账户网络）、**APK 分析**（order 7）、**EXE 逆向分析**（order 8），工具面与取证预设一致（`tool-fs` 只读，落盘走 pwsh 到 `$SEEU_WORKSPACE`）。
+- **提示词再加固「先挂载、后原始」**：概览规则 1/2 明确「设备/系统类问题先看备注 → `ges status --json` 的 `evidence_mounts` 与火眼只读挂载目录」，并**禁止在 `W:\` 上直接解压/整份读取原始 `.zip`/`.E01`/`.dd`**（确实没有挂载入口时才按需只读单条目，并在答复里说明「火眼未提供该检材挂载入口」）；`ges-case-index` 技能同步。
+- 校验：`npm test` **112/112**；`npm run check:overlay` 扩展为逐预设校验三个专项预设（存在、名称、`tool-fs` 只读）；`tests/presets-config.test.mjs` 增加专项预设与 persona 关键词断言。
+
 ### v0.3.3 改了什么
 
 - **修复：随包 dsh 插件实际没加载**（v0.3.2 的严重缺陷）。v0.3.2 只在 profile 清单里写了 bundle 名字，没把插件包放进 `<profile>/node_modules`，dsh 导入时 `ERR_MODULE_NOT_FOUND`，启动日志是 `dsh: warning: 9 entries did not activate`，界面上看不到插件效果。现在 `tools/dsh-plugins.mjs` 新增 `ensurePluginPackages()`：启动时把 4 个插件及依赖闭包复制进 profile（硬依赖/软依赖分开统计，实测 175 个包；同版本靠 `.seeu-dsh-plugins.json` 指纹跳过，升级自动重抄），复制方式改为逐文件 read/write 以兼容 `app.asar` 源目录。
@@ -778,7 +788,7 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 - **额外解包**：`node_modules/@dsh-ops/fastctx-win32-x64/**` 进 `app.asar.unpacked`，因为 `bin/fastctx.exe` 需要真实文件路径才能 spawn。
 - **验收**：`npm run test:e2e:plugins`（dev 或 `--exe <安装包 exe>` 都可）断言四件事：profile bundles、`<profile>/node_modules` 下四个插件包、页面插件 UI（「上下文洞察」「插件」）、以及 dsh 子进程日志不得出现 `did not activate` / `failed to import` / `ERR_MODULE_NOT_FOUND`。
 
-## 13. 分析预设（流量 / 日志 / 内存）
+## 13. 分析预设（取证 / 流量 / 日志 / 内存 / 数据 / APK / EXE）
 
 新建会话时选预设即可切换「工具面 + 技能组」；预设互不影响，取证镜像类分析仍留在默认取证预设。
 
@@ -789,7 +799,11 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 | 流量分析（Traffic） | 3 | `lovelyspark-cli` | PCAP、会话、协议、文件提取 |
 | 日志分析（Log） | 4 | `lovelyspark-cli` | 系统/应用日志、时间线还原 |
 | 内存分析（Memory） | 5 | `lovelymem-cli` | 内存镜像、进程/服务/注册表/凭据 |
+| 数据分析（网钜资金） | 6 | 通用技能 | 网钜导出的流水/账户/交易数据清洗与资金分析 |
+| APK 分析 | 7 | 通用技能 | Android 应用静态分析、权限/组件/签名/IOC |
+| EXE 逆向分析 | 8 | 通用技能 | Windows PE 结构、导入导出、查壳、静态行为研判 |
 
+- **persona**：取证/流量/内存/数据/APK/EXE 六个预设都带精简版专家 persona（来源见「v0.3.4 改了什么」），日志预设沿用原有 persona。
 - **技能目录布局**：通用技能在 `resources/forensics/skills/`；分组技能在 `resources/forensics/skill-sets/<traffic|log|memory>/`。外壳启动时把分组复制到 `<DSH_HOME>/skill-sets/<id>`，并把旧的 `lovelymem-cli` / `lovelyspark-cli` 从 `<DSH_HOME>/skills` 移走（升级迁移，不会重复出现）。
 - **按预设隔离**：三个分析预设各有一个 `skill-filesystem` 实例（`includeDefaultRoots: false`），`customSkillDirs` 指向 `SEEU_SKILL_SET_TRAFFIC` / `SEEU_SKILL_SET_LOG` / `SEEU_SKILL_SET_MEMORY`，所以流量/日志预设看不到 `lovelymem-cli`，内存预设也看不到 `lovelyspark-cli`。
 - **使用**：预设里已写明调用方式（`node "$env:SEEU_CLI_NODE" "$env:SEEU_LOVELY_CLI" lovelyspark -- <子命令>`），模型会先 `skill` 加载技能再执行；CLI 路径仍在「设置 → 本地模型与工具路径」里手动指定。
