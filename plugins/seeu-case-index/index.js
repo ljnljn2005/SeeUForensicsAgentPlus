@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { basename, dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
-import { describeBuildProgress } from '../../tools/ges-index/progress.mjs';
+import { describeBuildProgress, findRunningBuild } from '../../tools/ges-index/progress.mjs';
 import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records, evidences, facets } from '../../tools/ges-index/query.mjs';
 import { genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
 import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.mjs';
@@ -110,6 +110,8 @@ async function readBody(req) {
 function startBuild(args) {
   const dir = resolve(String(args.dir ?? ''));
   if (!existsSync(dir)) throw Object.assign(new Error(`案件目录不存在：${dir}`), { status: 404 });
+  const running = findRunningBuild(jobs.values(), dir);
+  if (running) return { jobId: running.id, dir, existing: true };
   const job = { id: randomUUID(), dir, status: 'running', phase: 'probe', completed: 0, total: 0, percent: 0, startedAt: Date.now() };
   jobs.set(job.id, job);
   while (jobs.size > MAX_JOBS) jobs.delete(jobs.keys().next().value);

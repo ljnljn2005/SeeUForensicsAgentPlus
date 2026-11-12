@@ -60,3 +60,16 @@ test('done 给出记录/实体/索引体积摘要，failed 给出错误摘要', 
   const failed = describeBuildProgress({ status: 'failed', phase: 'records', code: 'E_GES', error: 'ges 不可用', elapsedMs: 5000 })
   assert.equal(failed.summary, '建库失败（E_GES）：ges 不可用')
 })
+
+test('同一目录已有运行中任务时复用，不重复建库', async () => {
+  const { findRunningBuild } = await import('../tools/ges-index/progress.mjs')
+  const dir = 'E:/cases/a'
+  const jobs = [
+    { id: 'done-1', dir, status: 'done' },
+    { id: 'run-1', dir, status: 'running' },
+    { id: 'run-2', dir: 'E:/cases/b', status: 'running' },
+  ]
+  assert.equal(findRunningBuild(jobs, dir)?.id, 'run-1')
+  assert.equal(findRunningBuild(jobs, 'E:/cases/c'), null)
+  assert.equal(findRunningBuild([], dir), null)
+})

@@ -2142,7 +2142,8 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 新增 `tools/ges-index/progress.mjs`：`BUILD_PHASE_LABELS`（probe/enumerate/fetch/finalize/done/failed）、`buildPhaseLabel`、`formatDuration`、`describeBuildProgress(job, now)` → `{status,running,phaseLabel,elapsedMs,elapsedText,detail,etaText,percent,hint,summary}`。
 - `plugins/seeu-case-index/index.js`：`GET /build` 返回 `{...job, progress: describeBuildProgress(job)}`；`onProgress` 透传 `etaMs`（否则面板拿不到剩余时间）。
 - `plugins/seeu-case-index/client.js`：进度卡渲染 `phaseLabel`、`detail`、`已用 …`、`剩余约 …`、`hint`（>90 秒）、`summary`（完成/失败）。
-- 单测 `tests/progress.test.mjs` 5 例。
+- `tools/ges-index/progress.mjs` 另加 `findRunningBuild(jobs, dir)`；`startBuild` 检测到同目录已有运行中任务时直接返回 `{jobId, existing:true}`（实测两次 POST 返回同一 jobId）。
+- 单测 `tests/progress.test.mjs` 6 例。
 
 **坑**
 1. 实际 phase 是 `probe/enumerate/fetch/finalize`，不是最初以为的 `evidences/records/entities`；标签表必须按 `build.mjs` 里的 `progress({ phase })` 实际值写。
@@ -2150,6 +2151,6 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 3. 运行中 job 的 `elapsedMs` 只在结束时写入，必须由 `describeBuildProgress` 用 `startedAt` 现算，否则面板「用时」一直是 0。
 4. `formatDuration(34_500)` 走四舍五入 → 35 秒，单测断言要按同样规则写。
 
-**验证**：dev 预览直连 `POST /seeu-index/build` + 轮询 `GET /build`：阶段中文名/实时已用/百分比/ETA 连续可见；真实案件全量重建约 4–5 分钟；单测 5/5、`npm test` 全绿、build OK。
+**验证**：dev 预览直连 `POST /seeu-index/build` + 轮询 `GET /build`：阶段中文名/实时已用/百分比/ETA 连续可见；真实案件全量重建约 4–5 分钟；单测 6/6、`npm test` **132/132**、build OK。
 
 **遗留**：完成后摘要仅在面板进度卡显示，未写入案件概览；`rebuild` 期间的取消能力尚未提供。

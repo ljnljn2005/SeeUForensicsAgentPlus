@@ -87,3 +87,17 @@ export function describeBuildProgress(job, now = Date.now()) {
     summary,
   };
 }
+
+/**
+ * 同一目录已有运行中的建库任务时复用它，避免并发重建互相踩 building 库
+ * （实测并发会让部分叶子失败并触发 E_VALIDATION）。
+ * @param {Iterable<object>} jobs
+ * @param {string} dir 已 resolve 的绝对路径
+ */
+export function findRunningBuild(jobs, dir) {
+  const target = String(dir ?? '');
+  for (const job of jobs ?? []) {
+    if (job?.status === 'running' && String(job.dir ?? '') === target) return job;
+  }
+  return null;
+}
