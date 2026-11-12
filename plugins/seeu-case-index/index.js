@@ -227,8 +227,12 @@ async function handle(req, res) {
         return send(res, 200, { dbs });
       }
       if (req.method === 'GET' && path === '/myos/tables') {
-        const tables = await myosTables(url.searchParams.get('db') ?? '');
-        return send(res, 200, { tables });
+        const result = await myosTables(url.searchParams.get('db') ?? '', {
+          caseId: url.searchParams.get('caseId') ?? '',
+          materialId: url.searchParams.get('materialId') ?? '',
+          name: url.searchParams.get('name') ?? '',
+        });
+        return send(res, 200, result);
       }
       if (req.method === 'POST' && path === '/myos/import') {
         const result = await myosImport(await readBody(req));
@@ -247,8 +251,8 @@ async function handle(req, res) {
         }
         const body = await readBody(req);
         const tables = Array.isArray(body.tables) ? body.tables.filter(Boolean) : [];
-        if (!body.outDir || !body.db || tables.length === 0) {
-          return send(res, 400, { error: '缺少 outDir / db / tables' });
+        if (!body.outDir || (!body.db && !body.dbName) || tables.length === 0) {
+          return send(res, 400, { error: '缺少 outDir / db（或 dbName）/ tables' });
         }
         const job = {
           id: `myos-batch-${Date.now()}`,

@@ -3,7 +3,8 @@
 // 面板的「从 MYOS 导入」按钮走这里：
 //   列案件 → 选案件看检材 → 选检材查结果库里的表 → 选表导入成 SeeU 索引。
 // 依赖 MYOS 正在运行（MCP 服务端由 MYOS 提供），未启动时给出可读的错误。
-import { resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { existsSync } from 'node:fs'
 import { withMyosClient } from '../../tools/myos-index/mcp.mjs'
 import { importMyosRows, listMyosCases, listMyosMaterials, listMyosResultDbs, readMyosRows } from '../../tools/myos-index/import.mjs'
 
@@ -43,13 +44,23 @@ export async function myosMaterials(caseId) {
 }
 
 /** 列出结果库（.mfs）里的表：只认 sqlite_master，走 MYOS 的只读 sqlite_query。 */
-export async function myosTables(db) {
-  const dbPath = String(db ?? '').trim()
-  if (!dbPath) throw fail('缺少 db（结果库 .mfs 路径）')
+export async function myosTables(db, { caseId = '', materialId = '', name = '' } = {}) {
+  let dbPath = String(db ?? '').trim()
+  // 中文路径经控制台/HTTP 转码容易变成乱码（服务端看到的字节与 MYOS 里的不一致），
+  // 所以允许只给「案件 + 检材 + 库文件名」，由插件自己从 MCP 发现绝对路径。
+  if (!dbPath && name) {
+    const id = String(caseId ?? '').trim()
+    const dbs = await myosResultDbs({ caseId: id, materialId: String(materialId ?? '').trim() })
+    const wanted = String(name).trim().toLowerCase()
+    const hit = dbs.find((item) => String(item.path).split(/[\\/]/).pop().toLowerCase() === wanted)
+    if (!hit) throw fail(`在案件/检材里找不到结果库 ${name}（可用 /myos/dbs 查看）`, 404)
+    dbPath = hit.path
+  }
+  if (!dbPath) throw fail('缺少 db（结果库 .mfs 路径，或 caseId+materialId+name）')
   const { rows } = await call((client) =>
     readMyosRows(client, { dbPath, sql: "select name from sqlite_master where type='table' order by name", maxRows: 500 }),
   )
-  return rows.map((row) => String(Object.values(row)[0] ?? '')).filter(Boolean)
+  return { dbPath, tables: rows.map((row) => String(Object.values(row)[0] ?? '')).filter(Boolean) }
 }
 
 /**
@@ -105,16 +116,43 @@ export async function myosImport({ caseId, db, sql, outDir, caseName, evidenceNa
   return result
 }
 
+
+/** 按「库文件名」解析绝对路径；避免中文路径在控制台/HTTP 里被转码成乱码。 */
+async function resolveDbByName({ caseId, materialId, name }) {
+  const dbs = await myosResultDbs({ caseId: String(caseId ?? '').trim(), materialId: String(materialId ?? '').trim() })
+  const wanted = String(name ?? '').trim().toLowerCase()
+  const hit = dbs.find((item) => String(item.path).split(/[\/]/).pop().toLowerCase() === wanted)
+  if (hit) return hit.path
+  // MYOS 自动发现通常只给到「按 app 拆分的子库」（例如 data/MApps/<App>{guid}.mfs），
+  // 而根库 data/MApps.mfs 不在列表里：从已发现路径往上找同名文件。
+  const seen = new Set()
+  for (const item of dbs) {
+    let dir = dirname(String(item.path))
+    for (let depth = 0; depth < 3; depth += 1) {
+      const candidate = join(dir, String(name ?? ''))
+      if (!seen.has(candidate)) {
+        seen.add(candidate)
+        if (existsSync(candidate)) return candidate
+      }
+      const parent = dirname(dir)
+      if (parent === dir) break
+      dir = parent
+    }
+  }
+  throw fail(`在案件/检材里找不到结果库 ${name}（可用 /myos/dbs 查看已发现的库）`, 404)
+}
+
 /**
  * 批量导入：一次把结果库里选中的多张表写入同一个 SeeU 索引（追加模式）。
  * 每张表各算一个检材（eid 递增），面板显示每张表的记录数。
  */
-export async function myosImportBatch({ caseId, db, tables, outDir, caseName, evidenceName, app = '', maxRows = 2000, onProgress = null } = {}) {
+export async function myosImportBatch({ caseId, db, dbName = '', materialId = '', tables, outDir, caseName, evidenceName, app = '', maxRows = 2000, onProgress = null } = {}) {
   const progress = typeof onProgress === 'function' ? onProgress : () => {};
   const caseDir = resolve(String(outDir ?? ''))
   if (!outDir) throw fail('缺少 outDir（案件目录）')
-  const dbPath = String(db ?? '').trim()
-  if (!dbPath) throw fail('缺少 db（结果库 .mfs 路径）')
+  let dbPath = String(db ?? '').trim()
+  if (!dbPath && dbName) dbPath = await resolveDbByName({ caseId, materialId, name: dbName })
+  if (!dbPath) throw fail('缺少 db（结果库 .mfs 路径，或 dbName + caseId/materialId）')
   const list = (Array.isArray(tables) ? tables : []).map((item) => String(item ?? '').trim()).filter(Boolean)
   if (list.length === 0) throw fail('缺少 tables（要导入的表）')
   const limit = Math.min(Math.max(Number(maxRows) || 2000, 1), 20000)
@@ -176,9 +214,10 @@ export async function myosImportBatch({ caseId, db, tables, outDir, caseName, ev
  * 预估每张表的行数（导入前预览，避免把空表/巨型表一起导）。
  * count(*) 只查一行，代价远小于导入；失败的表单独标 error。
  */
-export async function myosTableCounts({ caseId, db, tables, maxTables = 200 } = {}) {
-  const dbPath = String(db ?? '').trim()
-  if (!dbPath) throw fail('缺少 db（结果库 .mfs 路径）')
+export async function myosTableCounts({ caseId, db, dbName = '', materialId = '', tables, maxTables = 200 } = {}) {
+  let dbPath = String(db ?? '').trim()
+  if (!dbPath && dbName) dbPath = await resolveDbByName({ caseId, materialId, name: dbName })
+  if (!dbPath) throw fail('缺少 db（结果库 .mfs 路径，或 dbName + caseId/materialId）')
   const list = (Array.isArray(tables) ? tables : []).map((item) => String(item ?? '').trim()).filter(Boolean)
   if (list.length === 0) throw fail('缺少 tables（要预估的表）')
   const id = String(caseId ?? '').trim()

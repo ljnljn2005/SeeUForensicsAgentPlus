@@ -41,8 +41,13 @@ test('myosMaterials：缺 caseId 时 400', withEnv(async () => {
 }))
 
 test('myosTables：经 MCP sqlite_master 读表名', withEnv(async () => {
-  const tables = await myosTables('D:/MYOS/Case/案件甲/dev/手机-data.D01/data/MApps.mfs')
-  assert.deepEqual(tables, ['TBL_APPDATA_MANAGER'])
+  const result = await myosTables('D:/MYOS/Case/案件甲/dev/手机-data.D01/data/MApps.mfs')
+  assert.deepEqual(result.tables, ['TBL_APPDATA_MANAGER'])
+  assert.equal(result.dbPath, 'D:/MYOS/Case/案件甲/dev/手机-data.D01/data/MApps.mfs')
+  // 只给「案件 + 检材 + 库文件名」时，插件自己从 MCP 发现绝对路径（避免中文路径转码）。
+  const byName = await myosTables('', { caseId: 'case-1', materialId: 'm1', name: 'MApps.mfs' })
+  assert.deepEqual(byName.tables, ['TBL_APPDATA_MANAGER'])
+  assert.match(byName.dbPath, /MApps\.mfs$/)
 }))
 
 test('myosImport：写 SeeU 索引并返回统计', withEnv(async () => {

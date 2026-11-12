@@ -2348,3 +2348,15 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：`tests/plugin-myos.test.mjs` 13/13（含预估两表 → `42 / 0`、缺 tables 400）；`npm test` 167/167；`m2-ui-check` `m2ok:true`。
 - 真机：`MApps.mfs` → `TBL_APPDATA_MANAGER 5 行`；`AndroidBrowser…mfs` → 浏览历史 2 行、下载表 0 行；不存在的表返回 `no such table`（界面显示「预估失败」）。
 - 坑：`count(*)` 在真实 MYOS 里同样受 `maxRows` 限制，但只返回 1 行；不可把空表当失败——空表是「0 行」，表不存在才是失败。
+
+### 20.100 AI 自助导入 MYOS（第 22 轮）
+
+- 需求：让会话里的 AI 也能把 MYOS 结果入库，而不是只有面板按钮；用户问「把 MYOS 里那个案件导进来」时直接执行。
+- 新技能 `resources/forensics/skills/myos-import/SKILL.md`：给出完整 bash 流程（`/myos/cases → materials → dbs → tables → row-counts → import-batch → 轮询 → /list + /evidences 校验`），要求先确认案件/检材、不要直读 `.mfs`、不改 MYOS 数据、导入后报告条数。
+- 接口增强（中文路径转码坑）：
+  - `/myos/tables` 支持 `?caseId=&materialId=&name=<库文件名>`，返回 `{dbPath, tables}`；
+  - `row-counts` / `import-batch` 支持 `dbName` + `caseId`/`materialId`，内部 `resolveDbByName()` 先从 `/myos/dbs` 精确匹配 basename，找不到再从每个已发现路径往上 3 层拼 `<name>` 并用 `existsSync` 验证（根库 `MApps.mfs` 常不在发现列表里）。
+  - 原因：Git Bash/控制台把中文路径按 GBK 传，服务端 UTF-8 解码后乱码 → MYOS 报 `dbPath not found`；用 `name` 绕开。
+- 验证：`skills-check` 技能列表 6 个（新增 `myos-import`）；真机 `row-counts`（`dbName`）→ `TBL_APPDATA_MANAGER 5 行`；`import-batch`（`dbName`）→ job done，`tables:[{records:5}]`，`.dev/myos-skill/.seeu-index/case-index.db` 118,784 B，`findIndexes` 能发现。
+- 测试：`tests/plugin-myos.test.mjs` 13/13（`myosTables` 新返回结构 + `name` 发现 + 批量/预估 `dbName` 路径）；`npm test` 168/168。
+- 坑：`resolveDbByName` 第一版用 `replace(/\/g,'/')` 被 python heredoc 吃掉反斜杠写成 `/\/g` 导致 `SyntaxError: missing )`，改为 `split(/[\/]/)`（用 edit 工具写，别用 shell heredoc 传正则）。

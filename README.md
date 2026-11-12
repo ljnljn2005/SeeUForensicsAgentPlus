@@ -86,6 +86,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 - **批量导入（第 18 轮）**：面板「从 MYOS 导入…」可勾选结果库里的多张表一次导入（每张表一个检材、eid 递增、默认追加）；后端新增 `POST /myos/import-batch`（逐表 `select * from "T" limit N`，跳过无数据表并回报原因）；实测 `MApps` + 浏览器历史 → 7 条记录 / 2 个检材 / 2 个实体。
 - **批量导入进度与表名过滤（第 19 轮）**：批量导入改成后台任务——`POST /myos/import-batch` 返回 `202 {jobId}`，面板每 0.7 s 轮询 `GET /myos/import-batch`，显示「第 2/5 张表 · TBL_X · 已收集 N 条」；同时间重复提交返回 409。表列表新增按表名过滤（如 `TBL_PR_`）+「全选」只选当前过滤结果。
 - **导入前预估条数（第 21 轮）**：批量区新增「预估条数」——对选中的表执行 `count(*)`（空表显示 0 行、表不存在显示「预估失败」），并显示「选中表合计 N 行（每张表最多导入 2000 行）」；「只选非空」一键选中预估 >0 的表。实测 `MApps` 5 行、浏览历史 2 行、下载表 0 行、不存在的表给出 `no such table` 提示。
+- **AI 自己导入 MYOS（第 22 轮）**：新增随包技能 `myos-import` —— 会话里用 `curl "$SEEU_INDEX_API/myos/…"` 即可列案件/检材/结果库/表、预估行数、批量导入并轮询进度，导完再用 `/evidences`、`/search` 查统一索引。为避免中文路径经控制台/HTTP 转码成乱码，`/myos/tables?caseId=&materialId=&name=MApps.mfs` 与 `row-counts`/`import-batch` 的 `dbName` 支持只传库文件名，插件自己从 MCP 发现路径（根库 `MApps.mfs`/`FSData.mfs` 不在发现列表时从子库目录往上找）。真机验证：`dbName` 方式预估 `TBL_APPDATA_MANAGER` 5 行并导入成索引。
 - **MYOS 取证结果导入 SeeU 索引（第 13 轮）**：新增 `tools/myos-index/`（MCP 客户端 `mcp.mjs`、导入器 `import.mjs`、命令行 `cli.mjs`）与 `npm run myos:import`。经 MYOS MCP 的 `query_cases` / `query_materials` / `sqlite_query` 读取加密 `.mfs` 结果库，按 SeeU 表结构写入 `<案件目录>/.seeu-index/case-index.db`（record + `record_fts` + entity 抽取 + `manifest.json`），导入后面板与 `ges-case-index` 技能可直接检索；假 MCP 服务端 + `tests/myos-index.test.mjs` 9 例，`npm test` 150/150。用法见 §11「把 MYOS 取证结果导入 SeeU 索引」。
 
 ### v0.3.7 改了什么
