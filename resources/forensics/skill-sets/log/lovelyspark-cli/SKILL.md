@@ -5,11 +5,11 @@ description: 用本机 LovelySpark CLI 分析 PCAP/PCAPNG 流量、查询分析�
 
 通过现有 PowerShell 工具调用。LovelySpark 原生参数不加 `--cli`。工具路径**只能由用户在桌面端设置窗口手动指定**（设置 → 本机取证工具路径），不做自动发现。
 
-```powershell
-& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelyspark -- --version
-& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelyspark -- analyze 'D:\case\capture.pcapng'
-& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelyspark -- tools schema module_summary
-& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelyspark -- call --db '<db_path>' module_summary --args-file 'D:\case\query.json'
+```bash
+"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelyspark -- --version
+"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelyspark -- analyze 'D:/case/capture.pcapng'
+"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelyspark -- tools schema module_summary
+"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelyspark -- call --db '<db_path>' module_summary --args-file 'D:/case/query.json'
 ```
 
 先 analyze，保存返回的 `db_path`，后续 call 复用该库。只需概览可用 `investigate '<pcap>' --focus overview --limit 10`。

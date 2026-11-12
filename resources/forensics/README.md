@@ -48,7 +48,7 @@ preset。会话的 system prompt 由 preset 内的 `persona` 子行生成。只�
 
 - `tool-fs`：**只读**（`read/readImage: true`，`write/edit/applyPatch: false`）；要写文件走命令行，写操作留在命令记录里
 - `tool-fs-search`：`sampleOverCapGlobResults: false`
-- `tool-bash` / `tool-pwsh`：按平台互斥启用（Windows 下启用 pwsh）
+- `tool-bash` / `tool-pwsh`：按平台互斥启用（Windows 下启用 pwsh 作为兜底）；命令执行优先用随包 `dsh-gitbash-shell` 的 `bash` 工具，bash 不可用时才降级 pwsh
 - `tool-skill` + `skill-filesystem`：技能加载
 - `present`：报告/产物交付
 - `tool-jobs`、`tool-schedule`、`tool-goal`、`planning`、delegation（子代理/工作流）等保持官方默认，取证分析要用

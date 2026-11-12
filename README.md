@@ -85,7 +85,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
   - 取证分析（Forensics）：火眼 + 服务器/主机取证合并稿（认环境 → 索引 → 火眼挂载目录 → 镜像挂载 → `ges read` 角标 → 三分强度 → 服务器 Windows/Linux 排查子段）；
   - 流量分析（Traffic）、内存分析（Memory）：分别写清 `lovelyspark-cli` / `lovelymem-cli` 的调用方式与证据链要求；
   - 日志分析（Log）：暂无对应专家文件，保持原 persona；
-  - 新增三个预设：**数据分析（网钜资金）**（order 6，资金流水清洗/口径/可疑特征/账户网络）、**APK 分析**（order 7）、**EXE 逆向分析**（order 8），工具面与取证预设一致（`tool-fs` 只读，落盘走 pwsh 到 `$SEEU_WORKSPACE`）。
+  - 新增三个预设：**数据分析（网钜资金）**（order 6，资金流水清洗/口径/可疑特征/账户网络）、**APK 分析**（order 7）、**EXE 逆向分析**（order 8），工具面与取证预设一致（`tool-fs` 只读，落盘用 `bash` 重定向到 `$SEEU_WORKSPACE`）。
 - **提示词再加固「先挂载、后原始」**：概览规则 1/2 明确「设备/系统类问题先看备注 → `ges status --json` 的 `evidence_mounts` 与火眼只读挂载目录」，并**禁止在 `W:\` 上直接解压/整份读取原始 `.zip`/`.E01`/`.dd`**（确实没有挂载入口时才按需只读单条目，并在答复里说明「火眼未提供该检材挂载入口」）；`ges-case-index` 技能同步。
 - 校验：`npm test` **112/112**；`npm run check:overlay` 扩展为逐预设校验三个专项预设（存在、名称、`tool-fs` 只读）；`tests/presets-config.test.mjs` 增加专项预设与 persona 关键词断言。
 
@@ -804,9 +804,10 @@ MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/M
 | EXE 逆向分析 | 8 | 通用技能 | Windows PE 结构、导入导出、查壳、静态行为研判 |
 
 - **persona**：取证/流量/内存/数据/APK/EXE 六个预设都带精简版专家 persona（来源见「v0.3.4 改了什么」），日志预设沿用原有 persona。
+- **命令执行工具**：全部预设统一优先用随包 `dsh-gitbash-shell` 提供的 `bash` 工具（Git Bash / POSIX 语法，环境变量写 `$SEEU_CLI_NODE`、`$SEEU_LOVELY_CLI`）；只有 `bash` 不可用（插件禁用或执行报错）时才降级 `pwsh`，并切换成 PowerShell 语法（`$env:…`、反斜杠路径）。persona 与技能文档都已按这条写。
 - **技能目录布局**：通用技能在 `resources/forensics/skills/`；分组技能在 `resources/forensics/skill-sets/<traffic|log|memory>/`。外壳启动时把分组复制到 `<DSH_HOME>/skill-sets/<id>`，并把旧的 `lovelymem-cli` / `lovelyspark-cli` 从 `<DSH_HOME>/skills` 移走（升级迁移，不会重复出现）。
 - **按预设隔离**：三个分析预设各有一个 `skill-filesystem` 实例（`includeDefaultRoots: false`），`customSkillDirs` 指向 `SEEU_SKILL_SET_TRAFFIC` / `SEEU_SKILL_SET_LOG` / `SEEU_SKILL_SET_MEMORY`，所以流量/日志预设看不到 `lovelymem-cli`，内存预设也看不到 `lovelyspark-cli`。
-- **使用**：预设里已写明调用方式（`node "$env:SEEU_CLI_NODE" "$env:SEEU_LOVELY_CLI" lovelyspark -- <子命令>`），模型会先 `skill` 加载技能再执行；CLI 路径仍在「设置 → 本地模型与工具路径」里手动指定。
+- **使用**：预设里已写明调用方式（`"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelyspark -- <子命令>`，统一在 `bash` 工具里执行；bash 不可用时才降级 `pwsh`），模型会先 `skill` 加载技能再执行；CLI 路径仍在「设置 → 本地模型与工具路径」里手动指定。
 - **校验**：`npm run check:overlay`（逐预设检查名称/技能根/`customSkillDirs`/`tool-fs` 只读）、`npm run test:e2e:skills`（安装与迁移）、`npm test`（含 `tests/presets-config.test.mjs`）。
 
 ## 14. 许可与来源

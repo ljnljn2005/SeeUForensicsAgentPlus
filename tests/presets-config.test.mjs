@@ -130,3 +130,16 @@ test('persona 已改造成各专业专家的精简版（含关键纪律与工具
     for (const pattern of patterns) assert.match(text, pattern, `${id} 的 persona 缺少 ${pattern}`)
   }
 })
+
+test('命令执行统一优先 bash 工具，pwsh 仅作降级', () => {
+  for (const id of ['preset-standard', 'preset-traffic', 'preset-memory', 'preset-data', 'preset-apk', 'preset-exe']) {
+    const text = byId.get(id).config.plugins[0].config.prefix
+    assert.match(text, /bash/, `${id} 的 persona 没写 bash 优先`)
+    assert.match(text, /pwsh/, `${id} 的 persona 没写 pwsh 降级`)
+  }
+  for (const skill of ['skill-sets/memory/lovelymem-cli', 'skill-sets/traffic/lovelyspark-cli', 'skill-sets/log/lovelyspark-cli']) {
+    const md = readFileSync(join(REPO, 'resources', 'forensics', skill, 'SKILL.md'), 'utf8')
+    assert.ok(md.includes('"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI"'), `${skill} 缺少 bash 调用示例`)
+    assert.ok(!/&\s*\$env:SEEU_CLI_NODE/.test(md), `${skill} 仍有 PowerShell 调用示例`)
+  }
+})

@@ -16,13 +16,15 @@ npm run lovely -- lovelymem -- doctor
 npm run lovely -- lovelyspark -- --version
 ```
 
-会话里的 PowerShell 使用应用注入的环境变量（桌面打包版同样适用）：
+会话里的命令执行优先用随包的 `bash` 工具（Git Bash / POSIX 语法），它继承应用注入的环境变量（桌面打包版同样适用）：
 
-```powershell
-& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI status
-& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelymem -- run --engine starmem --image 'D:\case\memory.mem' --plugin pslist
-& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelyspark -- analyze 'D:\case\capture.pcapng'
+```bash
+"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" status
+"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelymem -- run --engine starmem --image 'D:/case/memory.mem' --plugin pslist
+"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelyspark -- analyze 'D:/case/capture.pcapng'
 ```
+
+只有 `bash` 工具不可用（插件未启用/执行报错）时才降级用 `pwsh`，那时环境变量写成 `$env:SEEU_CLI_NODE` / `$env:SEEU_LOVELY_CLI`，路径用反斜杠。
 
 **路径由用户在桌面端手动指定，不做自动发现。** 打开设置窗口（托盘菜单「本地模型设置」或欢迎页「本地模型」chip）→「本机取证工具路径」→ 为 LovelyMem V3 / LovelySpark 各点「选择…」选 exe → 点「保存工具路径」。路径写入 `<DSH_HOME>/lovely-cli.json`（桌面版即 `%APPDATA%\SeeUForensicsAgentPlus\dsh-home\lovely-cli.json`，`SEEU_LOVELY_CONFIG` 可覆盖）；技能调用时每次重读，不需要重启。
 

@@ -3,13 +3,13 @@ name: lovelymem-cli
 description: 用本机 LovelyMem V3 CLI 分析内存镜像，查询进程、网络与插件产物。
 ---
 
-通过现有 PowerShell 工具调用；自动添加 `--cli`，不启动 GUI。工具路径**只能由用户在桌面端设置窗口手动指定**（设置 → 本机取证工具路径），不做自动发现。
+命令统一在 `bash` 工具（Git Bash）里执行；bash 不可用（工具缺失或执行报错）时才降级用 `pwsh`，那时环境变量写成 `$env:SEEU_CLI_NODE` / `$env:SEEU_LOVELY_CLI`。自动添加 `--cli`，不启动 GUI。工具路径**只能由用户在桌面端设置窗口手动指定**（设置 → 本机取证工具路径），不做自动发现。
 
-```powershell
-& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelymem -- doctor
-& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelymem -- plugins --engine starmem --query ps
-& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelymem -- describe --engine starmem --plugin pslist
-& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelymem -- run --engine starmem --image 'D:\case\memory.mem' --plugin pslist
+```bash
+"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelymem -- doctor
+"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelymem -- plugins --engine starmem --query ps
+"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelymem -- describe --engine starmem --plugin pslist
+"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelymem -- run --engine starmem --image 'D:/case/memory.mem' --plugin pslist
 ```
 
 先检查 doctor，再按关键词查插件，仅按需 describe 单个插件；不把整份插件清单或帮助放进对话。
