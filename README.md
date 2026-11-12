@@ -77,6 +77,12 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
+### v0.3.6 待发布（未打包）
+
+- **真实工具基准（第 3 轮）**：新增 `scripts/e2e/real-tools-bench.mjs`（`npm run test:e2e:real-tools`）与 `docs/benchmarks.md`，在本机真实素材上实测三套工具：LovelyCarve 1.3.0 解析 `W:/AP3_LEUNG_YL_USB.E01`（776 MB EWF）**162 ms**、挂载 part 0 到 `X:` **266 ms**、卸载 **154 ms**（`X:\` 可见 `WEPE`、`Sunny.zip`、`vera_key` 等）；LovelySpark 0.3.20 首次冷启动 11.3 s、`analyze` 86 KB 的 `L1-6.pcapng` **9–13 s**（27 个模块，分析库落在检材同目录 `<pcap>.db.generations/`）、`investigate` 复用分析库 8.8 s；StarMem 0.2.2 `--json info` **525 ms**（本机唯一内存样本是流量工具自带的 raw 进程转储，`windows-info` 报「未找到 KDBG」、`pslist/netscan` 超时——采集类命令需用户提供完整内存镜像）。
+- **修复 LovelyCarve 挂载链路（真实 CLI 才暴露的两个坑）**：① `--case` 只能作为进程启动参数，会话里再带会被 CLI 拒绝并让进程退出 → 改为「一次性 `cases create` 建案件 → 常驻 `lovelycarve-cli -q --case <dir> shell` → `images open` → `mounts create`」；② LovelyCarve 1.3.0 的 `mounts delete --force` **会卸载但不返回 JSON**，等响应会挂住 → 改为「写命令 + 轮询盘符是否消失（12 s）」，必要时兜底停进程释放挂载；③ 进程异常退出后残留在 `mounts.json` 的记录，会在下次 `status()` 按盘符存在性自动清理。
+- 验证：`npm test`（含假 CLI 的 inspect→mount→unmount 全链路）与 `npm run test:e2e:real-tools` 通过；`docs/benchmarks.md` 记录复现命令、版本与数字。
+
 ### v0.3.5 改了什么
 
 - **打包与打包态回归（v0.3.5）**：NSIS `281,858,620 B`（blockmap 293,867 B）、portable `236,534,010 B`、`app.asar` `426,401,524 B`（34,213 entries）、目录版总计 `1,110,752,752 B`；`.probe/asar-035-check.mjs` **76 项全 true**（新增 `presetSplit`/`qikoSkillSet`/`qikoTrimmed`/`skillPrune`/`starMemTool`/`starMemSkill`/`skillSetQikoEnv`/`version035`）；打包态 `m2-ui-check`（`m2ok:true`）、`settings-check --exe`（`ok:true`：外部工具路径 13 行含 StarMem、Ghidra 默认路径、12 项保存落盘）、`plugins-check --exe`（`ok:true`：175 个插件包、`activationFailures:[]`）、`skills-check --exe`（`ok:true`：Qiko 技能组 43 个、`leaked:[]`）；目录版冷启动 **6192 ms**、portable **50.8 s**；`npm test` **122/122**、`npm run check:overlay` OK。
@@ -757,6 +763,10 @@ headless 里技能根是 `<DSH_HOME>/skills`（脚本会把 `resources/forensics
 3. 选目标分区与盘符（默认 `X:`，会自动跳过已占用盘符），点「挂载为只读盘」；
 4. 窗口下方出现活动挂载卡片：可【打开盘符】直接进资源管理器，或【卸载】释放；
 5. 会话侧：挂载清单在 `<DSH_HOME>/mounts.json`，dsh 子进程通过 `SEEU_MOUNTS_FILE` 拿到同一路径，技能/模型可以直接读，不需要猜盘符。
+
+**真机验证（2026-11-12）**：LovelyCarve 1.3.0 实测挂载 `W:/AP3_LEUNG_YL_USB.E01`（776 MB EWF）—— 解析 162 ms、挂载 266 ms、卸载 154 ms，`X:` 内可直接浏览 `WEPE`、`Sunny.zip`、`vera_key` 等；完整数字与复现命令见 [docs/benchmarks.md](docs/benchmarks.md)。
+
+**实现细节（真实 CLI 才暴露）**：`--case` 只能作为 CLI 启动参数（会话里再带会报「`--case` 只能在启动时使用」并让进程退出），所以外壳的流程是「一次性 `cases create` 建案件 → 常驻 `lovelycarve-cli -q --case <dir> shell` → `images open` → `mounts create`」；LovelyCarve 1.3.0 的 `mounts delete --force` 会真的卸载但**不返回 JSON**，外壳因此改成「写命令 + 轮询盘符消失」，必要时停掉常驻进程释放挂载。
 
 **约束（务必知道）**
 

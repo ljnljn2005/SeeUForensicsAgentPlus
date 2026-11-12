@@ -22,8 +22,8 @@
  * e2e/单测因此不需要真的装 LovelyCarve 或 Dokan。
  */
 
-import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { spawn, spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 
@@ -130,9 +130,10 @@ function parseResponse(obj) {
  * 只有同一进程里创建的挂载点才能被后续命令看到，所以管理器全局共用一个实例。
  */
 export class LovelyCarveHost {
-  constructor({ cli, env = process.env, prefixArgs = [], timeoutMs = 180_000, log = () => {} }) {
+  constructor({ cli, env = process.env, prefixArgs = [], startArgs = [], timeoutMs = 180_000, log = () => {} }) {
     this.cli = cli
     this.prefixArgs = prefixArgs
+    this.startArgs = startArgs
     this.env = env
     this.timeoutMs = timeoutMs
     this.log = log
@@ -148,7 +149,7 @@ export class LovelyCarveHost {
 
   start() {
     if (this.child) return
-    const args = [...this.prefixArgs, '-q', 'shell']
+    const args = [...this.prefixArgs, '-q', ...this.startArgs, 'shell']
     const options = {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
@@ -238,6 +239,19 @@ export class LovelyCarveHost {
     })
   }
 
+  /** 只写命令、不等响应：`mounts delete` 在 CLI 1.3.0 里不返回 JSON。 */
+  write(line) {
+    this.start()
+    if (this.exited !== undefined) return false
+    try {
+      this.child.stdin.write(`${line}
+`)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   async stop() {
     if (!this.child) return
     const child = this.child
@@ -307,7 +321,11 @@ function pickMountId(result, mountPoint) {
  */
 export function createMountManager({ env = () => process.env, log = () => {} } = {}) {
   let host
+  let hostCaseDir
+  let hostSourceCli
   let staleEnv
+  /** 已经在本会话里 `images open` 过的检材；shell 里重复 open 会让 CLI 报错退出。 */
+  const openedImages = new Set()
 
   function currentEnv() {
     return env()
@@ -323,23 +341,81 @@ export function createMountManager({ env = () => process.env, log = () => {} } =
     return resolved.path
   }
 
-  function ensureHost() {
+  /** CLI 可能是一个 .mjs 假实现：真实路径要用 node 跑（测试/自动化用）。 */
+  function cliInvocation(cli, current) {
+    if (/\.(mjs|cjs|js)$/i.test(cli)) {
+      const node = current.SEEU_MOUNT_NODE
+        || (process.execPath.toLowerCase().endsWith('electron.exe') ? 'node' : process.execPath)
+      return { cli: node, prefixArgs: [cli] }
+    }
+    return { cli, prefixArgs: [] }
+  }
+
+  function runCliOnce(cli, prefixArgs, args, timeout = 120_000) {
+    return spawnSync(cli, [...prefixArgs, '-q', ...args], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout,
+      env: {
+        ...currentEnv(),
+        LOVELY_CARVE_AGENT: '1',
+        LOVELYCARVE_AGENT: '1',
+        NO_COLOR: '1',
+      },
+    })
+  }
+
+  /**
+   * 准备案件目录：`--case` 只能作为启动参数，所以案件必须在拉起常驻 shell 之前
+   * 就用一次性命令建好。已有 `case.db` 说明案件存在，直接复用。
+   */
+  function ensureCaseFolder(caseDir) {
+    mkdirSync(caseDir, { recursive: true })
+    const dbFile = join(caseDir, 'case.db')
+    if (existsSync(dbFile)) {
+      // 上次异常退出可能留下空的 case.lock；此时没有存活 shell，可以安全清掉。
+      const lock = join(caseDir, 'case.lock')
+      if (!(host && host.running) && existsSync(lock)) {
+        try { unlinkSync(lock) } catch { /* 清不掉就让 CLI 自己报 */ }
+      }
+      return
+    }
     const cli = cliOrThrow()
-    if (host && host.cli !== cli) {
+    const { cli: bin, prefixArgs } = cliInvocation(cli, currentEnv())
+    const out = runCliOnce(bin, prefixArgs, ['cases', 'create', caseDir, '--name', 'SeeU 镜像挂载'])
+    if (out.error) throw out.error
+    const text = `${out.stdout ?? ''}
+${out.stderr ?? ''}`
+    if (out.status !== 0 && !/already contains|already exists|已存在/i.test(text)) {
+      throw new Error(`创建 LovelyCarve 案件失败：${text.trim().slice(0, 400)}`)
+    }
+    if (!existsSync(dbFile)) {
+      // 假 CLI（测试/e2e）只实现 JSONL 协议，不会真的落 case.db；真实 CLI 会。
+      log(`mount: 案件目录没有 case.db（可能是假 CLI）：${caseDir}`)
+    }
+  }
+
+  function ensureHost(caseDir) {
+    const cli = cliOrThrow()
+    const wantCase = caseDir ? resolve(caseDir) : undefined
+    if (host && (hostSourceCli !== cli || hostCaseDir !== wantCase)) {
       void host.stop()
       host = undefined
+      openedImages.clear()
     }
     if (!host) {
       const current = currentEnv()
-      const fakePrefix = []
-      // 测试/自动化：指向 .mjs 的「假 CLI」用 node 跑，避免依赖真实安装。
-      if (/\.(mjs|cjs|js)$/i.test(cli)) {
-        const node = current.SEEU_MOUNT_NODE
-          || (process.execPath.toLowerCase().endsWith('electron.exe') ? 'node' : process.execPath)
-        host = new LovelyCarveHost({ cli: node, prefixArgs: [cli], env: current, log })
-      } else {
-        host = new LovelyCarveHost({ cli, prefixArgs: fakePrefix, env: current, log })
-      }
+      const { cli: bin, prefixArgs } = cliInvocation(cli, current)
+      // 关键：`--case` 只有在进程启动时传才有效；会话里再带会被 CLI 拒绝并退出。
+      host = new LovelyCarveHost({
+        cli: bin,
+        prefixArgs,
+        startArgs: wantCase ? ['--case', wantCase] : [],
+        env: current,
+        log,
+      })
+      hostCaseDir = wantCase
+      hostSourceCli = cli
       host.start()
     }
     staleEnv = currentEnv()
@@ -354,10 +430,14 @@ export function createMountManager({ env = () => process.env, log = () => {} } =
     const current = currentEnv()
     const resolved = resolveLovelyCarveCli(current)
     const state = readMountState(current)
-    const mounts = state.mounts.map((item) => ({
+    const all = state.mounts.map((item) => ({
       ...item,
       exists: typeof item.mountPoint === 'string' ? existsSync(`${item.mountPoint}\\`) : false,
     }))
+    // 进程退出时挂载会被系统释放；此时还留在清单里的记录属于上次异常退出，清掉。
+    const live = host !== undefined && host.running
+    const mounts = live ? all : all.filter((item) => item.exists)
+    if (!live && mounts.length !== all.length) writeMountState(current, mounts)
     return {
       ok: true,
       cli: { path: resolved.path, source: resolved.source, error: resolved.path ? undefined : resolved.error },
@@ -434,19 +514,15 @@ export function createMountManager({ env = () => process.env, log = () => {} } =
       return { ok: false, error: `盘符 ${point} 已被系统占用，请换一个（如 X: 或 Y:）` }
     }
     const caseDir = mountCaseDir(currentEnv())
-    mkdirSync(caseDir, { recursive: true })
-    const runner = ensureHost()
     try {
-      await runner.send(`cases create ${quote(caseDir)} --name ${quote('SeeU 镜像挂载')}`).catch((error) => {
-        const message = String(error instanceof Error ? error.message : error)
-        if (!/alreadyExists|already exists|已存在/i.test(message)) throw error
-      })
-      await runner.send(`--case ${quote(caseDir)} --image ${quote(path)} images open ${quote(path)}`).catch((error) => {
-        const message = String(error instanceof Error ? error.message : error)
-        if (!/alreadyExists|already exists|已存在|isOpen|opened/i.test(message)) throw error
-      })
-      const created = await runner.send(`--case ${quote(caseDir)} --image ${quote(path)} mounts create ${quote(`/part:${index}`)} --mount-point ${quote(point)}`)
-      const listing = await runner.send(`--case ${quote(caseDir)} --image ${quote(path)} mounts list`).catch(() => ({ result: null }))
+      ensureCaseFolder(caseDir)
+      const runner = ensureHost(caseDir)
+      if (!openedImages.has(path)) {
+        await runner.send(`--image ${quote(path)} images open ${quote(path)}`)
+        openedImages.add(path)
+      }
+      const created = await runner.send(`--image ${quote(path)} mounts create ${quote(`/part:${index}`)} --mount-point ${quote(point)}`)
+      const listing = await runner.send(`--image ${quote(path)} mounts list`).catch(() => ({ result: null }))
       const id = pickMountId(created.result ?? listing.result, point)
       const record = {
         id,
@@ -471,13 +547,37 @@ export function createMountManager({ env = () => process.env, log = () => {} } =
     const state = readMountState(currentEnv())
     const record = state.mounts.find((item) => String(item.id) === key)
     if (!record) return { ok: false, error: `没有找到挂载记录：${key}` }
+    let released = false
+    let fallback = false
     try {
-      if (host && host.running) {
-        await host.send(`--case ${quote(record.caseDir ?? mountCaseDir(currentEnv()))} --image ${quote(record.imagePath)} mounts delete ${quote(key)} --force`)
+      const point = typeof record.mountPoint === 'string'
+        ? `${record.mountPoint.replace(/\\+$/, '')}\\`
+        : ''
+      const gone = () => !point || !existsSync(point)
+      released = gone()
+      if (!released && host && host.running) {
+        // LovelyCarve 1.3.0 的 mounts delete --force 实际会卸载，但不回任何 JSON；
+        // 所以这里只写命令、轮询盘符是否消失，必要时兜底停进程（进程退出 = 释放挂载）。
+        host.write(`--image ${quote(record.imagePath)} mounts delete ${quote(key)} --force`)
+        const deadline = Date.now() + 12_000
+        while (Date.now() < deadline && !gone()) {
+          await new Promise((resolveWait) => setTimeout(resolveWait, 150))
+        }
+        released = gone()
+        if (!released) {
+          fallback = true
+          await host.stop()
+          host = undefined
+          openedImages.clear()
+          for (let i = 0; i < 10 && !released; i += 1) {
+            await new Promise((resolveWait) => setTimeout(resolveWait, 300))
+            released = gone()
+          }
+        }
       }
       const mounts = state.mounts.filter((item) => String(item.id) !== key)
       writeMountState(currentEnv(), mounts)
-      return { ok: true, mounts }
+      return { ok: true, mounts, released, fallback }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }
@@ -488,6 +588,9 @@ export function createMountManager({ env = () => process.env, log = () => {} } =
       await host.stop()
       host = undefined
     }
+    hostCaseDir = undefined
+    hostSourceCli = undefined
+    openedImages.clear()
   }
 
   /** 供测试观察：当前是否持有 CLI 进程。 */
