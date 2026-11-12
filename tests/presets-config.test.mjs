@@ -143,3 +143,17 @@ test('命令执行统一优先 bash 工具，pwsh 仅作降级', () => {
     assert.ok(!/&\s*\$env:SEEU_CLI_NODE/.test(md), `${skill} 仍有 PowerShell 调用示例`)
   }
 })
+
+test('分析预设写明本机实测工具与 lovelyspark 优先', () => {
+  const traffic = byId.get('preset-traffic').config.plugins[0].config.prefix
+  assert.match(traffic, /先 lovelyspark-cli/)
+  assert.match(traffic, /tshark 3\.4\.0/)
+  assert.match(traffic, /E:\/CTFTools\/Forensics\/4-其他工具/)
+  assert.ok(!/Get-Command tshark/.test(traffic), 'traffic persona 不应再写 PWsh 探测空话')
+  const memory = byId.get('preset-memory').config.plugins[0].config.prefix
+  assert.match(memory, /优先且默认走 `lovelymem-cli`/)
+  for (const id of ['preset-standard','preset-apk','preset-exe','preset-data','preset-memory']) {
+    assert.match(byId.get(id).config.plugins[0].config.prefix, /本机实测/, `${id} 缺少本机实测工具说明`)
+    assert.match(byId.get(id).config.plugins[0].config.prefix, /2026-11-12/, `${id} 缺少实测日期`)
+  }
+})

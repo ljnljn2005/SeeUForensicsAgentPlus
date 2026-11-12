@@ -3,7 +3,9 @@ name: lovelyspark-cli
 description: 用本机 LovelySpark CLI 分析 PCAP/PCAPNG 流量、查询分析库并导出证据。
 ---
 
-通过现有 PowerShell 工具调用。LovelySpark 原生参数不加 `--cli`。工具路径**只能由用户在桌面端设置窗口手动指定**（设置 → 本机取证工具路径），不做自动发现。
+通过现有 PowerShell 工具调用。LovelySpark 原生参数不加 `--cli`。本机实测（2026-11-12 开发机）：**流量/日志分析优先用本技能**；tshark 3.4.0 / capinfos / editcap / mergecap 已装但不在 PATH（`E:/CTFTools/Forensics/4-其他工具/【15】网络分析/Wireshark/`），只在本技能覆盖不到时用绝对路径调用做补充或交叉复核；nfdump、zeek 未装；python 3.13 已装（scapy、dpkt、pyshark）。
+
+工具路径**只能由用户在桌面端设置窗口手动指定**（设置 → 本机取证工具路径），不做自动发现。
 
 ```bash
 "$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelyspark -- --version
