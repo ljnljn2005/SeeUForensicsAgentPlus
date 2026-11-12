@@ -164,6 +164,22 @@ await sleep(1500)
 }
 await clickText('关闭', 'button')
 await sleep(600)
+// 索引来源筛选：全部 / 火眼建库 / MYOS 导入 / 外部目录
+report.idxFilterChips = await ev("document.querySelectorAll('[data-index-src]').length")
+report.idxFilterChipTexts = await ev("[...document.querySelectorAll('[data-index-src]')].map((el) => el.textContent).join('|')")
+report.idxFilterClickMyos = await ev("(() => { const el = document.querySelector('[data-index-src=\"myos\"]'); if (!el) return false; el.click(); return true })()")
+await sleep(700)
+{
+  const t = await bodyText()
+  report.idxFilterEmpty = /没有来源为/.test(t)
+}
+report.idxFilterClickAll = await ev("(() => { const el = document.querySelector('[data-index-src=\"all\"]'); if (!el) return false; el.click(); return true })()")
+await sleep(700)
+{
+  const t = await bodyText()
+  report.idxFilterRestore = /W盘/.test(t) && !/没有来源为/.test(t)
+}
+report.idxFilterOk = report.idxFilterChips === 4 && report.idxFilterClickMyos === true && report.idxFilterEmpty === true && report.idxFilterClickAll === true && report.idxFilterRestore === true
 report.rootText = text.slice(text.indexOf('取证案件索引'), text.indexOf('取证案件索引') + 900)
 report.drill3 = await clickText('检材 3', 'div')
 await sleep(6000)

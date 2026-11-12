@@ -1486,6 +1486,7 @@ window.__ModuleLoader__.load({
     function Panel() {
       const [dir, setDir] = useState(() => localStorage.getItem('seeu.indexDir') ?? '');
       const [indexes, setIndexes] = useState([]);
+      const [srcFilter, setSrcFilter] = useState('all');
       const [db, setDb] = useState(null);
       const [node, setNode] = useState('root');
       const [view, setView] = useState(null);
@@ -2009,48 +2010,73 @@ window.__ModuleLoader__.load({
               h('div', { style: S.row },
                 h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `索引库 ${indexes.length} 个`),
                 h('span', { style: S.muted }, '点一行切换当前库')),
-              h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 180, overflow: 'auto' } },
-                indexes.map((ix) => {
-                  const on = ix.dbPath === db;
-                  const meta = ix.meta ?? null;
-                  return h('div', {
-                    key: ix.dbPath,
-                    className: 'seeu-row is-clickable' + (on ? ' is-active' : ''),
+              (() => {
+                const counts = { all: indexes.length, ges: 0, myos: 0, external: 0 };
+                for (const ix of indexes) if (counts[ix.source] != null) counts[ix.source] += 1;
+                const items = [['all', '全部'], ['ges', '火眼建库'], ['myos', 'MYOS 导入'], ['external', '外部目录']];
+                const visible = srcFilter === 'all' ? indexes : indexes.filter((ix) => ix.source === srcFilter);
+                const emptyText = '没有来源为「' + (items.find(([k]) => k === srcFilter)?.[1] ?? srcFilter) + '」的索引';
+                return [
+                  h('div', { style: { ...S.row, gap: 4, flexWrap: 'wrap' } }, items.map(([value, label]) => h('span', {
+                    key: value,
+                    'data-index-src': value,
+                    role: 'button',
+                    className: 'seeu-chip' + (srcFilter === value ? ' is-on' : ''),
                     style: {
-                      display: 'flex', flexDirection: 'column', gap: 2, minHeight: 34, padding: '5px 8px',
-                      borderBottom: '1px solid ' + C_L1, borderLeft: '2px solid ' + (on ? C_ACC : 'transparent'),
-                      background: on ? C_ACTIVE : 'transparent', cursor: 'pointer', fontSize: 12.5,
+                      fontSize: 11, padding: '1px 7px', borderRadius: 9, cursor: 'pointer',
+                      color: srcFilter === value ? C_FG : C_FG3,
+                      background: srcFilter === value ? C_ACTIVE : 'transparent',
+                      border: '1px solid ' + (srcFilter === value ? C_ACC : C_L2),
                     },
-                    onClick: () => openIndex(ix),
-                  },
-                    h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8 } },
-                      h('span', { style: { color: C_FG, fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, ix.caseName ?? ix.caseNumber ?? basename(ix.caseDir)),
-                      ix.caseNumber ? h('span', { style: { ...S.tag, flex: 'none' } }, ix.caseNumber) : null,
-                      ix.sourceLabel ? h('span', {
-                        style: {
-                          ...S.tag, flex: 'none',
-                          color: ix.source === 'ges' ? C_FG3 : C_ACC,
-                          borderColor: ix.source === 'ges' ? C_L2 : C_ACC,
+                    onClick: () => setSrcFilter(value),
+                  }, `${label} ${counts[value] ?? 0}`))),
+                  visible.length
+                    ? h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 180, overflow: 'auto' } },
+                      visible.map((ix) => {
+                        const on = ix.dbPath === db;
+                        const meta = ix.meta ?? null;
+                        return h('div', {
+                          key: ix.dbPath,
+                          className: 'seeu-row is-clickable' + (on ? ' is-active' : ''),
+                          style: {
+                            display: 'flex', flexDirection: 'column', gap: 2, minHeight: 34, padding: '5px 8px',
+                            borderBottom: '1px solid ' + C_L1, borderLeft: '2px solid ' + (on ? C_ACC : 'transparent'),
+                            background: on ? C_ACTIVE : 'transparent', cursor: 'pointer', fontSize: 12.5,
+                          },
+                          onClick: () => openIndex(ix),
                         },
-                        title: ix.tool ? '索引由 ' + ix.tool + ' 生成' : '',
-                      }, ix.sourceLabel) : null,
-                      h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, fmtBytes(ix.sizeBytes ?? 0)),
-                      ix.extra ? h('span', {
-                        role: 'button',
-                        title: '从面板的额外目录列表移除（不删除索引文件）',
-                        style: { flex: 'none', color: C_FG3, fontSize: 11, cursor: 'pointer', padding: '0 4px' },
-                        onClick: async (e) => {
-                          if (e && e.stopPropagation) e.stopPropagation();
-                          try {
-                            await post('/extra-dirs/remove', { dir: ix.caseDir });
-                            await scan();
-                          } catch (err) { setError(String(err.message ?? err)); }
-                        },
-                      }, '移除') : null,
-                      h('span', { style: { marginLeft: 'auto', ...S.rowTime } }, ix.builtAt ? fmtTime(ix.builtAt) : '')),
-                    meta?.text ? h('div', { style: { color: C_FG3, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: meta.text }, meta.text) : null,
-                    meta?.warn ? h('div', { style: { color: '#F5A524', fontSize: 11 } }, '⚠ ' + meta.warn) : null);
-                })))
+                          h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8 } },
+                            h('span', { style: { color: C_FG, fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, ix.caseName ?? ix.caseNumber ?? basename(ix.caseDir)),
+                            ix.caseNumber ? h('span', { style: { ...S.tag, flex: 'none' } }, ix.caseNumber) : null,
+                            ix.sourceLabel ? h('span', {
+                              style: {
+                                ...S.tag, flex: 'none',
+                                color: ix.source === 'ges' ? C_FG3 : C_ACC,
+                                borderColor: ix.source === 'ges' ? C_L2 : C_ACC,
+                              },
+                              title: ix.tool ? '索引由 ' + ix.tool + ' 生成' : '',
+                            }, ix.sourceLabel) : null,
+                            h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, fmtBytes(ix.sizeBytes ?? 0)),
+                            ix.extra ? h('span', {
+                              role: 'button',
+                              title: '从面板的额外目录列表移除（不删除索引文件）',
+                              style: { flex: 'none', color: C_FG3, fontSize: 11, cursor: 'pointer', padding: '0 4px' },
+                              onClick: async (e) => {
+                                if (e && e.stopPropagation) e.stopPropagation();
+                                try {
+                                  await post('/extra-dirs/remove', { dir: ix.caseDir });
+                                  await scan();
+                                } catch (err) { setError(String(err.message ?? err)); }
+                              },
+                            }, '移除') : null,
+                            h('span', { style: { marginLeft: 'auto', ...S.rowTime } }, ix.builtAt ? fmtTime(ix.builtAt) : '')),
+                          meta?.text ? h('div', { style: { color: C_FG3, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: meta.text }, meta.text) : null,
+                          meta?.warn ? h('div', { style: { color: '#F5A524', fontSize: 11 } }, '⚠ ' + meta.warn) : null);
+                      }))
+                    : h('div', { style: { ...S.muted, padding: '6px 2px' } }, emptyText),
+                ];
+              })(),
+            )
             : h(EmptyState, { title: '还没有索引库', text: '在顶部填入案件目录（火眼全解析结果目录），点「建库 / 更新」；已有索引库时可点「扫描已有索引」。' })),
         onboarding,
         myosOpen ? h(MyosDialog, {

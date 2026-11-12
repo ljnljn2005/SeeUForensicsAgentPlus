@@ -2403,3 +2403,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：`tests/myos-index.test.mjs` 增加「`findIndexes` 能读到 `manifest.tool`」断言；`npm test` 173/173、`m2-ui-check` `m2ok:true`。
 - 真机：`W盘` → `ges:火眼建库`；MYOS 导入索引 → `myos:MYOS 导入`（用 node `fetch` 读 UTF-8 验证，避免控制台码页干扰）。
 - 坑：① 比较字符串把 `seeu-myso-import` 写成 `seeu-myos-import`（myso/myos 调换）→ 标签永远落到 external；这种拼写错误不会报错，只能靠真机对照 `tool` 字段发现。② 用 python 管道解析 `curl` 输出时，Windows 控制台按 GBK 解码 UTF-8，`sourceLabel` 会显示成乱码 —— 那是诊断链路的编码问题，不是接口问题；用 node `fetch` 或写文件再读可避免。
+
+### 20.105 面板索引来源筛选（第 27 轮）
+
+- `plugins/seeu-case-index/client.js`：`Panel` 新增 `srcFilter` 状态（`all|ges|myos|external`），索引库卡片标题下加一行筛选 chip（`data-index-src`，带各来源数量），列表按 `source` 过滤；无匹配时显示「没有来源为「X」的索引」。
+- `m2-ui-check` 新增断言：`idxFilterChips===4`、chip 文案（`全部 1|火眼建库 1|MYOS 导入 0|外部目录 0`）、点「MYOS 导入」出现空提示、点「全部」恢复出 `W盘`，汇总为 `idxFilterOk`。
+- 验证：`m2-ui-check` → `idxFilterOk:true, m2ok:true, errors:[]`；`npm test` 173/173、`check:overlay` OK。
+- 坑：手写这段 JSX 时先插入 chip 又保留旧的 `indexes.map(...)` 收尾，导致括号/三元结构错位；`esbuild.transformSync(loader:'jsx')` 只报 `Unterminated` 之类的模糊错误，最后用「重写整个 return 数组」的方式一次收干净，再用 transform 校验。

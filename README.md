@@ -91,6 +91,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 - **MYOS 导入目录自动记住（第 24 轮）**：MYOS 导入可以写到任意输出目录（`outDir`），以前只有「完成并查看索引」那一下能看到，重启后 `/list` 扫不到。现在导入成功会把输出目录记进 `<DSH_HOME>/index-extra-dirs.json`，`/list` 默认扫描时合并这些额外目录（最近 20 个、去重、目录不存在自动忽略）；面板下次启动仍能看到这份索引。实测：导入到 `.dev/myos-extra2` 后 `/list` 直接出现，重启后依然在。
 - **外部目录可见可移除（第 25 轮）**：`/list` 给来源是「额外目录」的索引加 `extra:true`，面板索引行显示「外部目录」标记 + 【移除】——移除只从 `<DSH_HOME>/index-extra-dirs.json` 清单里删目录，不删索引文件；新增 `POST /seeu-index/extra-dirs/remove {dir}`（`forgetExtraDir`，大小写不敏感、目录不存在也不报错）。
 - **索引来源标签（第 26 轮）**：`/list` 每个索引带 `source/sourceLabel`——「火眼建库」（`manifest.tool = ges-index`）、「MYOS 导入」（`seeu-myso-import`）、「外部目录」（不在默认扫描目录里）；面板索引行用青色标签区分，来源由 manifest 的 `tool` 判定，不靠猜。
+- **索引来源筛选（第 27 轮）**：索引库标题下新增「全部 / 火眼建库 / MYOS 导入 / 外部目录」筛选 chip（带数量）；点某来源只显示该来源的索引，没有匹配时显示「没有来源为「X」的索引」，点「全部」恢复；`m2-ui-check` 断言 chip 数量、点击过滤与恢复。
 - **MYOS 取证结果导入 SeeU 索引（第 13 轮）**：新增 `tools/myos-index/`（MCP 客户端 `mcp.mjs`、导入器 `import.mjs`、命令行 `cli.mjs`）与 `npm run myos:import`。经 MYOS MCP 的 `query_cases` / `query_materials` / `sqlite_query` 读取加密 `.mfs` 结果库，按 SeeU 表结构写入 `<案件目录>/.seeu-index/case-index.db`（record + `record_fts` + entity 抽取 + `manifest.json`），导入后面板与 `ges-case-index` 技能可直接检索；假 MCP 服务端 + `tests/myos-index.test.mjs` 9 例，`npm test` 150/150。用法见 §11「把 MYOS 取证结果导入 SeeU 索引」。
 
 ### v0.3.7 改了什么
