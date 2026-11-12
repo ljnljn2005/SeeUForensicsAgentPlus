@@ -159,6 +159,15 @@ try {
   }
   log('分组技能', JSON.stringify(report.skillSets))
 
+  // Qiko 比武技能组（随包 49 个取证技能）
+  const qikoDir = join(home, 'skill-sets', 'qiko')
+  const qikoNames = existsSync(qikoDir) ? readdirSync(qikoDir).filter((x) => !x.startsWith('.')) : []
+  const qikoExpect = ['server-forensics-playbook', 'ios-mobile-forensics', 'wechat-people-relationship-explosion-map', 'reverse-engineering']
+  const qikoMissing = qikoExpect.filter((x) => !qikoNames.includes(x))
+  report.qikoSet = { dir: qikoDir, count: qikoNames.length, missing: qikoMissing, ok: qikoMissing.length === 0 && qikoNames.length >= 40 }
+  if (!report.qikoSet.ok) throw new Error(`skill-sets/qiko 不完整（${qikoNames.length} 个，缺 ${JSON.stringify(qikoMissing)}）`)
+  log('Qiko 技能组', JSON.stringify(report.qikoSet))
+
   const sample = skills.find((s) => s?.name === 'lovelycarve-forensics')
   report.lovelyCarve = {
     name: sample?.name,
