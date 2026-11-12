@@ -2360,3 +2360,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 验证：`skills-check` 技能列表 6 个（新增 `myos-import`）；真机 `row-counts`（`dbName`）→ `TBL_APPDATA_MANAGER 5 行`；`import-batch`（`dbName`）→ job done，`tables:[{records:5}]`，`.dev/myos-skill/.seeu-index/case-index.db` 118,784 B，`findIndexes` 能发现。
 - 测试：`tests/plugin-myos.test.mjs` 13/13（`myosTables` 新返回结构 + `name` 发现 + 批量/预估 `dbName` 路径）；`npm test` 168/168。
 - 坑：`resolveDbByName` 第一版用 `replace(/\/g,'/')` 被 python heredoc 吃掉反斜杠写成 `/\/g` 导致 `SyntaxError: missing )`，改为 `split(/[\/]/)`（用 edit 工具写，别用 shell heredoc 传正则）。
+
+### 20.101 MYOS 结果库下拉补根库（第 23 轮）
+
+- 问题：`query_phone_forensics_results_overview` 的自动发现只返回「按 app 拆分的子库」（`data/MApps/<App>{guid}.mfs`），根库 `data/MApps.mfs`（应用清单）、`FSData.mfs`（文件系统）、`FrAnalyze.mfs`（解析汇总）等都不在列表里；用户只能手动把绝对路径粘进输入框，而中文路径经控制台/HTTP 一转码就乱。
+- `plugins/seeu-case-index/myos.mjs`：新增 `collectRootDbs(dbs, {maxDepth:3})`——从每个已发现路径的目录往上 3 层，`readdirSync` 收集同目录 `.mfs` 文件（跳过已发现路径），返回 `{path,name,tables:[],source:'root'}`；`myosResultDbs()` 返回 `[...dbs, ...collectRootDbs(dbs)]`。
+- 面板：结果库下拉选项形如 `MApps.mfs · 根库 · 5 张表 · <完整路径>`；修了 `item.path.split(/[\/]/).pop()`（只按正斜杠拆，Windows 反斜杠导致整条路径被当名字）→ `split(/[\/]/)`。
+- 测试：`tests/plugin-myos.test.mjs` 14/14（新增 `collectRootDbs`：临时目录 `data/MApps.mfs` + `data/FSData.mfs` + 子库 → 补 2 个根库、去重、不重复已发现项）；`npm test` 168/168、`m2-ui-check` `m2ok:true`。
+- 真机：`案件20261015145357`/手机-data.D01 → `/myos/dbs` 返回 19 个（8 子库 + 11 根库，根库含 `MApps.mfs`/`FSData.mfs`/`FSDataIndex.mfs`/`FrAnalyze.mfs`/`apklist.mfs`/`Platform.mfs`）；面板用 JS `encodeURIComponent` 传中文路径可正常 `tables`。
+- 坑：面板请求路径没问题（浏览器/JS 发 UTF-8），乱码只出现在「Git Bash 里手写 curl」的场景，所以技能里仍推荐 `dbName`。

@@ -3,13 +3,13 @@
  * 用假 MYOS MCP 服务端，不需要真实 MYOS。
  */
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTableCounts, myosTables } from '../plugins/seeu-case-index/myos.mjs'
+import { collectRootDbs, myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTableCounts, myosTables } from '../plugins/seeu-case-index/myos.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const FAKE = join(HERE, 'fixtures', 'fake-myos-mcp.mjs')
@@ -185,3 +185,24 @@ test('myosTableCounts：缺 tables 时报 400', withEnv(async () => {
     (error) => error.status === 400,
   )
 }))
+
+test('collectRootDbs：从子库往上补根库（MApps.mfs）', () => {
+  const base = mkdtempSync(join(tmpdir(), 'seeu-root-dbs-'))
+  try {
+    const dataDir = join(base, 'dev', '手机-data.D01', 'data')
+    mkdirSync(join(dataDir, 'MApps'), { recursive: true })
+    writeFileSync(join(dataDir, 'MApps.mfs'), '')
+    writeFileSync(join(dataDir, 'FSData.mfs'), '')
+    const sub = join(dataDir, 'MApps', 'WeChat{1}.mfs')
+    writeFileSync(sub, '')
+    const extra = collectRootDbs([{ path: sub, tables: ['T'] }])
+    const names = extra.map((item) => item.name).sort()
+    assert.deepEqual(names, ['FSData.mfs', 'MApps.mfs'])
+    assert.equal(extra.every((item) => item.source === 'root'), true)
+    // 已发现的子库不会重复加入
+    const again = collectRootDbs([{ path: sub }, { path: join(dataDir, 'MApps.mfs') }])
+    assert.deepEqual(again.map((item) => item.name), ['FSData.mfs'])
+  } finally {
+    rmSync(base, { recursive: true, force: true })
+  }
+})

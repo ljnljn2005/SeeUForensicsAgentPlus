@@ -4,7 +4,7 @@
 //   列案件 → 选案件看检材 → 选检材查结果库里的表 → 选表导入成 SeeU 索引。
 // 依赖 MYOS 正在运行（MCP 服务端由 MYOS 提供），未启动时给出可读的错误。
 import { dirname, join, resolve } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { withMyosClient } from '../../tools/myos-index/mcp.mjs'
 import { importMyosRows, listMyosCases, listMyosMaterials, listMyosResultDbs, readMyosRows } from '../../tools/myos-index/import.mjs'
 
@@ -71,7 +71,41 @@ export async function myosResultDbs({ caseId = '', materialId = '' } = {}) {
   const id = String(caseId ?? '').trim()
   const mid = String(materialId ?? '').trim()
   if (!id && !mid) throw fail('缺少 caseId 或 materialId')
-  return call((client) => listMyosResultDbs(client, { caseId: id, materialId: mid }))
+  const dbs = await call((client) => listMyosResultDbs(client, { caseId: id, materialId: mid }))
+  return [...dbs, ...collectRootDbs(dbs)]
+}
+
+/**
+ * MYOS 自动发现通常只给「按 app 拆分的子库」（data/MApps/<App>{guid}.mfs），
+ * 根库 data/MApps.mfs、data/FSData.mfs 等不在列表里。这里从每个已发现路径往上找
+ * 同目录下的根库，补进下拉，避免用户手打路径（中文路径经控制台/HTTP 会转码）。
+ */
+export function collectRootDbs(dbs, { maxDepth = 3 } = {}) {
+  const extra = []
+  const seen = new Set(dbs.map((item) => String(item.path).toLowerCase()))
+  for (const item of dbs) {
+    let dir = dirname(String(item.path))
+    for (let depth = 0; depth < maxDepth; depth += 1) {
+      let entries = []
+      try {
+        entries = readdirSync(dir, { withFileTypes: true })
+      } catch {
+        break
+      }
+      for (const entry of entries) {
+        if (!entry.isFile() || !/\.mfs$/i.test(entry.name)) continue
+        const full = join(dir, entry.name)
+        const key = full.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        extra.push({ path: full, name: entry.name, tables: [], source: 'root' })
+      }
+      const parent = dirname(dir)
+      if (parent === dir) break
+      dir = parent
+    }
+  }
+  return extra
 }
 
 /**
