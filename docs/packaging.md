@@ -887,3 +887,28 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 
 - 老版本（≤0.3.2）的实例不会自己补插件包；升级后必须**完全退出**（含托盘）再启动新版本，插件才会出现。
 - 若用户目录里已有旧 profile，升级时按 `.seeu-dsh-plugins.json` 的 version 重新复制；`SEEU_DISABLE_DSH_PLUGINS=1` 可整体关闭随包插件。
+
+### v0.3.4 回归验证（2026-11-12）
+
+产物：
+
+| 文件 | 大小 |
+| --- | --- |
+| `win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,109,631,285 B） |
+| `win-unpacked/resources/app.asar` | 425,280,057 B（34,095 entries） |
+| `SeeUForensicsAgentPlus-0.3.4-x64.exe` | 281,533,139 B（blockmap 293,403 B） |
+| `SeeUForensicsAgentPlus-0.3.4-x64-portable.exe` | 236,256,556 B |
+
+验证：
+
+- `.probe/asar-034-check.mjs`：68 项全 `true`、`missing: []`。新增检查：`toolPathsModule`、`toolPathsPathPriority`（`findOnPath`/`PATHEXT`/`SEEU_TOOL_`）、`toolPathsIpc`、`settingsToolPaths`、`personaToolPaths`（Ghidra 路径 + `analyzeHeadless.bat` + PATH 解析顺序）、`devWebToolEnv`、`toolPathsE2e`、`expertPersonas`（`preset-data`/`preset-apk`/`preset-exe`）、`bashFirstPolicy`、`version034`。
+- 启动：`node scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 9501` → `ok:true, elapsedMs:7343`；portable `--port 9502` → `ok:true, elapsedMs:60014`。
+- 打包态 `m2-ui-check` → `m2ok:true, errors:[]`。
+- 打包态 `settings-check --exe` → `ok:true`：`toolPathsRows:12`、`toolPathsGhidra:"C:/Users/ASUS/.dsh/plugins/dsh-infinite-gen-5/third_party/sources/ghidra-12.1.4"`、`toolPathsSectionVisible/ApiSaved/UiSaved/FileOk` 全 `true`、`toolsRows:3`、`errors:[]`。
+- 打包态 `plugins-check --exe` → `ok:true`：`bundlesOk:true`、`packagesOk:true`、`pluginLine`「插件包 175 个（已复制 175 个…）」、`activationFailures:[]`、`activationOk:true`。
+- `npm test` → **122/122**；`npm run check:overlay` → OK。
+
+注意：
+
+- 外部工具路径解析顺序为「设置里显式指定 → PATH 命中的命令 → 默认实测路径」；打包态 `SEEU_TOOL_*` 由外壳注入，dev 预览由 `scripts/dev-web.mjs` 注入（日志「外部工具：12 个已注入」）。
+- 0.3.3 的三件产物已在本次打包后删除；`release/` 只保留 0.3.4。

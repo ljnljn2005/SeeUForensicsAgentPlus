@@ -62,24 +62,22 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.3**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.3.4**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,109,408,111 B ≈ 1.03 GiB，含随包 dsh 插件） |
-| `release/win-unpacked/resources/app.asar` | 425,056,883 B（34,072 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的三预设 + MYOS MCP 行） |
-| `release/SeeUForensicsAgentPlus-0.3.3-x64.exe`（NSIS 安装包） | 281,470,879 B（blockmap 293,467 B） |
-| `release/SeeUForensicsAgentPlus-0.3.3-x64-portable.exe` | 236,209,035 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,109,631,285 B ≈ 1.03 GiB，含随包 dsh 插件） |
+| `release/win-unpacked/resources/app.asar` | 425,280,057 B（34,095 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的三预设 + MYOS MCP 行） |
+| `release/SeeUForensicsAgentPlus-0.3.4-x64.exe`（NSIS 安装包） | 281,533,139 B（blockmap 293,403 B） |
+| `release/SeeUForensicsAgentPlus-0.3.4-x64-portable.exe` | 236,256,556 B |
 
-实测冷启动到 dsh UI：目录版 **6130 ms**；portable 首次 49.6s（先要把 ~1.0GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **7343 ms**；portable 首次 60.0s（先要把 ~1.0GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-> 注：`release/` 里还留着 `SeeUForensicsAgentPlus-0.3.1-x64-portable.exe`，因为打包时它正在运行、文件被占用无法删除；不影响 0.3.3 的产物。
-
-### v0.3.4 改了什么（未打包）
+### v0.3.4 改了什么
 
 - **每个会话预设换成精简版专家 persona**（来源：`E:\取证桌面` 下 7 份弘连「取证桌面」专家提示词，约 33–37 KB/份 → 精简到 8.7–13.7 KB，删掉本机不存在的 `D:\Programs\Honglian\GoldenEyesV4\skills\…` 技能清单与「取证桌面」外壳指令，保留取证纪律、溯源红线与三分结论要求）：
   - 取证分析（Forensics）：火眼 + 服务器/主机取证合并稿（认环境 → 索引 → 火眼挂载目录 → 镜像挂载 → `ges read` 角标 → 三分强度 → 服务器 Windows/Linux 排查子段）；
@@ -89,6 +87,8 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 - **提示词再加固「先挂载、后原始」**：概览规则 1/2 明确「设备/系统类问题先看备注 → `ges status --json` 的 `evidence_mounts` 与火眼只读挂载目录」，并**禁止在 `W:\` 上直接解压/整份读取原始 `.zip`/`.E01`/`.dd`**（确实没有挂载入口时才按需只读单条目，并在答复里说明「火眼未提供该检材挂载入口」）；`ges-case-index` 技能同步。
 - **设置里可改外部工具路径**（用户要求「这些工具都支持在设置里修改路径」）：新增「外部取证工具路径」区，12 项可选可改，Ghidra 默认指向 `C:/Users/ASUS/.dsh/plugins/dsh-infinite-gen-5/third_party/sources/ghidra-12.1.4`；保存到 `<DSH_HOME>/tool-paths.json`，启动时注入 `SEEU_TOOL_<ID>` 环境变量；persona 同步成「以环境变量为准、未设置用默认实测值」，Ghidra 从「未装」改为默认路径 + `analyzeHeadless.bat`。新增 `tools/tool-paths.mjs`/`src/tool-paths.ts` 与 `tests/tool-paths.test.mjs` 6 例（含 PATH 优先）；`scripts/e2e/settings-check.mjs` 增加 12 行渲染、Ghidra 默认值、保存落盘断言。解析顺序按要求做成「**PATH 环境变量优先，找不到再退回默认路径**」，设置里显式改过的路径优先级最高。
 - 校验：`npm test` **122/122**；`npm run check:overlay` 扩展为逐预设校验三个专项预设（存在、名称、`tool-fs` 只读）；`tests/presets-config.test.mjs` 增加专项预设、persona 关键词与外部工具路径断言；`npm run test:e2e:settings` 全绿（含外部工具路径 12 行/保存）。
+
+- **打包与打包态回归（v0.3.4）**：NSIS `281,533,139 B`（blockmap 293,403 B）、portable `236,256,556 B`、`app.asar` `425,280,057 B`（34,095 entries）、目录版总计 `1,109,631,285 B`；`.probe/asar-034-check.mjs` 68 项全 true（在原 61 项上新增 `toolPathsModule`/`toolPathsPathPriority`/`toolPathsIpc`/`settingsToolPaths`/`personaToolPaths`/`devWebToolEnv`/`toolPathsE2e`/`expertPersonas`/`bashFirstPolicy`/`version034`）；打包态 `m2-ui-check`（`m2ok:true, errors:[]`）、`settings-check --exe`（`ok:true`：`toolPathsRows:12`、Ghidra 默认路径、12 项保存落盘、`toolsRows:3`）、`plugins-check --exe`（`ok:true`：profile 下 175 个插件包、`activationFailures:[]`）；目录版冷启动 **7343 ms**、portable **60.0 s**；`npm test` **122/122**、`npm run check:overlay` OK。
 
 ### v0.3.3 改了什么
 

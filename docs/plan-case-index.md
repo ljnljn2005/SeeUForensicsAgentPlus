@@ -2004,7 +2004,7 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 实现：`.probe/apply-personas.py`（仅脚本，不入库）按 `- id: preset-X` 找 `prefix: |` 并按缩进替换正文；`preset-data`/`preset-apk`/`preset-exe` 三块以 `NEW_TEMPLATE` 整块插入（工具面复制 seeu-lite：tool-fs 只读、tool-todo、compaction 等，`skill-filesystem` 不设 `customSkillDirs`）。
 - 提示词再加固（回答用户「为什么直接读 W:\ 原始 zip 而不是先看火眼虚拟目录」）：`plugins/seeu-case-index/index.js` 的概览规则 1 增「备注没有时先 `ges status --json` 查 `evidence_mounts` 并翻挂载目录，不要解压 W:\ 原始压缩包」；规则 2 增「禁止在 `W:\` 上直接解压/整份读取原始 `.zip`/`.E01`/`.dd`，确实没有挂载入口时才按需只读单条目并说明」；规则 4 增「读原始文件前先确认已查过挂载且不可用」；`ges-case-index` 技能同步同一句硬规则。
 - 校验：`npm test` 112/112（`tests/presets-config.test.mjs` 增至 6 例：三预设顺序/名称/只读工具面、6 份 persona 长度与关键词）；`npm run check:overlay` 扩展逐预设校验 `preset-data`/`preset-apk`/`preset-exe`（存在、名称、tool-fs 只读）；`node scripts/build.mjs` OK。
-- 坑：① overlay 里现有分析预设的 `customSkillDirs` 必须写成带引号的 `!!js` 标量，否则 js-yaml 报 unknown tag / bad indentation；② 计划文档里写 `' '` 时若写成真实 NUL，会让整个 md 变 binary（本次已修复为转义文本）；③ persona 文本较长（单份 13.7 KB），替换脚本必须按缩进边界截断，不能按空行。
+- 坑：① overlay 里现有分析预设的 `customSkillDirs` 必须写成带引号的 `!!js` 标量，否则 js-yaml 报 unknown tag / bad indentation；② 计划文档里写 `'\u0000'` 时若写成真实 NUL，会让整个 md 变 binary（本次已修复为转义文本）；③ persona 文本较长（单份 13.7 KB），替换脚本必须按缩进边界截断，不能按空行。
 - 遗留：日志分析预设尚无专家 persona（用户未提供对应文件）；真实观看效果需重启 dev 预览/重新打包，打包前先 `npm run check:overlay`。
 
 ### 20.75 外部工具路径改为设置里可改（Ghidra/IDA/tshark/jadx/python/7z/sqlite3…）
@@ -2020,3 +2020,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 坑：① 新增行的 class 复用 `.tool` 后，旧断言 `.tools .tool` 数到 15 行导致 `toolsSectionVisible:false`——断言改为 `.tools .tool[data-tool]`；② `kind:'dir'` 的 Ghidra 必须用目录选择对话框，不能沿用 exe 过滤；③ 路径注入只对「存在且类型对」的项生效，避免把坏路径写进会话环境变量。
 - 遗留：改路径只影响新会话（dsh 启动时读环境变量）；打包版需重新打包才带上 `tool-paths` 模块与 persona 改动。
 
+
+## 20.76 v0.3.4 打包交付：专家 persona + bash 优先 + 外部工具路径设置/PATH 优先
+
+- 版本 `0.3.4`（`npm version --no-git-tag-version`）；`node scripts/build.mjs`、`npm test` **122/122**、`npm run check:overlay` OK。
+- 打包：`npx electron-builder --win --x64 -c.directories.output=release-034`（日志 `.probe/pack-034.log`，无证书跳过签名）。产物搬进 `release/`（删除 0.3.3 三件）：exe `281,533,139 B`、blockmap `293,403 B`、portable `236,256,556 B`、`app.asar` `425,280,057 B`（34,095 entries）、目录版总计 `1,109,631,285 B`。
+- 自检：`.probe/asar-034-check.mjs`（由 asar-033 复制并新增 10 项：`toolPathsModule`、`toolPathsPathPriority`、`toolPathsIpc`、`settingsToolPaths`、`personaToolPaths`、`devWebToolEnv`、`toolPathsE2e`、`expertPersonas`、`bashFirstPolicy`、`version034`）→ 68 项全 true、`missing:[]`。
+- 启动验证：目录版 `--port 9501` → `ok:true, elapsedMs:7343`；portable `--port 9502` → `ok:true, elapsedMs:60014`。
+- 打包态 e2e：`m2-ui-check` → `m2ok:true, errors:[]`；`settings-check --exe` → `ok:true`（`toolPathsRows:12`、Ghidra 默认路径、12 项保存落盘、`toolsRows:3`、`errors:[]`）；`plugins-check --exe` → `ok:true`（`bundlesOk`/`packagesOk` 真、175 个插件包、`activationFailures:[]`、`activationOk:true`）。
+- 坑：① 打包态 `plugins-check` 用 grep 过滤时一度「无输出」，实际是输出走 stderr/尾部被截断，重跑看完整 JSON 即 `ok:true`，不是失败；② `docs/plan-case-index.md` 里又混进一个真实 NUL 字节使 `grep` 判定 binary，已替换为 `\u0000` 文本；③ 0.3.3 的 portable 这次能删（未被占用），`release/` 只留 0.3.4。
+- 遗留：外部工具路径只影响新会话；真实 LovelyCarve/LovelySpark/LovelyMem 与镜像挂载仍未实机验证（本机未装 LovelyCarve）；MYOS → case-index.db 统一入库器仍未做（等用户指定案件）。
