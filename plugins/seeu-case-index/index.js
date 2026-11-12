@@ -11,6 +11,7 @@ import { genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
 import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.mjs';
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
 import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTableCounts, myosTables } from './myos.mjs';
+import { readExtraDirs, rememberExtraDir } from '../../tools/ges-index/extra-dirs.mjs';
 
 const ROUTE = '/seeu-index';
 const jobs = new Map();
@@ -74,8 +75,11 @@ function syncOneCase(dbPath) {
 }
 
 function defaultDirs() {
-  const env = process.env.SEEU_INDEX_SEARCH_DIRS ?? '';
-  return env.split(';').map((s) => s.trim()).filter(Boolean);
+  const env = process.env['SEEU_INDEX_SEARCH_DIRS'] ?? '';
+  const dirs = env.split(';').map((s) => s.trim()).filter(Boolean);
+  // MYOS 导入可以写到任意输出目录；这些目录记在 <DSH_HOME>/index-extra-dirs.json，
+  // 下次扫描自动带上（外壳下发的 SEEU_INDEX_SEARCH_DIRS 只是默认集合）。
+  return [...new Set([...dirs, ...readExtraDirs()])];
 }
 
 function send(res, status, body) {
@@ -235,7 +239,9 @@ async function handle(req, res) {
         return send(res, 200, result);
       }
       if (req.method === 'POST' && path === '/myos/import') {
-        const result = await myosImport(await readBody(req));
+        const body = await readBody(req);
+        const result = await myosImport(body);
+        if (body.outDir) rememberExtraDir(body.outDir);
         return send(res, 200, result);
       }
       if (req.method === 'POST' && path === '/myos/row-counts') {
@@ -287,6 +293,8 @@ async function handle(req, res) {
             job.result = result;
             job.totals = result.totals;
             job.finishedAt = new Date().toISOString();
+            // 导入成功时才记录输出目录（目录此时已存在）。
+            if (body.outDir) rememberExtraDir(body.outDir);
           })
           .catch((error) => {
             job.status = 'failed';

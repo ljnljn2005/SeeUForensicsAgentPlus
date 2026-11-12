@@ -2369,3 +2369,16 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：`tests/plugin-myos.test.mjs` 14/14（新增 `collectRootDbs`：临时目录 `data/MApps.mfs` + `data/FSData.mfs` + 子库 → 补 2 个根库、去重、不重复已发现项）；`npm test` 168/168、`m2-ui-check` `m2ok:true`。
 - 真机：`案件20261015145357`/手机-data.D01 → `/myos/dbs` 返回 19 个（8 子库 + 11 根库，根库含 `MApps.mfs`/`FSData.mfs`/`FSDataIndex.mfs`/`FrAnalyze.mfs`/`apklist.mfs`/`Platform.mfs`）；面板用 JS `encodeURIComponent` 传中文路径可正常 `tables`。
 - 坑：面板请求路径没问题（浏览器/JS 发 UTF-8），乱码只出现在「Git Bash 里手写 curl」的场景，所以技能里仍推荐 `dbName`。
+
+### 20.102 记住 MYOS 导入输出目录（第 24 轮）
+
+- 问题：面板「从 MYOS 导入」可以把索引写到任意 `outDir`，导入完成回调里 `scan(caseDir)` + `setDb(dbFile)` 能立刻看到；但下次启动 `/list` 只扫外壳下发的 `SEEU_INDEX_SEARCH_DIRS`，输出目录不在其中就「消失」了。
+- 新增 `tools/ges-index/extra-dirs.mjs`：
+  - `extraDirsFile(env)` = `SEEU_INDEX_EXTRA_DIRS` 或 `<DSH_HOME>/index-extra-dirs.json`（`SEEU_DSH_HOME`/`DSH_HOME` 回退；都没有则返回空，不写盘）；
+  - `readExtraDirs(env)`：读 `{dirs:[...]}`，过滤非绝对路径/不存在的目录、按小写去重；
+  - `rememberExtraDir(dir, env)`：只接受已存在的绝对路径，最近优先、最多 20 个，写 2 空格 JSON（`updatedAt`）。
+  - 故意用独立文件名，避免与外壳 `src/host.ts` 维护的 `index-state.json` 双写冲突。
+- `plugins/seeu-case-index/index.js`：`defaultDirs()` 合并 `readExtraDirs()`；`POST /myos/import` 成功后 `rememberExtraDir(body.outDir)`；`POST /myos/import-batch` 在任务 **成功** 的 `.then` 里记录（失败/取消不记）。
+- 测试 `tests/extra-dirs.test.mjs` 4 例：路径解析（默认/覆盖/无 home）、记录-去重-最近优先、忽略相对路径与不存在目录、坏 JSON 不抛错且读时过滤。
+- 真机验证：`dbName` 批量导入到 `.dev/myos-extra2` → `index-extra-dirs.json` 出现该目录；`/list`（不带 dir）返回 `W盘` + 该 MYOS 索引；用 python 以 UTF-8 发请求，`case_name` 正确存为「额外目录验证2」（用 Git Bash `curl -d` 发中文会 GBK 乱码，属控制台问题，面板 JS 是 UTF-8 不受影响）。
+- 坑：最初在 `POST /myos/import-batch` **启动前** 调 `rememberExtraDir(outDir)`，此时输出目录还不存在 → 直接被忽略；改为任务成功后记录。
