@@ -19,6 +19,7 @@ import {
   PRODUCT_DISPLAY_NAME,
   PRODUCT_NAME,
 } from './brand.js'
+import { pickStaleAuthCookies } from './auth-cookies.js'
 import { DshHost, type HostState } from './host.js'
 import {
   describeLocalModelConfig,
@@ -351,7 +352,10 @@ async function startHost(): Promise<void> {
       logShell(`host ready: ${state.url}`)
       setStatus({ phase: 'ready', message: '运行时已就绪', url: state.url })
       if (mainWindow !== undefined && !mainWindow.isDestroyed()) {
-        void mainWindow.loadURL(state.url)
+        const target = mainWindow
+        void pruneStaleAuthCookies(state.url).finally(() => {
+          if (!target.isDestroyed()) void target.loadURL(state.url)
+        })
       }
     }
   })
@@ -368,6 +372,23 @@ async function startHost(): Promise<void> {
     const message = error instanceof Error ? error.message : String(error)
     logShell(`startHost failed: ${message}`)
     await showErrorPage('取证运行时启动失败', errorDetail(error))
+  }
+}
+
+/**
+ * 127.0.0.1 的 cookie 不区分端口：外壳每次用新端口启动都会多一条 dsh-auth-<hash>。
+ * 累积到 16 KB 后 dsh 的 Node HTTP 服务会直接回 431，首页永远白屏；加载首页前清掉非当前端口的旧 cookie。
+ */
+async function pruneStaleAuthCookies(url: string): Promise<void> {
+  try {
+    const { hostname, port } = new URL(url)
+    const origin = `${hostname}:${port}`
+    const cookies = await session.defaultSession.cookies.get({ domain: hostname })
+    const stale = pickStaleAuthCookies(cookies, origin)
+    for (const name of stale) await session.defaultSession.cookies.remove(`http://${hostname}/`, name)
+    logShell(`auth cookies: 检查到 ${cookies.length} 条，清理 ${stale.length} 个旧端口的 dsh-auth cookie（127.0.0.1 不区分端口，攒多了会让首页 431）`)
+  } catch (error) {
+    logShell(`auth cookies: 清理失败（忽略）${error instanceof Error ? error.message : String(error)}`)
   }
 }
 

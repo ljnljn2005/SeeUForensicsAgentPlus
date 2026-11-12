@@ -1,7 +1,7 @@
 {
   "name": "seeu-forensics-agent-plus",
   "productName": "SeeUForensicsAgentPlus",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "private": true,
   "type": "module",
   "description": "SeeUForensicsAgentPlus — 取证专用 DeepSeek Harness 桌面版",
@@ -65,7 +65,8 @@
     "test:e2e:mounts": "node scripts/e2e/mount-check.mjs",
     "test:e2e:skills": "node scripts/e2e/skills-check.mjs",
     "test:e2e:plugins": "node scripts/e2e/plugins-check.mjs",
-    "test:e2e:real-tools": "node scripts/e2e/real-tools-bench.mjs"
+    "test:e2e:real-tools": "node scripts/e2e/real-tools-bench.mjs",
+    "test:e2e:auth-cookies": "node scripts/e2e/auth-cookie-check.mjs"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.1.0",

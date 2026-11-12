@@ -946,3 +946,12 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版 `verify-launch --port 9491` → `ok:true, elapsedMs:5088`；portable `--port 9492 --timeout 240000` → `ok:true, elapsedMs:52954`。
 - 打包态 e2e（`SEEU_UI_EXE` 指 `release/win-unpacked/SeeUForensicsAgentPlus.exe`，用 Windows 路径）：`m2-ui-check` `m2ok:true/errors:[]`；`settings-check --exe` `ok:true`（`diagItems` 五项全 ✓、`thinkingSaved:true`、`toolPathsRows:13`、`probeNoContextWindow:false`）；`plugins-check --exe` `ok:true`（175 个插件包、`activationFailures:[]`、`activationOk:true`）；`skills-check --exe` `ok:true`（`leaked:[]`）；`hero-check --exe` `ok:true`（本机工具 13/13、镜像挂载 0）；`mount-check --exe` `ok:true`（inspect 164 ms、2 分区、mount/unmount 正常）。
 - 坑：asar 检查里匹配 esbuild 产物要按压缩后的写法（`key: "stream"` 双引号；`mountErrorHint` 在主进程 bundle，不在 `mounts.html`），否则误报 false。
+
+### v0.3.7 回归验证
+
+- 产物：NSIS `SeeUForensicsAgentPlus-0.3.7-x64.exe` **281,815,681 B**（blockmap 293,228 B）、portable **236,553,590 B**、`resources/app.asar` **426,333,279 B（34,193 entries）**、`win-unpacked` 总计 1,110,684,507 B；electron-builder 26.18.0、Electron 44.7.0、无证书跳过签名（约 15 分钟）。
+- 打包坑：第一次用 `nohup npx electron-builder … &` 把任务挂在被 shell 收走的进程组里，构建目录只留半成品；第二次直接重跑报 `ENOENT: rename … \win-unpacked\electron.exe → SeeUForensicsAgentPlus.exe`（旧 `win-unpacked` 残留）；`rm -rf release-037` 后第三次用后台 job 正常完成。**结论：打包先清干净输出目录，且用受管后台任务而不是 `nohup &`。**
+- asar 自检：`.probe/asar-037-check.mjs` **89 项全 true**、`missing:[]`。新增 `buildProgress`/`buildCancel`/`buildAbortSignal`/`buildDedupe`/`indexMetaList`/`m2IndexMeta`、`authCookiePrune`/`authCookieE2e`、`version037`；修了两处检查写法：`authCookieE2e` 要读仓库 `package.json`（asar 内清单没有 `scripts`）。
+- 启动：目录版 `verify-launch --port 5391` → `ok:true, elapsedMs:5092`；portable `--port 5392 --timeout 240000` → `ok:true, elapsedMs:46641`。
+- 打包态 e2e（`SEEU_UI_EXE` 指 `release/win-unpacked/SeeUForensicsAgentPlus.exe`，用 Windows 路径）：`m2-ui-check` `m2ok:true/errors:[]`；`settings-check --exe` `ok:true`（`diagItems` 五项全 ✓、`thinkingSaved:true`、`toolPathsRows:13`）；`plugins-check --exe` `ok:true`（175 个插件包、`activationFailures:[]`、`activationOk:true`）；`skills-check --exe` `ok:true`（`qikoSet.count:43`、`leaked:[]`）；`hero-check --exe` `ok:true`（`actions` 五项、本机工具 13/13、最近案件 chip 正常，证明 431 修复后首页可渲染）；`mount-check --exe` `ok:true`（inspect 185 ms、mount 361 ms、unmount 2 ms、`timingWired:true`）；dev `auth-cookie-check` `{"ok":true,"seeded":80,"pruned":81,"rendered":true}`。
+- 坑：dsh 页面加载完成后 URL 会从 `/?token=…` 变成 `/`（前端 `replaceState`），`hero-check` 旧正则只认带 token 的 URL 会误报「主页面没出现」；已改为同时接受两种 URL。

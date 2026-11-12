@@ -2213,3 +2213,46 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `npm test` 137/137。
 
 **遗留**：取消后没有「保留半成品以续跑」入口；取消按钮只在建库进度卡出现。
+
+### 20.90 修复 dsh-auth cookie 累积导致首页 431（第 12 轮）
+
+**现象**：0.3.7 打包态 `hero-check --exe` 失败，`actions:[]`、`bodyHead:""`；不只打包版，0.3.6 及更早同样会中招 —— 只是需要累积几十次启动。
+
+**定位过程**
+1. 先把 hero 等待从 30 s 提到 120 s 仍失败，加 `bodyHead` 诊断确认页面正文为空（不是「加载慢」）。
+2. CDP 探针（`.probe/hero-probe2/4/6.mjs`）：`Page.navigate` 到 `http://127.0.0.1:<port>/?token=…` 时 `Network.responseReceived` 只有 `{"Connection":"close"}`，`Log.entryAdded` 报 `431 (Request Header Fields Too Large)` —— Node `clientError` 的 HPE_HEADER_OVERFLOW 特征。
+3. `requestWillBeSent` 的头只有 210 字节，但 `requestWillBeSentExtraInfo` 显示 **Cookie 头 15,958 字节**（总 16,550 > Node 默认 16 KB）。
+4. `Storage.getCookies`：127.0.0.1 下有几十条 `dsh-auth-<hash>`，每条 ~225 B，值为 `v1.<base64url JSON>`，JSON 里 `authority:"127.0.0.1:<端口>"` —— **cookie 按域名存，不区分端口**，外壳每次换端口（dev 预览/打包版/每次重启端口不同）就多一条。
+5. 外壳 `src/main.ts` 用 `app.setPath('userData', …\SeeUForensicsAgentPlus)`，所以用户机器上的 jar 会真正累积，不是测试环境特有。
+
+**实现**
+- `tools/auth-cookies.mjs`：`decodeAuthCookieAuthority(value)`（去 `v1.` → base64url → JSON.authority，坏值返回 `''`）、`pickStaleAuthCookies(cookies, origin)`（`dsh-auth-` 开头且 authority ≠ `host:port`，解不开的也算旧）。
+- `src/auth-cookies.ts`：薄层 re-export（主进程用）。
+- `src/main.ts`：`pruneStaleAuthCookies(url)` → `cookies.get({domain: hostname})` → `pickStaleAuthCookies` → 逐个 `cookies.remove('http://<hostname>/', name)`，日志带「检查到 N 条、清理 M 个」；host ready 回调里 `void pruneStaleAuthCookies(state.url).finally(() => target.loadURL(state.url))`，**先清理再加载**。
+- e2e `scripts/e2e/auth-cookie-check.mjs`（`npm run test:e2e:auth-cookies`）：在 loading.html（`file://`）阶段通过 CDP `Storage.setCookies` 塞 80 条旧端口 cookie（`expires` 次日，约 18 KB），然后等外壳页渲染；断言日志「清理 80 个」、页面正文非空、剩余 `dsh-auth` cookie ≤2。
+
+**坑**
+1. 第一版 e2e 想「两次启动共享 userData」自然累积，失败：dsh-auth 是**会话 cookie**，进程被 kill 后不落盘，第二次启动「检查到 0 条」——必须显式播种。
+2. 播种时机要在 `loading.html` 阶段（host 还没 ready、清理还没跑）；等外壳页出现再播种就晚了。
+3. 不能只等「页面有文字」：loading 页本身有文字，会假通过；要等 `http://127.0.0.1` 的外壳页。
+4. 日志改「检查到 N 条，清理 M 个」常量化，e2e 才能断言到具体数量（只打「清理 M 个」且 M=0 时无法区分「没跑」和「跑干净了」）。
+
+**验证**
+- 单测 `tests/auth-cookies.test.mjs` 4/4；`npm test`（含）141/141；`check:overlay` OK；build OK。
+- e2e：`{"ok":true,"seeded":80,"pruned":80,"rendered":true,"authCookies":1,"pruneLine":"auth cookies: 检查到 80 条，清理 80 个旧端口的 dsh-auth cookie…"}`。
+
+**遗留**：只在 127.0.0.1 上清理；若将来支持远程 dsh 地址，需要按真实 host 处理。
+
+## §20.91 v0.3.7 打包与回归（第 12 轮）
+
+**背景**：第 12 轮修复「跑久了首页 431 白屏」（见 §20.90）后需要重新出包，把第 8~12 轮的建库进度/取消、索引元数据、cookie 清理一起发布。
+
+**产物**（无签名，约 15 分钟）：NSIS `281,815,681 B`（blockmap 293,228 B）、portable `236,553,590 B`、`app.asar` `426,333,279 B`（34,193 entries）、目录版 1,110,684,507 B。
+
+**验证**：`.probe/asar-037-check.mjs` 89 项全 true、`missing:[]`；目录版冷启动 5,092 ms、portable 46,641 ms；打包态 `m2-ui-check` / `settings-check --exe`（diag 五项、13 行工具路径）/ `plugins-check --exe`（175 包、`activationFailures:[]`）/ `skills-check --exe`（qiko 43 个）/ `hero-check --exe`（首页正常，431 修复生效）/ `mount-check --exe`（挂载 361 ms）全绿；dev `auth-cookie-check` 播种 80 条旧 cookie → 清理 81 条、页面正常渲染；`npm test` 141/141、`check:overlay` OK。
+
+**坑**
+1. `nohup node_modules/.bin/electron-builder … &` 挂在被 shell 收回的进程组里，构建目录只剩半成品日志也没有；应该用受管后台任务。
+2. 半成品 `release-037/win-unpacked` 残留导致第二次构建 `ENOENT rename electron.exe`；打包前必须清输出目录。
+3. asar 内的 `package.json` 不含 `scripts`，检查 `test:e2e:*` 脚本是否存在要读仓库 `package.json`。
+4. hero e2e 匹配 URL 要同时接受 `/?token=…` 与 `/`（页面加载后前端 replaceState 会去掉 token）。

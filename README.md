@@ -62,33 +62,39 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.6**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.3.7**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,786,746 B ≈ 1.03 GiB，含随包 dsh 插件与技能库） |
-| `release/win-unpacked/resources/app.asar` | 426,435,518 B（34,213 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory,qiko}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的十个预设 + MYOS MCP 行） |
-| `release/SeeUForensicsAgentPlus-0.3.6-x64.exe`（NSIS 安装包） | 281,864,757 B（blockmap 293,917 B） |
-| `release/SeeUForensicsAgentPlus-0.3.6-x64-portable.exe` | 236,497,369 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,684,507 B ≈ 1.03 GiB，含随包 dsh 插件与技能库） |
+| `release/win-unpacked/resources/app.asar` | 426,333,279 B（34,193 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory,qiko}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的十个预设 + MYOS MCP 行） |
+| `release/SeeUForensicsAgentPlus-0.3.7-x64.exe`（NSIS 安装包） | 281,815,681 B（blockmap 293,228 B） |
+| `release/SeeUForensicsAgentPlus-0.3.7-x64-portable.exe` | 236,553,590 B |
 
-实测冷启动到 dsh UI：目录版 **5088 ms**；portable 首次 53.0s（先要把 ~1.1GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **5092 ms**；portable 首次 46.6s（先要把 ~1.1GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-### v0.3.7 待发布（未打包）
+### v0.3.7 改了什么
 
 - **建库进度可读化（第 8 轮）**：新增 `tools/ges-index/progress.mjs`（`buildPhaseLabel` / `formatDuration` / `describeBuildProgress` 纯函数），服务端 `GET /seeu-index/build` 在原有 job 上附加 `progress` 字段：阶段中文名（探测案件 / 枚举检材 / 读取检材数据 / 校验与替换 / 完成 / 失败）、**实时已用时间**（运行中按 `startedAt` 现算，不再只在结束时才有 `elapsedMs`）、`已完成/总数 条 · 百分比`、按吞吐估算的**剩余时间**；运行超过 90 秒时给「可以先切到其他视图，任务会在后台继续」提示；完成后给出「建库完成：N 条记录 · M 个实体 · 用时 X · 索引 Y MiB」摘要，失败时给出错误码与原因。
 - 面板进度卡（`plugins/seeu-case-index/client.js`）改为渲染上述中文进度：如「读取检材数据 · 79 / 360 条 · 21.9% · 已用 1 分 20 秒 · 剩余约 4 分 50 秒」，不再只有一行 `fetch 21.9%`。
 - **防重复提交**：同一案件目录已有运行中的建库任务时，`POST /build` 直接返回该任务（`existing:true`），避免并发重建互相踩库（实测并发会让部分叶子失败、触发 `E_VALIDATION`）。
-- 单测 `tests/progress.test.mjs` 6 例（阶段名回退、时长格式、运行中实时 elapsed、超 90 秒提示与 ETA、完成/失败摘要、同目录复用运行中任务）。- **索引规模与新鲜度写进会话概览（第 9 轮）**：`findIndexes()` 现在带回 `manifest.json` 的 `counts/durationMs/leaves/coverageOk/integrityOk`；新增 `tools/ges-index/index-meta.mjs`（`formatBytes` / `formatBuiltAt` / `indexSummary` 纯函数）。会话概览的每个案件多一行「索引：22,776 条记录 · 8,191 个实体 · 360 个检材文件 · 建库 2026-11-12 23:55（用时 3 分 3 秒） · 库 63.0 MiB」，索引超过 7 天或上次建库有失败叶子时给出 ⚠ 提示（模型能据此判断「要不要先重建索引」）。
+- 单测 `tests/progress.test.mjs` 6 例（阶段名回退、时长格式、运行中实时 elapsed、超 90 秒提示与 ETA、完成/失败摘要、同目录复用运行中任务）。
+- **索引规模与新鲜度写进会话概览（第 9 轮）**：`findIndexes()` 现在带回 `manifest.json` 的 `counts/durationMs/leaves/coverageOk/integrityOk`；新增 `tools/ges-index/index-meta.mjs`（`formatBytes` / `formatBuiltAt` / `indexSummary` 纯函数）。会话概览的每个案件多一行「索引：22,776 条记录 · 8,191 个实体 · 360 个检材文件 · 建库 2026-11-12 23:55（用时 3 分 3 秒） · 库 63.0 MiB」，索引超过 7 天或上次建库有失败叶子时给出 ⚠ 提示（模型能据此判断「要不要先重建索引」）。
 - 单测 `tests/index-meta.test.mjs` 5 例（体积/时间格式、manifest 缺失容错、超 7 天旧索引告警、失败叶子告警并存）。
 - 实测：dev 预览重生成 `.dev/dsh-home/AGENTS.md`（2,728 字符）含上述摘要行。
 - **面板索引列表显示规模与新鲜度（第 10 轮）**：`GET /seeu-index/list` 的每个索引附带 `meta`（与写入会话概览同一个 `indexSummary`），面板索引卡片改为两行：主行案件名/案号/体积/生成时间，副行「索引：22,776 条记录 · 8,191 个实体 · 360 个检材文件 · 建库 2026-11-12 23:55（用时 3 分 3 秒） · 库 63.0 MiB」；索引过期或上次建库有失败叶子时副行下再显示琥珀色 ⚠ 提示。面板与会话概览口径一致，避免「面板说 3 万条、AI 说 2 万条」。
 - **建库可取消（第 11 轮）**：`buildIndex()` 支持 `AbortSignal`（探测后/枚举后/取数返回后检查），插件新增 `POST /seeu-index/build/cancel`（运行中任务返回 `{ok,jobId}`，已结束返回 409），状态新增 `cancelled`；半成品 `.seeu-index/case-index.db.building` 会被清理，**旧索引原样保留**。面板进度卡在运行时多一个「取消建库」按钮，取消后提示「已取消建库（用时 X），旧索引保持不变」。取消在下一个检查点生效（正在执行的 `ges` 单次调用结束后，通常几秒–20 秒）。
 
 - 实测（dev 预览直连插件 API，真实案件 `W盘_2919…`，360 个叶子/22,777 条记录）：各阶段中文名、秒级已用时间、`已完成/总数` 与 `剩余约` 连续可见（运行中样例「读取检材数据 · 81 / 360 条 · 22.5% · 已用 1 分 15 秒 · 剩余约 4 分 16 秒」）；一次全量重建 **4 分 9 秒**，完成摘要「建库完成：22,776 条记录 · 8,191 个实体 · 用时 4 分 9 秒 · 索引 63.0 MiB」。
+- **修复：跑久了首页 431 白屏（第 12 轮，重要）**：dsh 的登录 cookie（`dsh-auth-<hash>`，值里带 `authority:"127.0.0.1:<端口>"`）是**按域名存、不区分端口**的；外壳每次换端口启动就多一条，攒到约 70 条（Cookie 请求头 ≈16 KB）后，dsh 的 Node HTTP 服务直接回 `431 Request Header Fields Too Large`，首页只剩空白 —— 之前没人注意，因为要累积几十次启动才触发。
+  - 修复：新增 `tools/auth-cookies.mjs`（`decodeAuthCookieAuthority` / `pickStaleAuthCookies` 纯函数）；外壳在 `loadURL` 前先 `session.defaultSession.cookies.get({domain:'127.0.0.1'})`，把 authority 不是当前 `host:port` 的旧条目删掉，再加载页面；日志 `auth cookies: 检查到 N 条，清理 M 个旧端口的 dsh-auth cookie（127.0.0.1 不区分端口，攒多了会让首页 431）`。
+  - 单测 `tests/auth-cookies.test.mjs` 4 例；e2e `npm run test:e2e:auth-cookies` 在 loading 页阶段塞 80 条旧端口 cookie（≈18 KB，未修复必然 431）→ 断言日志「清理 80 个」且首页能渲染正文。
+- **打包与打包态回归（v0.3.7）**：NSIS `281,815,681 B`（blockmap 293,228 B）、portable `236,553,590 B`、`app.asar` `426,333,279 B`（34,193 entries）、目录版总计 `1,110,684,507 B`；`.probe/asar-037-check.mjs` **89 项全 true**（含 `authCookiePrune`/`authCookieE2e`/`buildProgress`/`buildCancel`/`buildAbortSignal`/`indexMetaList`/`m2IndexMeta`/`version037`）；打包态 `m2-ui-check`（`m2ok:true`）、`settings-check --exe`（`ok:true`：五项自检 `diagItems` 全 ✓、`thinkingSaved:true`、外部工具路径 13 行）、`plugins-check --exe`（`ok:true`：175 插件包、`activationFailures:[]`）、`skills-check --exe`（`ok:true`：qiko 43 个、`leaked:[]`）、`hero-check --exe`（`ok:true`：本机工具 13/13，验证 431 修复后首页正常）、`mount-check --exe`（`ok:true`：解析 185 ms、挂载 361 ms、卸载 2 ms）；目录版冷启动 **5092 ms**、portable **46,641 ms**；`npm test` **141/141**、`npm run check:overlay` OK。
+- e2e 顺带修了 hero 页匹配：dsh 页面加载后 URL 会从 `/?token=…` 变成 `/`（cookie 登录后前端 `replaceState`），旧正则只认带 token 的 URL 会误报「主页面没出现」→ 改为同时接受两种 URL。
 
 ### v0.3.6 改了什么
 

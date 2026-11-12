@@ -138,7 +138,8 @@ try {
   child.stdout.on('data', () => {})
   child.stderr.on('data', () => {})
 
-  const page = await waitForPage((url) => /^http:\/\/127\.0\.0\.1:\d+\//.test(url))
+  // 只认带 token 的 dsh 外壳页：启动期的 loading/error 页也挂在 127.0.0.1 上，不能提前 attach。
+  const page = await waitForPage((url) => /^http:\/\/127\.0\.0\.1:\d+\/(\?token=.*)?$/.test(url))
   if (page === undefined) throw new Error('主页面没出现（CDP page 超时）')
   log('主页面', page.url.replace(/\?.*$/, ''))
 
@@ -150,7 +151,7 @@ try {
   // 等 hero 区渲染（官方是异步加载）
   const actions = await evaluate(client, `(async () => {
     const t0 = Date.now()
-    while (Date.now() - t0 < 30000) {
+    while (Date.now() - t0 < 120000) {
       const list = [...document.querySelectorAll('[data-seeu-action]')].map((el) => el.getAttribute('data-seeu-action'))
       if (list.length >= 3) return list
       await new Promise((r) => setTimeout(r, 300))
@@ -159,6 +160,10 @@ try {
   })()`)
   report.actions = actions
   log('快捷入口', JSON.stringify(actions))
+  if (!actions.length) {
+    report.bodyHead = await evaluate(client, `document.body ? document.body.innerText.slice(0, 600) : ''`)
+    log('页面文本', JSON.stringify(report.bodyHead))
+  }
   for (const key of ['index', 'model', 'workspace', 'mounts', 'skills']) {
     if (!actions.includes(key)) throw new Error(`缺少快捷入口 ${key}`)
   }
