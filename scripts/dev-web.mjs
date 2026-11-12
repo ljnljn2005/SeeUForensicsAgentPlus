@@ -8,6 +8,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statS
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localModelEnv, localModelPatch, normalizeLocalModel } from '../tools/local-model.mjs';
+import { toolPathsEnv } from '../tools/tool-paths.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
@@ -76,6 +77,8 @@ const env = {
   SEEU_INDEX_SEARCH_DIRS: searchDirs.join(';'),
   SEEU_INDEX_STATE_FILE: stateFile,
   SEEU_CROSS_DB: join(workspace, 'indexes', 'crosscase.db'),
+  // 外部工具：PATH 优先、设置里指定的其次、默认实测路径兜底（与桌面外壳一致）
+  ...toolPathsEnv(process.env),
 };
 delete env.ELECTRON_RUN_AS_NODE;
 
@@ -125,6 +128,7 @@ console.log('[dev-web] DSH_HOME：' + devHome);
 console.log('[dev-web] 技能：' + skills.join(', '));
 console.log('[dev-web] 本地模型：' + localSummary);
 console.log('[dev-web] 索引 API：' + env.SEEU_INDEX_API);
+console.log('[dev-web] 外部工具：' + Object.keys(toolPathsEnv(process.env)).length + ' 个已注入（PATH 优先，其次默认路径）');
 console.log('[dev-web] 启动：node ' + argv.slice(1).join(' '));
 
 const child = spawn(process.execPath, argv, { cwd: workspace, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
