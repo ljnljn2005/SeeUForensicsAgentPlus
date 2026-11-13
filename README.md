@@ -79,6 +79,13 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
+### v0.3.16 待发布（未打包）
+
+- **链路体检工具**：`npm run chain:check -- --caseNumber <案号>`（或 `--db <索引路径>`）一条命令检查「索引可打开 → 检索可用 → 火眼挂载可读 → 镜像可解析」，输出人类可读报告（`--json` 输出 JSON、`--out` 落盘）。
+  - 实测 W 盘美亚杯案件：`22776 条记录 · 8191 个实体 · 360 个检材文件`；`Investors` → `fts5-trigram · 11 命中`；4 个火眼挂载可读（`CHAN_MH_mobile.tar` 等）；`AP3_LEUNG_YL_USB.E01` 解析 2 分区（177 ms）。
+  - 通过 `describeIndexCoverage()` 标出「有解析内容」与「仅元数据」的检材，避免误以为索引丢了数据。
+  - 退出码：0 全通 / 1 有失败环节 / 2 参数错误或找不到索引，可直接进 CI。
+
 ### v0.3.15 改了什么
 
 - **修复检索接口 500**：`/seeu-index/search` 对 ≥3 字关键词报 `{"error":"ftsQuery is not defined"}`（`search()` 里调用了历史遗留的不存在函数）——现在短词（<3 字）走 LIKE、长词（≥3 字）走 FTS5 `record_fts match`，异常回退 LIKE；2 字关键词「加密」一直是正常的，所以旧 e2e 没暴露。
@@ -1015,7 +1022,23 @@ npm run myos:import -- import --case <caseId> \
 - **使用**：预设里已写明调用方式（`"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelyspark -- <子命令>`，统一在 `bash` 工具里执行；bash 不可用时才降级 `pwsh`），模型会先 `skill` 加载技能再执行；CLI 路径仍在「设置 → 本地模型与工具路径」里手动指定。
 - **校验**：`npm run check:overlay`（逐预设检查名称/技能根/`customSkillDirs`/`tool-fs` 只读）、`npm run test:e2e:skills`（安装与迁移）、`npm test`（含 `tests/presets-config.test.mjs`）。
 
-## 14. 许可与来源
+## 14. 链路体检（索引 / 检索 / 挂载 / 镜像）
+
+一条命令确认「索引 → 检索 → 火眼挂载 → LovelyCarve」是否都可用（本工具不挂载镜像，只做 inspect，秒级完成）：
+
+```bash
+npm run chain:check -- --caseNumber 2919d298
+# 或显式指定索引
+npm run chain:check -- --db "E:/forensics/案件/.seeu-index/case-index.db"
+# 换检索关键词 / 输出 JSON / 只体检不解析镜像
+npm run chain:check -- --caseNumber 2919d298 --probe Investors --json --no-images
+```
+
+输出包含：索引规模、检材覆盖（有内容 / 仅元数据）、检索命中、火眼挂载目录可读性（含样本条目）、镜像分区表与解析耗时；末尾给出「✅ 链路打通 / ❌ 存在失败环节」结论。
+
+索引根目录来源与插件一致：`SEEU_INDEX_SEARCH_DIRS`（`;` 分隔）、`<DSH_HOME>/index-extra-dirs.json`、`<DSH_HOME>/index-state.json`。
+
+## 15. 许可与来源
 
 - 外壳代码：MIT。
 - `dsh` 运行时：来自 npm `@deepseek-ai/dsh`（DeepSeek AI 开源，MIT）；本仓库不修改其源码，仅通过官方 profile/patch 机制扩展。

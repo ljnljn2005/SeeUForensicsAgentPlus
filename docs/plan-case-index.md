@@ -2655,3 +2655,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 回归：`tests/search-fts.test.mjs` 2 例（FTS/ LIKE / E_NO_QUERY）；`scripts/e2e/m2-ui-check.mjs` 增加长关键词 `Investors` 断言（`引擎 fts5-trigram · 11 命中`，且引擎标签允许 `fts5-` 前缀）；`npm test` 196–197 全绿、`check:overlay` OK、build OK。
 - 版本：`npm version 0.3.15`；提交 **`400e3d3`**（fix + 测试）；随后打包 v0.3.15（v0.3.14 及更早的包检索 ≥3 字会失败）。
 - 遗留：本套题无 pcap/内存镜像/可执行样本 → LovelySpark、StarMem、VMware 动态分析未实测（等样本）；E01 的「火眼挂载」是分区节点视图，翻文件应走 LovelyCarve。
+
+## §20.134 链路体检工具（chain:check）
+
+- 动机：美亚杯实测暴露「每个环节都要手工敲一遍命令」，用户希望「链路打通」可反复验证、也可进 CI。
+- 实现：
+  - `tools/chain-check.mjs`（纯函数，可单测）：`describeIndexCoverage(evidences)`（有内容 vs 仅元数据）、`checkMountReadable(evidence, fs)`、`summarizeChain(report)`、`formatChainReport(report)`、`collectIndexDirs(env, fs)`（`SEEU_INDEX_SEARCH_DIRS` + `index-extra-dirs.json` + `index-state.json`）。
+  - `scripts/chain-check.mjs`（CLI）：`--caseNumber|--db`、`--probe`（默认 `Investors`）、`--no-images`、`--json`、`--out`；用 `findIndexes/openIndex/statsOf/evidences/search`、`loadEvidenceMounts/attachMounts`、`resolveLovelyCarveCli/createMountManager().inspect` 组合；退出码 0/1/2。
+  - `package.json` 加 `chain:check`；`tests/chain-check.test.mjs` 4 例。
+- 实测（W 盘美亚杯）：`22776 条记录 · 8191 实体 · 360 检材文件`；覆盖：`LEUNG_YL_mobile.zip`/`FUNG_CC_mobile.zip` 有内容，`CHAN_MH_mobile.zip`/`AP3_LEUNG_YL_USB.E01` 仅元数据；检索 `Investors` → `fts5-trigram · 11 命中`；挂载 4 个可读（`CHAN_MH_mobile.tar` 等）；E01 2 分区 177 ms；结论 ✅。
+- 坑：
+  - `loadEvidenceMounts()` 返回 `{ mounts, skipped }` 对象，不是数组；`mounts.length` 判断会静默跳过挂载（表现为「没有火眼挂载入口」）→ 解构 `{ mounts = [] }`。
+  - 案号匹配不能用 `endsWith`（`2919d298` 是完整 UUID 的前缀）→ 用 `includes`。
+  - 挂载点列目录只显示 1 项（`<name>.tar` / `.E01`）是正常的（那是火眼展开根）。
+- 验证：`node --test tests/chain-check.test.mjs` 4/4；`npm test` 201/201；`build` OK；`check:overlay` OK。
