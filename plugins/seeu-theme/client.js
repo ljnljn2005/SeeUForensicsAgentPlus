@@ -284,6 +284,7 @@ window.__ModuleLoader__.load({
       }
       // 本机工具就绪度：外部工具路径 + 当前挂载数，一次读取即可（挂载窗口里可刷新）
       const [tools, setTools] = React.useState(null)
+      const [mcp, setMcp] = React.useState(null)
       React.useEffect(() => {
         let alive = true
         const load = async () => {
@@ -303,6 +304,14 @@ window.__ModuleLoader__.load({
               mounts = 0
             }
             if (alive) setTools({ ready, total: rows.length, mounts })
+            try {
+              if (shell && shell.mcp && typeof shell.mcp.info === 'function') {
+                const info = await shell.mcp.info()
+                if (alive && info) setMcp({ ok: !!(info.ok && info.exists), tools: Number(info.tools ?? 0) })
+              }
+            } catch {
+              // MCP 信息不可用时静默隐藏
+            }
           } catch {
             // 外壳 API 不可用时静默隐藏
           }
@@ -427,6 +436,40 @@ window.__ModuleLoader__.load({
             h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #8397B0)' } }, '· 镜像挂载 ' + tools.mounts),
           )
         : null
+      const mcpChip = mcp
+        ? h(
+            'div',
+            {
+              key: 'mcp',
+              'data-seeu-mcp': String(mcp.tools),
+              title: '随会话启动的内置 SeeU MCP（只读索引工具）',
+              onClick: openLocalModel,
+              style: {
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '3px 12px',
+                borderRadius: '999px',
+                fontSize: '11.5px',
+                lineHeight: 1.7,
+                cursor: 'pointer',
+                color: 'var(--dsw-alias-label-secondary, #A9BBD1)',
+                background: 'var(--dsw-alias-bg-layer-2, #131E33)',
+                border: '1px solid var(--dsw-alias-border-l2, rgba(255,255,255,0.12))',
+              },
+            },
+            h('span', {
+              style: {
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: mcp.ok && mcp.tools > 0 ? '#34D399' : '#FBBF24',
+              },
+            }),
+            h('span', { style: { color: 'var(--dsw-alias-label-tertiary, #8397B0)' } }, 'MCP：'),
+            h('span', { style: { color: 'var(--dsw-alias-label-primary, #E6EDF7)', fontWeight: 600 } }, mcp.ok ? mcp.tools + ' 工具' : '未就绪'),
+          )
+        : null
       return h(
         'div',
         { className: 'seeu-hero-wrap', style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' } },
@@ -469,6 +512,7 @@ window.__ModuleLoader__.load({
         recentChip,
         lmChip,
         toolsChip,
+        mcpChip,
       )
     }
 

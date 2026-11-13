@@ -344,7 +344,12 @@ const api = {
     save: (paths: Record<string, string>): Promise<ToolPathsSaveResult> =>
       ipcRenderer.invoke('seeu:tool-paths:save', paths) as Promise<ToolPathsSaveResult>,
   },
-  // 运行环境体检：插件/技能/工具路径/本机模型/挂载/MYOS/索引目录。
+  // 内置 SeeU MCP：随会话启动的只读索引工具（见 tools/seeu-mcp/server.mjs）。
+  mcp: {
+    info: () =>
+      ipcRenderer.invoke('seeu:mcp:info') as Promise<{ ok: boolean; server?: string; exists?: boolean; tools?: number; error?: string }>,
+  },
+  // 运行环境体检：插件/技能/工具路径/MCP/本机模型/挂载/MYOS/索引目录。
   env: {
     report: (): Promise<{ ok: boolean; report?: EnvReport; text?: string; markdown?: string; error?: string }> =>
       ipcRenderer.invoke('seeu:env:report') as Promise<{ ok: boolean; report?: EnvReport; text?: string; markdown?: string; error?: string }>,

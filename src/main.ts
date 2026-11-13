@@ -40,7 +40,7 @@ import {
 import { LOVELY_TOOL_SPECS, lovelyToolsView, saveLovelyToolPaths } from './lovely-tools.js'
 import { mountHostEnv, mountManager, setMountLogger } from './mounts.js'
 import { TOOL_PATH_SPECS, saveToolPaths, toolPathsEnv, toolPathsView } from './tool-paths.js'
-import { collectEnvReport, envFixTargets, envReportMarkdown, envReportText } from './env-report.js'
+import { collectEnvReport, envFixTargets, envReportMarkdown, envReportText, mcpFacts } from './env-report.js'
 import { ensureBundledPluginPackages, installBundledPluginBundles } from './dsh-plugins.js'
 import { bundledSkillsDir, installBundledSkills, userSkillsDir } from './skills.js'
 import {
@@ -1029,6 +1029,14 @@ function registerIpc(): void {
   })
 
   // ── 运行环境体检：把插件/技能/工具/网关/挂载/索引目录汇总成一张清单 ──
+  ipcMain.handle('seeu:mcp:info', async () => {
+    try {
+      return { ok: true, ...mcpFacts() }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
   ipcMain.handle('seeu:env:report', async () => {
     try {
       const report = await collectEnvReport()

@@ -194,6 +194,15 @@ try {
   report.toolsOk = toolsChip !== null && /\d+\/\d+ 就绪/.test(report.toolsText) && /镜像挂载/.test(report.toolsText)
   log('本机工具 chip', report.toolsOk ? report.toolsText : '没出现')
   if (!report.toolsOk) throw new Error('欢迎页没有显示本机工具就绪度 chip')
+  const mcpChip = await evaluate(client, `(() => {
+    const el = document.querySelector('[data-seeu-mcp]')
+    return el ? { text: el.innerText, tools: el.getAttribute('data-seeu-mcp') } : null
+  })()`)
+  report.mcpText = mcpChip ? mcpChip.text : ''
+  report.mcpTools = mcpChip ? Number(mcpChip.tools) : -1
+  report.mcpOk = mcpChip !== null && /MCP：/.test(report.mcpText) && report.mcpTools > 0 && /工具/.test(report.mcpText)
+  log('MCP chip', report.mcpOk ? report.mcpText : '没出现')
+  if (!report.mcpOk) throw new Error('欢迎页没有显示内置 MCP 工具数 chip')
 
   // 欢迎页「最近案件」chip：需要真实案件库在场
   if (existsSync(CASE_DB)) {

@@ -79,6 +79,11 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
+### v0.3.23 待发布（未打包）
+
+- 欢迎页新增「MCP：6 工具」chip：外壳 IPC `seeu:mcp:info` 返回 `mcpFacts()`（dev/打包两套路径、读 `server.mjs` 统计工具数），chip 绿点表示就绪、琥珀表示未就绪；点击打开设置窗口。
+- `hero-check` 新增 `mcpText`/`mcpTools`/`mcpOk` 断言（实测「MCP：6 工具」）；`m2-ui-check` 回归通过。
+
 ### v0.3.22 改了什么
 
 - 新增 `scripts/e2e/seeu-mcp-live-check.mjs`（`npm run test:e2e:mcp-live`）：真实 Electron → dsh 会话 → 内置 MCP（stdio）→ 索引插件 HTTP → 索引库的端到端验证。mock 网关首轮让模型调用 `mcp__seeu__evidence_list`，断言：工具列表里 5 个 `mcp__seeu__*` 都在、工具被执行、回传内容里出现真实检材（`CHAN_MH_mobile.zip`、`eid 1`、火眼挂载 route）。

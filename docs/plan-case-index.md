@@ -2838,3 +2838,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 产物：NSIS 320,029,701 B（blockmap 332,509）、portable 270,565,325、`app.asar` 566,489,972（32,966 entries）、目录版 1,262,680,982；asar-0322 自检 0 false、`missing:[]`。
 - 回归：`npm test` 214/214；目录版 6176 ms / portable 52,755 ms；打包态 m2/settings（体检 8 项）/plugins/skills（10 随包）/hero/mount 全绿。
 - 坑：修改 `src/env-report.ts` 后必须重建再跑 settings-check（否则旧 dist 只返回 7 项）。
+
+### 20.146 欢迎页 MCP chip
+
+- 新增外壳 IPC `seeu:mcp:info`：复用 `src/env-report.ts` 导出的 `mcpFacts()`（dev=`appRoot/tools/seeu-mcp`，打包=`process.resourcesPath/app.asar.unpacked/tools/seeu-mcp`），返回 `{ok, server, exists, tools}`。
+- `src/preload.ts` 暴露 `window.seeu.mcp.info()`；`plugins/seeu-theme/client.js` 的 HeroActions 读取它，渲染 `[data-seeu-mcp]` chip（「MCP：6 工具」，绿点=就绪/琥珀=未就绪，点击打开设置）。
+- `scripts/e2e/hero-check.mjs` 新增 `mcpText/mcpTools/mcpOk`；实测 `ok:true, mcpText:"MCP：6 工具", mcpOk:true`；`m2-ui-check` `m2ok:true, idxChainSteps:3, errors:[]`。
+- 坑：preload 里同时插了类型声明与桥实现，产生重复 `mcp` 键（esbuild 警告 `Duplicate key "mcp"`），已合并为一处。

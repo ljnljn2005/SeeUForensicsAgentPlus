@@ -56,7 +56,7 @@ function skillSetIds(dir: string): string[] {
 }
 
 /** 内置 SeeU MCP：dev 在 appRoot/tools/seeu-mcp，打包在 app.asar.unpacked/tools/seeu-mcp。 */
-function mcpFacts(): { server: string; exists: boolean; tools: number } {
+export function mcpFacts(): { server: string; exists: boolean; tools: number } {
   const dir = app?.isPackaged
     ? join(process.resourcesPath, 'app.asar.unpacked', 'tools', 'seeu-mcp')
     : join(appRoot(), 'tools', 'seeu-mcp')
