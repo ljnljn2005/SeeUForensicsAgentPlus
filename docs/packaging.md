@@ -1141,3 +1141,12 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版 6176 ms；portable 52,755 ms（首启解包）。
 - 打包态 e2e：`m2-ui-check`（`m2ok:true`、`idxChainSteps:3`、`errors:[]`）、`settings-check --exe`（`ok:true`、`envItemCount:8`、`toolPathsRows:15`、`diagOk:true`）、`plugins-check`（`ok:true`、175 包、`activationFailures:[]`）、`skills-check`（`ok:true`、10 随包、`leaked:[]`）、`hero-check`（`ok:true`、15/15）、`mount-check`（`ok:true`、inspect 204 ms、`remountHintOk:true`）。
 - 注意：改 `src/env-report.ts` 后必须先 `node scripts/build.mjs` 再跑 settings-check，否则 e2e 用的是旧 `dist/main.cjs`（旧逻辑 7 项 → 等 8 项超时）。
+
+### v0.3.23 回归验证
+
+- `npm test` 214/214、`check:overlay` OK、build OK。
+- 打包：NSIS 320,029,815 B（blockmap 332,612 B）、portable 270,587,054 B、`app.asar` 566,492,194 B（32,966 entries）、目录版 1,262,683,204 B。
+- `.probe/asar-0323-check.mjs`：143 项全 true、`missing:[]`（新增 `mcpChip`：`dist/main.cjs` 含 `seeu:mcp:info`，`plugins/seeu-theme/client.js` 含 `data-seeu-mcp` 与「MCP：」）。
+- 启动：目录版 20,756 ms（首启杀毒扫描）、portable 42,463 ms。
+- 打包态：`hero-check --exe` → `ok:true`、`mcpOk:true`、`mcpText:"MCP：6 工具"`、`toolsOk:true`；`m2-ui-check` → `m2ok:true`、`idxChainSteps:3`、`errors:[]`。
+- 坑：asar 自检脚本里 `fs.readFileSync` 未导入（脚本只 import 了具名 `readFileSync`），改为直接调用。

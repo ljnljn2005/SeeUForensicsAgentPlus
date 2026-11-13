@@ -64,25 +64,26 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.22**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
+本轮已验证产物（**v0.3.23**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,680,982 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
-| `release/win-unpacked/resources/app.asar` | 566,489,972 B（32,966 entries；含内置 MCP 服务端 `tools/seeu-mcp/server.mjs`（6 工具）与 `tools/chain-check-run.mjs`） |
-| `release/SeeUForensicsAgentPlus-0.3.22-x64.exe`（NSIS 安装包） | 320,029,701 B（blockmap 332,509 B） |
-| `release/SeeUForensicsAgentPlus-0.3.22-x64-portable.exe` | 270,565,325 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,683,204 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
+| `release/win-unpacked/resources/app.asar` | 566,492,194 B（32,966 entries；含内置 MCP 服务端 `tools/seeu-mcp/server.mjs`（6 工具）与欢迎页 MCP chip） |
+| `release/SeeUForensicsAgentPlus-0.3.23-x64.exe`（NSIS 安装包） | 320,029,815 B（blockmap 332,612 B） |
+| `release/SeeUForensicsAgentPlus-0.3.23-x64-portable.exe` | 270,587,054 B |
 
-实测冷启动到 dsh UI：目录版 **6176 ms**（首轮可能受杀毒扫描影响，通常 5–8 s）；portable 首次 **52.8 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **20.8 s 首次 / 42.5 s portable**（首启有杀毒扫描与解包，稳定后回到 5–8 s / ~53 s 量级）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-### v0.3.23 待发布（未打包）
+### v0.3.23 改了什么
 
 - 欢迎页新增「MCP：6 工具」chip：外壳 IPC `seeu:mcp:info` 返回 `mcpFacts()`（dev/打包两套路径、读 `server.mjs` 统计工具数），chip 绿点表示就绪、琥珀表示未就绪；点击打开设置窗口。
 - `hero-check` 新增 `mcpText`/`mcpTools`/`mcpOk` 断言（实测「MCP：6 工具」）；`m2-ui-check` 回归通过。
+- **打包与回归**：v0.3.23 打包（NSIS 320,029,815 B / portable 270,587,054 B / asar 566,492,194 B / 32,966 entries），asar 143 项全 true、`missing:[]`；目录版与 portable 启动均 `ok`；打包态 `hero-check`（`mcpOk:true`、`toolsOk:true`、入口 15/15）与 `m2-ui-check`（`idxChainSteps:3`）通过；`npm test` 214/214、`check:overlay` OK。
 
 ### v0.3.22 改了什么
 

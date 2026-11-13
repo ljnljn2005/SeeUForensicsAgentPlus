@@ -2845,3 +2845,9 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `src/preload.ts` 暴露 `window.seeu.mcp.info()`；`plugins/seeu-theme/client.js` 的 HeroActions 读取它，渲染 `[data-seeu-mcp]` chip（「MCP：6 工具」，绿点=就绪/琥珀=未就绪，点击打开设置）。
 - `scripts/e2e/hero-check.mjs` 新增 `mcpText/mcpTools/mcpOk`；实测 `ok:true, mcpText:"MCP：6 工具", mcpOk:true`；`m2-ui-check` `m2ok:true, idxChainSteps:3, errors:[]`。
 - 坑：preload 里同时插了类型声明与桥实现，产生重复 `mcp` 键（esbuild 警告 `Duplicate key "mcp"`），已合并为一处。
+
+### 20.147 v0.3.23 打包（欢迎页 MCP chip）
+
+- 版本 0.3.23：欢迎页新增 `[data-seeu-mcp]`「MCP：6 工具」chip（IPC `seeu:mcp:info` → `mcpFacts()`）。
+- 产物：NSIS 320,029,815 B（blockmap 332,612）、portable 270,587,054、`app.asar` 566,492,194（32,966 entries）、目录版 1,262,683,204；asar-0323 143 项全 true、`missing:[]`。
+- 回归：目录版 20,756 ms（首启杀毒扫描）、portable 42,463 ms；打包态 hero（`mcpOk:true`）/m2（`idxChainSteps:3`）通过；`npm test` 214/214。
