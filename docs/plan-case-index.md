@@ -2694,3 +2694,15 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 坑：Send Anywhere 的 `SendAnywhere.sqlite` 常为空（历史只留 Realm），Realm 需 `strings` 读文本并配合字段名推断，不能当 SQLite 打开。
 - 技能更新：`resources/forensics/skills/ios-full-extraction-quick/SKILL.md` 增加「文件传输类应用」小节（Send Anywhere/SHAREit/AirDrop 路径与证据要点）。
 - 验证：文档与技能更新；`npm test` 200/200、`build` OK、`check:overlay` OK。
+
+## §20.137 美亚杯 Q16/Q18 实测（收/发方向与接收装置）
+
+- 结论：Q16 = **B 接收方**；Q18 = **A CHAN_MH_mobile.zip**。
+- 证据链：
+  1. Realm 记录的两张图为 `Screenshot_20250423-105307_Gallery.jpg` / `Screenshot_20250424-083131_Gallery.jpg`，是 **Android 截图命名**（iOS 自身截图为 `IMG_xxxx`）。
+  2. Realm 里对端设备名 = `Samsung SM-G930F`（三星手机发出）。
+  3. Realm 文件路径指向本机 `.../Application/033732ED-…/Documents/`（CHAN 的 Send Anywhere 容器）⇒ 文件被收到本机。
+  4. 复核 FUNG_CC/LEUNG_YL 均为 iPhone（`DeviceClass: iPhone`、`ProductType: iPhone12,1/iPhone14,6`），且 CHAN 相册 `Photos.sqlite` 无这两张图 ⇒ 接收方不是别的 iPhone。
+- 仍未解：Q19 `transferMode` 枚举（Realm 存整数）、Q31 AirDrop 记录（`sharingd.plist` 无清单、Photos 无 AirDrop 导入记录）。
+- 坑：`Photos.sqlite` 里的字符串命中可能来自 `-wal` 残留，查询要用 `ZASSET` 表而不是盲目 grep；`Containers/Data/Application/<UUID>` 在全量提取里可能未保留（本套 extraction 的 `var/mobile/Containers` 为空），此时以 Realm 记录路径为准。
+- 技能更新：`ios-full-extraction-quick` 增加「发送/接收方向三线索」与「Photos.sqlite ≠ 全部接收文件」两条。

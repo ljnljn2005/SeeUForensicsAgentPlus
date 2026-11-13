@@ -59,6 +59,9 @@
 | 22 | Safari 搜索过的字词 | **B. escape room hong kong** | `var/mobile/Library/Safari/History.db`（复制 `-wal` 后只读）搜索 URL `q=escape+room+hong+kong` |
 | 12 | 哪个文件传输软件用过 | **C. com.estmob.paprika（Send Anywhere）** | `com.estmob.paprika/Documents` 有 `SA_Beat.mp3`/`SA_iTunes.mkv`；`Library/com.estmob.sendanywhere.sdk.database.realm` 有传输记录（`peerDeviceId`/`transferMode`/`sentTime` 与截图文件名）；SHAREit `transfer`/`file` 表为空；AirDropUI 无数据 |
 | 17 | 传送的档案类型 | **A. 屏幕截图** | Realm 内文件名 `Screenshot_20250423-105307_Gallery.jpg`、`Screenshot_20250424-083131_Gallery.jpg` |
-| 16/18/19/31 | 收发方向 / 接收装置 / 传输模式 / AirDrop 条数 | **待深挖**（已有线索） | Realm `strings` 含对端设备名 `Samsung SM-G930F`（方向、接收装置的强线索）；`transferMode` 是枚举整数，需按 App 枚举表映射；AirDrop 的 `com.apple.sharingd.plist` 只有 ID/哈希、无传输清单 |
+| 16 | 传送方或接收方 | **B. 接收方**（CHAN_MH 收到文件） | 传的是 `Screenshot_20250423-105307_Gallery.jpg` 这类 **Android 风格命名**（iOS 自己截图为 `IMG_xxxx.PNG`），且文件落在本机 `com.estmob.paprika` 的 Documents（Realm 路径 `.../Application/033732ED-…/Documents/Screenshot_…jpg`）；对端设备名 `Samsung SM-G930F` ⇒ 由三星发出、CHAN 接收 |
+| 18 | 接收至哪一个装置 | **A. CHAN_MH_mobile.zip** | 同上：文件被收到本机 Send Anywhere 容器/Realm 记录里；FUNG_CC/LEUNG_YL 均为 iPhone，且其相册（Photos.sqlite）未见这两个文件 |
+| 19 | 传送方的传输模式 | **待深挖** | Realm 字段 `transferMode` 是枚举整数（不是字符串），需要 App 枚举表/动调才能映射 `SEND_DIRECTLY` 等；`strings` 里无 `SEND_*` 字面量 |
+| 31 | AirDrop 成功传送的条数 | **待深挖** | `com.apple.sharingd.plist` 只有 AirDropID/哈希；`Photos.sqlite` 的 40 个资产里无 AirDrop 导入的截图（`ZIMPORTEDBY` 无对应记录）——AirDrop 成功痕迹不在这些库里 |
 
 复现命令（一条链路体检 + 上述解析）：`npm run chain:check -- --caseNumber 2919d298`，详见 `resources/forensics/skills/ios-full-extraction-quick/SKILL.md`。

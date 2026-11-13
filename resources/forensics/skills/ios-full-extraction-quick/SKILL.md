@@ -68,6 +68,9 @@ ls "$A/com.estmob.paprika/Documents" "$A/com.lenovo.anyshare/Documents"
 - **SHAREit**（`com.lenovo.anyshare`）：`Documents/.shareit/{shareit,downloader,contacts,adcs}.db`；`shareit.db` 有 `transfer`/`file` 表（传过东西才有行）。
 - **AirDrop**：`com.apple.Sharing.AirDropUI` 无数据目录；`var/mobile/Library/Preferences/com.apple.sharingd.plist` 只有 AirDropID/哈希（**没有成功传输清单**）；AirDrop 成功痕迹更多在相册/文件中转（`PhotoData`、`Documents`）或设备日志，不要只凭 sharingd.plist 下结论。
 - 只读：先 `cp` 到 `$SEEU_WORKSPACE` 再解析；WAL 库连同 `-wal`/`-shm` 一起复制。
+- **判断「发送方/接收方」的三条硬线索**：① 文件名风格（Android 截图 `Screenshot_YYYYMMDD-HHMMSS_Gallery.jpg` vs iOS `IMG_xxxx.PNG`/`IMG_xxxx.MOV`）；② Realm/DB 里的对端设备名（`Samsung SM-G930F`、`HUAWEI …`）；③ 文件落在谁的本机容器（`.../Application/<UUID>/Documents/...` 属于本机 App 就是收到，反之可能是发出后残留的记录）。
+- **Photos.sqlite 只代表「照片」App 里的资产**：收到的文件未必进相册（在 App 容器里），别用「相册里没有」去否定接收。
+
 
 ## 第六步：IM 数据（WhatsApp/微信）
 - WhatsApp：`var/mobile/Applications/net.whatsapp.WhatsApp/`（`Documents/` 下 `ChatStorage.sqlite`，媒体在 `Library/Media/` 或 `Message/Media/`；数据库可能是 WAL，同样先复制）。
