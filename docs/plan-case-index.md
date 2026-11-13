@@ -2774,3 +2774,9 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 打包态 e2e：`m2-ui-check`（面板「体检」→「✅ 全部通过 / 火眼挂载 4/4 可读」，`idxChainOk:true`）、`settings-check`、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（9 随包技能）、`hero-check`（15/15）、`mount-check` 全绿。
 - 文档：README §2 与「### v0.3.17 改了什么」、`docs/packaging.md`「### v0.3.17 回归验证」。
 - 遗留：Gitea 仍不可达；美亚杯 Q81/83/84/85/91–96/98 仍需 `Sunny.zip` 密码。
+
+### 20.137 v0.3.18：体检结果逐环节行
+
+- 面板体检卡片由 `chain.result.report` 派生四行：索引（记录/实体或错误）、检索（关键词/引擎/命中/耗时）、火眼挂载（可读/总数）、镜像解析（仅当 images 请求时出现）；每行 `data-chain-step`，✓ 用强调色、× 用琥珀色。
+- e2e：`m2-ui-check` 新增 `idxChainSteps`/`idxChainStepText`，`idxChainOk` 要求 steps ≥3 且含「索引」「检索」。
+- 打包：v0.3.18（NSIS 320,080,738 B / portable 270,641,430 B / asar 566,597,933 B，32,984 entries），asar-0318 0 false；打包态 m2 实测 steps=3。

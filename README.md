@@ -64,20 +64,25 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.17**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
+本轮已验证产物（**v0.3.18**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,774,137 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
 | `release/win-unpacked/resources/app.asar` | 566,595,818 B（32,984 entries；新增 `tools/chain-check-run.mjs`、`tools/image-mount.mjs`，插件可在 asar 内直接 import） |
-| `release/SeeUForensicsAgentPlus-0.3.17-x64.exe`（NSIS 安装包） | 320,080,340 B（blockmap 333,200 B） |
-| `release/SeeUForensicsAgentPlus-0.3.17-x64-portable.exe` | 270,625,844 B |
+| `release/SeeUForensicsAgentPlus-0.3.18-x64.exe`（NSIS 安装包） | 320,080,738 B（blockmap 333,236 B） |
+| `release/SeeUForensicsAgentPlus-0.3.18-x64-portable.exe` | 270,641,430 B |
 
 实测冷启动到 dsh UI：目录版 **7547 ms**（首轮可能受杀毒扫描影响，通常 5–8 s）；portable 首次 **52.9 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
+
+### v0.3.18 改了什么
+
+- **链路体检逐环节**：面板「体检」结果卡片不再只有一行摘要，而是拆成「索引 / 检索 / 火眼挂载 / 镜像解析」四行，每行带 ✓/× 与细节；e2e 断言 `data-chain-step` 数量与文案；打包态实测 `steps:3`、`「Investors」fts5-trigram · 11 命中`、`火眼挂载 4/4 可读`。
+- 打包与回归：NSIS 320,080,738 B（blockmap 333,236 B）、portable 270,641,430 B、`app.asar` 566,597,933 B（32,984 entries）、目录版总计 1,262,776,252 B；asar-0318 自检 0 false；目录版冷启动 6246 ms、portable 54,630 ms；打包态 m2/settings/plugins/skills/hero/mount 全绿。
 
 ### v0.3.17 改了什么
 

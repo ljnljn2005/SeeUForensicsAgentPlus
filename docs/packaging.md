@@ -1094,3 +1094,12 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版 `verify-launch` 首次 27.4 s（杀毒扫描新 asar），复跑 7547 ms；portable 52,927 ms。
 - 打包态 e2e：`m2-ui-check`（含「体检」按钮 → 结果卡片，`idxChainText` = ✅ 全部通过 / 火眼挂载 4/4 可读）、`settings-check`（15 行外部工具、诊断五项、体检复制/导出）、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（9 个随包技能、`leaked:[]`）、`hero-check`（15/15 工具）、`mount-check`（含重新挂载）全部 `ok:true`。
 - **坑（重要）**：插件在 asar 里被 dsh 以 ESM 加载，`plugins/seeu-case-index/index.js` 静态 import 的每个 `tools/**` 模块都必须在 `electron-builder.yml` 的 `files` 白名单里；漏掉会让打包版插件整体 import 失败（面板恢复为空壳）。v0.3.16 曾漏 `tools/chain-check-run.mjs`/`tools/image-mount.mjs`，v0.3.17 已补齐并验证。
+
+### v0.3.18 回归验证
+
+- 打包：`npm version 0.3.18` → `node scripts/build.mjs` → `npm test` 211/211 → `check:overlay` OK → `npx electron-builder --win --x64 -c.directories.output=release-0318`（约 12 分钟，无签名）。
+- 产物：NSIS 320,080,738 B（blockmap 333,236 B）、portable 270,641,430 B、`app.asar` 566,597,933 B（32,984 entries）、目录版 1,262,776,252 B。
+- asar 自检 `.probe/asar-0318-check.mjs`：`missing: []`、0 项 false（新增 `chainStepRow`、`version0318`）。
+- 启动：目录版首次 29,156 ms（杀毒扫描新 asar）、复跑 6246 ms；portable 54,630 ms。
+- 打包态 e2e：`m2-ui-check`（`idxChainSteps:3`、`idxChainStepText` 含索引/检索/火眼挂载）、`settings-check`、`plugins-check`、`skills-check`、`hero-check`、`mount-check` 全绿。
+- 坑：面板卡片加高后会挤压同一 tab 下方文本，e2e 里 `tablesText` 的截取窗口要从 700 加宽到 1600；体检卡片断言要轮询到「案件：」再读文本。

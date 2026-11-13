@@ -2164,6 +2164,26 @@ window.__ModuleLoader__.load({
                               chain.result.report.query ? ' · 检索「' + chain.result.report.query.q + '」' + (chain.result.report.query.total ?? 0) + ' 命中' : '',
                               chain.result.report.mounts ? ' · 火眼挂载 ' + (chain.result.report.mounts.items || []).filter((i) => i.readable).length + '/' + (chain.result.report.mounts.items || []).length + ' 可读' : '')
                           : null,
+                        chain.result && chain.result.report
+                          ? (() => {
+                              const rep = chain.result.report;
+                              const rows = [];
+                              if (rep.index) rows.push(['索引', !!rep.index.ok, rep.index.ok ? (rep.index.counts ? (rep.index.counts.records + ' 条记录 / ' + rep.index.counts.entities + ' 个实体') : '可打开') : (rep.index.error || '失败')]);
+                              if (rep.query) rows.push(['检索', !!rep.query.ok, rep.query.ok ? ('「' + (rep.query.q || '') + '」' + (rep.query.engine ? (rep.query.engine + ' · ') : '') + (rep.query.total ?? 0) + ' 命中 · ' + (rep.query.ms ?? 0) + ' ms') : (rep.query.error || '失败')]);
+                              if (rep.mounts) {
+                                const items = rep.mounts.items || [];
+                                rows.push(['火眼挂载', !!rep.mounts.ok, items.filter((i) => i.readable).length + '/' + items.length + ' 可读']);
+                              }
+                              if (rep.images && rep.images.length) {
+                                rows.push(['镜像解析', rep.images.filter((i) => i.inspectOk).length === rep.images.length, rep.images.filter((i) => i.inspectOk).length + '/' + rep.images.length + ' 可解析']);
+                              }
+                              return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 } },
+                                rows.map((row) => h('div', { 'data-chain-step': row[0], style: { ...S.row, gap: 6, fontSize: 11.5 } },
+                                  h('span', { style: { color: row[1] ? C_ACC : '#F5A524', width: 12, flex: 'none' } }, row[1] ? '✓' : '×'),
+                                  h('span', { style: { color: C_FG2, width: 62, flex: 'none' } }, row[0]),
+                                  h('span', { style: { color: C_FG3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, String(row[2])))));
+                            })()
+                          : null,
                         chain.result && chain.result.report && (chain.result.report.fails || chain.result.summary && chain.result.summary.fails || []).length
                           ? h('div', { style: { color: '#F5A524', fontSize: 11.5 } }, '⚠ ' + ((chain.result.summary && chain.result.summary.fails) || []).join('；'))
                           : null,

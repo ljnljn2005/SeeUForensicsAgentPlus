@@ -213,7 +213,9 @@ await sleep(700)
   }
   report.idxChainResult = await ev("document.querySelectorAll('[data-chain-result]').length")
   report.idxChainText = await ev("(() => { const el = document.querySelector('[data-chain-result]'); return el ? el.innerText : '' })()")
-  report.idxChainOk = report.idxChainButton === 1 && report.idxChainResult === 1 && /链路体检/.test(report.idxChainText) && /案件：/.test(report.idxChainText)
+  report.idxChainSteps = await ev("document.querySelectorAll('[data-chain-step]').length")
+  report.idxChainStepText = await ev("Array.from(document.querySelectorAll('[data-chain-step]')).map((el) => el.innerText.replace(/\s+/g, ' ').trim()).join(' | ')")
+  report.idxChainOk = report.idxChainButton === 1 && report.idxChainResult === 1 && /链路体检/.test(report.idxChainText) && /案件：/.test(report.idxChainText) && report.idxChainSteps >= 3 && /索引/.test(report.idxChainStepText) && /检索/.test(report.idxChainStepText)
   await clickText('关闭', 'button')
   await sleep(400)
 }
