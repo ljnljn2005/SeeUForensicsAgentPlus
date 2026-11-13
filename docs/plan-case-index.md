@@ -2810,3 +2810,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 新增 `docs/answers-2025美亚杯.md`：52 题答案表（题号/要点/答案/置信度/关键证据），11 题阻塞项（`Sunny.zip` AES-256 密码 → VeraCrypt 容器 → tammy.txt/钱包），以及已用到的 SeeU 能力清单。
 - README 新增「## 16. 题目实测答案」入口。
 - 结论：iOS 提取/备份、WhatsApp、相册、文件传输、USB/WinPE 题全部实测完成；剩余题只缺压缩包密码（题面说明在 NAS）。
+
+### 20.142 MCP 端到端验证（v0.3.22 待发布）
+
+- 新增 `scripts/e2e/seeu-mcp-live-check.mjs`：复用 local-tools-e2e 的 CDP + mock 网关骨架，把工具调用改成 `mcp__seeu__evidence_list { caseNumber: '2919d298' }`；mock 网关记录 role=tool 的消息内容用于断言。
+- 关键坑：外壳 `src/host.ts` 用 `<home>/index-state.json` 覆盖 `SEEU_INDEX_SEARCH_DIRS`，所以在 e2e 里必须**预写** `index-state.json`（`{dirs:['E:/forensics']}`）才能让插件扫描到 W 盘案件；否则 MCP 的 `index_list` 为空、`resolveCaseNumber` 原样返回前缀 → `/evidences` 404（首次跑就是 `toolResultLooksReal:false`，结果里写「找不到案件索引：2919d298」）。
+- 断言：`ok = gotReply && toolResultSeen && seeuTool && /CHAN_MH_mobile\.zip/ && /eid 1/`；实测 `ok:true`、`seeuToolCount:5`（chain_check/index_search/evidence_list/index_tables/index_list）、`toolResultChars:512`。
+- 运行需要本机 W 盘美亚杯索引（`E:/forensics`）；CI 无该数据时可跳过。
