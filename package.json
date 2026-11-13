@@ -70,7 +70,8 @@
     "myos:import": "node tools/myos-index/cli.mjs",
     "test:e2e:myos": "node scripts/e2e/myos-real-import.mjs",
     "bench:gateway": "node scripts/bench/local-gateway-bench.mjs",
-    "chain:check": "node scripts/chain-check.mjs"
+    "chain:check": "node scripts/chain-check.mjs",
+    "ios:quick": "node scripts/ios-quick.mjs"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.1.0",

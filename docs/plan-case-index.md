@@ -2736,3 +2736,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 微信（CHAN 全量提取、LEUNG/FUNG 备份）数据库为明文 SQLite，`MM.sqlite` 90,112 B，`WCDB_Contact.sqlite` 90,112 B，`message_1..4.sqlite` 5–57 KB；Friend/Friend_Ext 空、Finder 全 0 行 → Q48（关注视频号数）判 **D（无内容）**；Q47（WeChat ID）两个候选 wxid，FUNG 备份文件名带 `wxid_c9xyspglub7512`，故 CHAN 应为 `wxid_zt3dtp69pc7v12`（题面选项缺失，待对官方答案）。
 - Q19 Send Anywhere 传输模式：Realm 记录含 `peerDeviceName: Samsung SM-G930F`（P2P 直传特征），`transferMode` 为整数枚举且无字面量，倾向 **SEND_DIRECTLY**，需对官方答案。
 - 坑：CHAN/LEUNG/FUNG 的 `com.tencent.xin/Documents/<hash>` 命名不同；`FinderMsg/MsgSessionStatus.db` 与 `finder/db/*.db` 都要看；Realm 无标准解析器（pip 的 `realm` 不是 Realm Core 绑定），只能读 schema 字符串与已知字段，枚举值无法直接映射。
+
+## §20.142 iOS 取证速查 CLI（ios:quick）
+
+- 新增 `tools/ios-quick.mjs`（纯函数，node:sqlite 只读）：`analyzeDeviceInfo`、`listAccounts`、`photoAssets`、`photoOrder`、`countPhotoImports`、`safariHistory`、`waSessions`、`waMembers`、`waCallStats`、`waLocations`、`wechatFinder`、`wechatWxids`、`summarizeIos`。
+- 新增 `scripts/ios-quick.mjs` 子命令：device/accounts/photos/imports/order/safari/wa-sessions/wa-members/wa-calls/wa-locations/wechat/summary；`package.json` 加 `ios:quick`。
+- 单测 `tests/ios-quick.test.mjs` 6 例（临时 SQLite 夹具：账号、相册+导入来源+Z_PK 顺序、Safari、WhatsApp 会话/管理员/通话/位置、微信 finder 计数与 wxid 提取）。
+- 实测：`wa-members <LEUNG ChatStorage> 120363417204753192@g.us --admins` 返回两个管理员；`photos <FUNG Photos.sqlite> --name IMG_0027` 返回 `lat 22.2816569 / lon 114.1756115`。
+- 坑：node:sqlite 返回 null 原型对象 → `assert.deepEqual` 失败，`listAccounts` 显式映射为普通对象；`ZADDITIONALASSETATTRIBUTES` 与 `ZASSET` 是 1:1，测试夹具不要重复插入；`photoAssets` 的 LIKE 需 `escape '\'`。

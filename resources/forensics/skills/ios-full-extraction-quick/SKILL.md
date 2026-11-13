@@ -113,3 +113,21 @@ JS
 - 本案例库为**明文 SQLite**（非 SQLCipher），可直接 `node:sqlite` 只读打开；先 `select name from sqlite_master` 看表。
 - 视频号（Channels）：`Documents/<hash>/finder/db/finder_main.db` 的 `finderFollowingListTable`（关注列表，空表=没关注）、`finder_main.aff.db`（feed/profile/contact/comment_list）、`FinderMsg/MsgSessionStatus.db`；全 0 行时答案就是「（无内容）」。
 - 本机 wxid 判定：备份文件名 `com.tencent.xin.backupinfo.wxid_<id>.crc` 指该备份所属账号；同机多个 wxid 时结合 `fts_message.db`/`WCDB_Contact` 关系判断。
+
+## 快速命令（优先用 CLI，少写脚本）
+题干问到账号/相册/Safari/WhatsApp/微信时，直接用随包脚本（只读）：
+
+```bash
+node scripts/ios-quick.mjs device  <iDevice_info.txt>
+node scripts/ios-quick.mjs accounts <Accounts3.sqlite>
+node scripts/ios-quick.mjs photos  <Photos.sqlite> --name IMG_0027
+node scripts/ios-quick.mjs order   <Photos.sqlite> IMG_0014.MOV IMG_0016.MOV
+node scripts/ios-quick.mjs safari  <History.db>
+node scripts/ios-quick.mjs wa-sessions <ChatStorage.sqlite> [--archived]
+node scripts/ios-quick.mjs wa-members  <ChatStorage.sqlite> <jid> [--admins]
+node scripts/ios-quick.mjs wa-calls    <CallHistory.storedata>
+node scripts/ios-quick.mjs wa-locations <ChatStorage.sqlite>
+node scripts/ios-quick.mjs wechat  <Documents/<hash>>
+```
+
+工作区运行时（dev/preview）也可 `npm run ios:quick -- <子命令…>`。脚本缺失时按本技能里的 SQL 手查。

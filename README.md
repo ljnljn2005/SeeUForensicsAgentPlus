@@ -1023,6 +1023,25 @@ npm run myos:import -- import --case <caseId> \
 - **使用**：预设里已写明调用方式（`"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelyspark -- <子命令>`，统一在 `bash` 工具里执行；bash 不可用时才降级 `pwsh`），模型会先 `skill` 加载技能再执行；CLI 路径仍在「设置 → 本地模型与工具路径」里手动指定。
 - **校验**：`npm run check:overlay`（逐预设检查名称/技能根/`customSkillDirs`/`tool-fs` 只读）、`npm run test:e2e:skills`（安装与迁移）、`npm test`（含 `tests/presets-config.test.mjs`）。
 
+## 15. iOS 取证速查（`ios:quick`）
+
+把美亚杯类题目最常问的事实一键取出（只读、不改检材）：
+
+```bash
+node scripts/ios-quick.mjs device  <iDevice_info.txt>          # BuildVersion/IMEI/ICCID/SIM
+node scripts/ios-quick.mjs accounts <Accounts3.sqlite>         # iCloud 等账号
+node scripts/ios-quick.mjs photos  <Photos.sqlite> --name IMG_0027   # GPS/导入来源/原名/Z_PK
+node scripts/ios-quick.mjs order   <Photos.sqlite> IMG_0014.MOV IMG_0016.MOV  # 是否相邻/缺失
+node scripts/ios-quick.mjs safari  <History.db>                # 历史条目/访问次数
+node scripts/ios-quick.mjs wa-sessions <ChatStorage.sqlite> [--archived]
+node scripts/ios-quick.mjs wa-members  <ChatStorage.sqlite> <jid> [--admins]
+node scripts/ios-quick.mjs wa-calls    <CallHistory.storedata>  # WhatsApp 通话条数
+node scripts/ios-quick.mjs wa-locations <ChatStorage.sqlite>    # 位置消息 WGS84
+node scripts/ios-quick.mjs wechat  <Documents/<hash>>           # 视频号关注数/wxid
+```
+
+实现：`tools/ios-quick.mjs`（纯函数）+ `scripts/ios-quick.mjs`（CLI）；单测 `tests/ios-quick.test.mjs` 6 例（临时 SQLite 夹具）。
+
 ## 14. 链路体检（索引 / 检索 / 挂载 / 镜像）
 
 一条命令确认「索引 → 检索 → 火眼挂载 → LovelyCarve」是否都可用（本工具不挂载镜像，只做 inspect，秒级完成）：
