@@ -2744,3 +2744,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 单测 `tests/ios-quick.test.mjs` 6 例（临时 SQLite 夹具：账号、相册+导入来源+Z_PK 顺序、Safari、WhatsApp 会话/管理员/通话/位置、微信 finder 计数与 wxid 提取）。
 - 实测：`wa-members <LEUNG ChatStorage> 120363417204753192@g.us --admins` 返回两个管理员；`photos <FUNG Photos.sqlite> --name IMG_0027` 返回 `lat 22.2816569 / lon 114.1756115`。
 - 坑：node:sqlite 返回 null 原型对象 → `assert.deepEqual` 失败，`listAccounts` 显式映射为普通对象；`ZADDITIONALASSETATTRIBUTES` 与 `ZASSET` 是 1:1，测试夹具不要重复插入；`photoAssets` 的 LIKE 需 `escape '\'`。
+
+### 20.134 v0.3.16 打包与回归（第 53 轮）
+
+- 版本 0.3.16：新增 `tools/chain-check.mjs` + `scripts/chain-check.mjs`（`chain:check`）、`tools/ios-quick.mjs` + `scripts/ios-quick.mjs`（`ios:quick`），以及 `ios-full-extraction-quick`、`usb-winpe-quick` 两个随包技能；`electron-builder.yml` 白名单加 `tools/chain-check.mjs`、`tools/ios-quick.mjs`。
+- 产物：NSIS 320,064,982 B（blockmap 332,754 B）、portable 270,624,840 B、`app.asar` 566,556,645 B（32,982 entries）、目录版 1,262,734,964 B；旧 0.3.15 三件删除（0.3.14 portable 仍被占用保留）。
+- 自检：`.probe/asar-0316-check.mjs` → `missing: []`、0 false。两个坑：① `scripts/*.mjs` 不进 asar（`files` 白名单只对 `tools/**` 生效），自检别列它们，产品里保留 `tools` 模块即可；② asar 内 `package.json` 的 `scripts` 被 electron-builder 剥离，`iosQuickPackageScript` 必须读仓库 `package.json`。
+- 启动：目录版 7252 ms、portable 52,709 ms。
+- 打包态 e2e：`m2-ui-check`（需隔离绝对 `SEEU_DSH_HOME`/`SEEU_USER_DATA`，否则活动预置读不到）、`settings-check`（`SEEU_SETTINGS_MOCK_PORT=28181`/`SEEU_SETTINGS_CDP_PORT=9353` 避开 MYOS 18081；15 行工具路径、诊断五项、体检复制/导出、262144 上下文、思考流 kwargs 均通过）、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（9 个随包技能 + Qiko 43 + 三组技能、`leaked:[]`）、`hero-check`（15/15 工具）、`mount-check`（inspect 224 ms / mount 408 ms / 卸载后重新挂载成功）全部 `ok:true`。
+- 文档：README §2 产物表与「### v0.3.16 改了什么」、`docs/packaging.md`「### v0.3.16 回归验证」。
+- 遗留：Gitea `172.30.211.91:3000` 仍不可达，本地领先约 20 个提交；美亚杯 Q81/83/84/85/91–96/98 仍缺 `Sunny.zip` 密码；Spark 真实网关基准需用户提供 baseURL/模型 id/apiKey。

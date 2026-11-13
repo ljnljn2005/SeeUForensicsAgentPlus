@@ -1075,3 +1075,13 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - `hero-check --exe` → `ok:true`（`toolsOk`）；
   - `mount-check --exe` → `ok:true`（E01 inspect 244 ms、`remountHintOk`）。
 - 关联：`docs/chain-check-2025美亚杯.md` 记录 W:\ 检材逐环实测（火眼挂载/索引/LovelyCarve），本版即修复该实测中发现的 `/search` 500。
+
+
+### v0.3.16 回归验证
+
+- 版本与体积：NSIS 320,064,982 B（blockmap 332,754 B）、portable 270,624,840 B、`app.asar` 566,556,645 B（32,982 entries）、目录版 1,262,734,964 B。
+- `node .probe/asar-0316-check.mjs`：`missing: []`、0 个 false（新增 `tools/chain-check.mjs`、`tools/ios-quick.mjs` 必需路径；`iosQuickPackageScript` 改读仓库 `package.json`，因为 asar 内清单的 `scripts` 会被 electron-builder 去掉）。
+- 目录版冷启动 `verify-launch --port 5396` → 7252 ms；portable `--port 5397` → 52,709 ms。
+- 打包态 e2e（隔离 `SEEU_DSH_HOME`/`SEEU_USER_DATA` 绝对路径；`settings-check` 用 `SEEU_SETTINGS_MOCK_PORT=28181`/`SEEU_SETTINGS_CDP_PORT=9353` 避开 MYOS 18081）：`m2-ui-check`、`settings-check`、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（9 个随包技能、`leaked:[]`）、`hero-check`（15/15 工具）、`mount-check`（inspect 224 ms / mount 408 ms / 重新挂载 X:）全部 `ok:true`。
+- 坑 1：`scripts/chain-check.mjs`、`scripts/ios-quick.mjs` 不会进 asar（白名单只对 `tools/**` 生效），自检不要把它们列为必需路径；打包后给用户的是 `tools` 模块，命令行入口仅开发态可用。
+- 坑 2：打包态 `m2-ui-check` 必须传隔离的 `SEEU_DSH_HOME`（绝对路径），否则活动预置写不进去，会报「活动行打开失败时没有提示」。

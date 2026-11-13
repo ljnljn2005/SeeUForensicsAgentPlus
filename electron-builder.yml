@@ -22,6 +22,10 @@ files:
   - tools/ges-index/**
   - tools/myos-index/**
   - tools/lovely-cli/cli.mjs
+  - tools/chain-check.mjs
+  - tools/ios-quick.mjs
+  - scripts/chain-check.mjs
+  - scripts/ios-quick.mjs
   - build/icon.ico
   - build/tray.ico
   - build/icon.png
@@ -52,6 +56,10 @@ asar: true
 # 来源：node_modules 内 *.node 扫描结果 + dsh 运行时依赖清单。
 asarUnpack:
   - tools/lovely-cli/cli.mjs
+  - tools/chain-check.mjs
+  - tools/ios-quick.mjs
+  - scripts/chain-check.mjs
+  - scripts/ios-quick.mjs
   - "**/*.node"
   - "node_modules/**/prebuilds/**"
   - "node_modules/node-pty/**"

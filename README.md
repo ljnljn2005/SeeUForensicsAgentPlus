@@ -64,28 +64,31 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.15**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
+本轮已验证产物（**v0.3.16**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,703,160 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
-| `release/win-unpacked/resources/app.asar` | 566,538,202 B（32,976 entries；体积上涨主要来自 dsh 0.2.2-rc.3 新增依赖，如 `dsh-error`/`dsh-http-proxy` 等） |
-| `release/SeeUForensicsAgentPlus-0.3.15-x64.exe`（NSIS 安装包） | 320,055,949 B（blockmap 333,051 B） |
-| `release/SeeUForensicsAgentPlus-0.3.15-x64-portable.exe` | 270,591,032 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,734,964 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
+| `release/win-unpacked/resources/app.asar` | 566,556,645 B（32,982 entries；含 `tools/chain-check.mjs`、`tools/ios-quick.mjs` 与新增技能） |
+| `release/SeeUForensicsAgentPlus-0.3.16-x64.exe`（NSIS 安装包） | 320,064,982 B（blockmap 332,754 B） |
+| `release/SeeUForensicsAgentPlus-0.3.16-x64-portable.exe` | 270,624,840 B |
 
-实测冷启动到 dsh UI：目录版 **7348 ms**（首轮可能受杀毒扫描影响，通常 5–7 s）；portable 首次 **53.8 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **7252 ms**（首轮可能受杀毒扫描影响，通常 5–7 s）；portable 首次 **52.7 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-### v0.3.16 待发布（未打包）
+### v0.3.16 改了什么
 
 - **链路体检工具**：`npm run chain:check -- --caseNumber <案号>`（或 `--db <索引路径>`）一条命令检查「索引可打开 → 检索可用 → 火眼挂载可读 → 镜像可解析」，输出人类可读报告（`--json` 输出 JSON、`--out` 落盘）。
   - 实测 W 盘美亚杯案件：`22776 条记录 · 8191 个实体 · 360 个检材文件`；`Investors` → `fts5-trigram · 11 命中`；4 个火眼挂载可读（`CHAN_MH_mobile.tar` 等）；`AP3_LEUNG_YL_USB.E01` 解析 2 分区（177 ms）。
   - 通过 `describeIndexCoverage()` 标出「有解析内容」与「仅元数据」的检材，避免误以为索引丢了数据。
   - 退出码：0 全通 / 1 有失败环节 / 2 参数错误或找不到索引，可直接进 CI。
 - **iOS 全量提取速查技能**：新增 `resources/forensics/skills/ios-full-extraction-quick`（`iDevice_info.txt` 一次回答系统版本/IMEI/ICCID/蓝牙 → WiFi 已知网络 plist → 已装应用包名 → Safari History.db → WhatsApp/微信库），并把美亚杯 7 道题做成可复现实测表（见 `docs/chain-check-2025美亚杯.md`）。
+
+- **iOS 速查 CLI**：`npm run ios:quick -- summary <提取根目录>`（`tools/ios-quick.mjs` + `scripts/ios-quick.mjs`），子命令：device / accounts / photos / imports / order / safari / wa-sessions / wa-members / wa-calls / wa-locations / wechat / summary；`node:sqlite` 只读打开，单测 6 例（README §15）。
+- **打包与打包态回归（v0.3.16）**：asar 自检 46 项（新增 `tools/chain-check.mjs`、`tools/ios-quick.mjs` 必需路径与 `chainCheckCli`/`iosQuickCli` 等检查）全 true、`missing:[]`；`verify-launch` 目录版 7252 ms、portable 52709 ms；打包态 `m2-ui-check`、`settings-check`（15 行工具路径 / 诊断五项 / 环境体检 / 一键复制与导出）、`plugins-check`、`skills-check`（随包 9 个技能，含 `ios-full-extraction-quick`、`usb-winpe-quick`）、`hero-check`（本机工具 15/15）、`mount-check`（含重新挂载）全绿。打包白名单里的 `tools/*.mjs` 会进 asar；`scripts/*.mjs` 是开发态 CLI，不进安装包。
 
 ### v0.3.15 改了什么
 
