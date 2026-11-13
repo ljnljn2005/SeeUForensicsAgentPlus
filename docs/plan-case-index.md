@@ -2780,3 +2780,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 面板体检卡片由 `chain.result.report` 派生四行：索引（记录/实体或错误）、检索（关键词/引擎/命中/耗时）、火眼挂载（可读/总数）、镜像解析（仅当 images 请求时出现）；每行 `data-chain-step`，✓ 用强调色、× 用琥珀色。
 - e2e：`m2-ui-check` 新增 `idxChainSteps`/`idxChainStepText`，`idxChainOk` 要求 steps ≥3 且含「索引」「检索」。
 - 打包：v0.3.18（NSIS 320,080,738 B / portable 270,641,430 B / asar 566,597,933 B，32,984 entries），asar-0318 0 false；打包态 m2 实测 steps=3。
+
+### 20.138 v0.3.19：链路体检「给 AI 用」+ 随包技能
+
+- `plugins/seeu-case-index/index.js` 的 `GET /chain-check` 支持 `text=1`：直接返回 `runChainCheck().text`（text/plain），失败仍用 404。
+- 新增技能 `resources/forensics/skills/seeu-chain-check/SKILL.md`：触发时机（会话开始/查不到数据/解析检材前）、bash 调用（先 `/list` 拿 caseNumber，再 `chain-check?text=1`，可选 `images=1`）、输出解读、硬规则（失败先修链路，禁止全盘 grep）。
+- 打包 v0.3.19（NSIS 320,022,835 B / portable 270,611,871 B / asar 566,485,135 B，32,964 entries）；asar-0319 0 false；技能随包 10 个（skills-check 实测含 `seeu-chain-check`）。
+- 坑：新增 `resources/forensics/skills/**` 目录后 asar 自检的 required 列表要同步；`text=1` 分支必须 `return true` 防止后续路由再写响应。

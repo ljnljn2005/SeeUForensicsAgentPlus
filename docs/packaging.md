@@ -1103,3 +1103,12 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版首次 29,156 ms（杀毒扫描新 asar）、复跑 6246 ms；portable 54,630 ms。
 - 打包态 e2e：`m2-ui-check`（`idxChainSteps:3`、`idxChainStepText` 含索引/检索/火眼挂载）、`settings-check`、`plugins-check`、`skills-check`、`hero-check`、`mount-check` 全绿。
 - 坑：面板卡片加高后会挤压同一 tab 下方文本，e2e 里 `tablesText` 的截取窗口要从 700 加宽到 1600；体检卡片断言要轮询到「案件：」再读文本。
+
+### v0.3.19 回归验证
+
+- 打包：`npm version 0.3.19` → build → `npm test` 211/211 → `check:overlay` OK → `npx electron-builder --win --x64 -c.directories.output=release-0319`。
+- 产物：NSIS 320,022,835 B（blockmap 333,132 B）、portable 270,611,871 B、`app.asar` 566,485,135 B（32,964 entries）、目录版 1,262,663,454 B。
+- asar 自检 `.probe/asar-0319-check.mjs`：`missing: []`、0 false（新增 `chainCheckText`、`chainCheckSkill`、`version0319`）。
+- 启动：目录版首次 29,186 ms（杀毒扫描）、复跑 6,106 ms；portable 52,590 ms。
+- 打包态 e2e：`m2-ui-check`（`idxChainSteps:3`、`idxChainOk:true`）、settings/plugins/skills（10 随包技能含 `seeu-chain-check`）/hero/mount 全绿。
+- 验证 `text=1`：`curl -s "http://127.0.0.1:54053/seeu-index/chain-check?caseNumber=2919d298&text=1"` 输出四段报告（索引覆盖 / 检索链路 / 火眼挂载 / 镜像）。

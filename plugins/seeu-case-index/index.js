@@ -273,6 +273,12 @@ async function handle(req, res) {
       const probe = url.searchParams.get('probe') ?? 'Investors';
       const images = url.searchParams.get('images') !== '0';
       const result = await runChainCheck({ caseNumber, db, probe, images, env: process.env });
+      if (url.searchParams.get('text') === '1') {
+        res.statusCode = result.exitCode === 2 ? 404 : 200;
+        res.setHeader('content-type', 'text/plain; charset=utf-8');
+        res.end(result.text);
+        return true;
+      }
       return send(res, result.exitCode === 2 ? 404 : 200, { ok: result.exitCode === 0, ...result });
     }
     // ---------- MYOS（超级取证大师）取证结果导入 ----------
