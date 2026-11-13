@@ -29,6 +29,17 @@ function item(key, label, status, detail, hint = '') {
   return { key, label, status, detail, ...(hint ? { hint } : {}) }
 }
 
+/** 内置 SeeU MCP：服务端文件在不在、暴露几个工具。 */
+function mcpItem(mcp) {
+  const server = typeof mcp?.server === 'string' ? mcp.server : ''
+  const exists = mcp?.exists === true
+  const tools = Number(mcp?.tools ?? 0)
+  if (!server) return item('mcp', '内置 SeeU MCP', 'warn', '宿主没有上报 MCP 信息（旧版本外壳）')
+  if (!exists) return item('mcp', '内置 SeeU MCP', 'fail', '服务端文件缺失：' + server, '重新启动外壳；仍缺则重装 SeeU（tools/seeu-mcp 需要随包解包）')
+  const detail = tools > 0 ? `${tools} 个只读工具已就绪（index_list / evidence_list / index_search / index_tables / read_record / chain_check）` : '服务端存在，但没数到工具'
+  return item('mcp', '内置 SeeU MCP', tools > 0 ? 'ok' : 'warn', detail, tools > 0 ? '' : '检查 tools/seeu-mcp/server.mjs 是否完整')
+}
+
 /** 外部工具：13 条路径里有多少条解析到了真实文件。 */
 function toolsItem(tools) {
   const total = Number(tools?.total ?? 0)
@@ -152,6 +163,7 @@ export function buildEnvReport(facts = {}, now = Date.now()) {
     pluginsItem(facts.plugins),
     skillsItem(facts.skills),
     toolsItem(facts.tools),
+    mcpItem(facts.mcp),
     localModelItem(facts.localModel),
     mountsItem(facts.mounts),
     myosItem(facts.myos),

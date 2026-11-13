@@ -2824,3 +2824,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - MCP 第 6 个工具 `read_record { id, caseNumber? , db? }`：格式化输出「记录 #id · 检材 · 应用/账号 · 时间/分类/证据文件/行 · 正文 · 引用 · 复核命令」。
 - 测试 `tests/cite.test.mjs` 3 例（有句柄/无句柄/E_NOT_FOUND），临时 SQLite 造 evidence/artifact/record。
 - 实测：`/cite?id=10972` 返回 `Goldeneyes://2919d298-…/757000000577#96` 与 `ges read` 命令；MCP `read_record` 调用返回完整正文与引用。
+
+### 20.144 环境体检新增「内置 SeeU MCP」项（8 项）
+
+- `tools/env-report.mjs` 新增 `mcpItem(mcp)`：无上报 → warn；服务端文件缺失 → fail + 重装提示；正常 → ok「N 个只读工具已就绪」；`buildEnvReport` 在 tools 之后插入 mcp。
+- `src/env-report.ts` 新增 `mcpFacts()`：dev 取 `appRoot()/tools/seeu-mcp`，打包取 `process.resourcesPath/app.asar.unpacked/tools/seeu-mcp`；读 `server.mjs` 正则统计工具名（`^\s{4}name: '([a-z_]+)'`）；`collectEnvReport` 传入 `mcp`。
+- 测试：`tests/env-report.test.mjs` 升到 8 项（keys 顺序含 mcp），6/6；`settings-check` 等待 ≥8 行、`envReportOk` 阈值 8；dev 实测 `envItemCount:8`、`envKeys: plugins,skills,tools,mcp,localModel,mounts,myos,indexDirs`、`envSummary:"体检结果：7 项正常 · 1 项注意 · 0 项不可用"`。
+- 坑：改 `src/env-report.ts` 后必须先 `node scripts/build.mjs` 再跑 settings-check，否则 e2e 打的还是旧 `dist/main.cjs`（旧逻辑只有 7 项 → 等 8 项超时 `envItemCount:0`）。

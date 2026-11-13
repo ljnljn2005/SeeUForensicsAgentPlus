@@ -10,6 +10,7 @@ import {
 
 const fullFacts = () => ({
   tools: { total: 13, ready: 13, missing: [] },
+  mcp: { server: 'D:/SeeU/resources/app.asar.unpacked/tools/seeu-mcp/server.mjs', exists: true, tools: 6 },
   plugins: { bundles: 6, missing: [] },
   skills: { bundled: 6, sets: ['traffic', 'log', 'memory', 'qiko'], installed: 6 },
   mounts: { found: true, version: '1.3.0', active: 0 },
@@ -18,16 +19,16 @@ const fullFacts = () => ({
   localModel: { exists: true, config: { enabled: true, models: [{ id: 'qwen3.8-flash-next' }], contextWindow: 131072 } },
 })
 
-test('齐全环境：七项全 ok，报告 ok', () => {
+test('齐全环境：八项全 ok，报告 ok', () => {
   const report = buildEnvReport(fullFacts(), Date.parse('2026-11-13T00:00:00Z'))
-  assert.equal(report.items.length, 7)
+  assert.equal(report.items.length, 8)
   assert.equal(report.summary.fail, 0)
   assert.equal(report.summary.warn, 0)
   assert.equal(report.ok, true)
   assert.equal(report.checkedAt, '2026-11-13T00:00:00.000Z')
   assert.deepEqual(
     report.items.map((item) => item.key),
-    ['plugins', 'skills', 'tools', 'localModel', 'mounts', 'myos', 'indexDirs'],
+    ['plugins', 'skills', 'tools', 'mcp', 'localModel', 'mounts', 'myos', 'indexDirs'],
   )
 })
 
@@ -67,7 +68,7 @@ test('插件缺包 / 挂载 CLI 未配置 / 本机模型未配置 → warn 且�
 test('空事实不抛异常；worstStatus / formatEnvReport 可用', () => {
   const report = buildEnvReport({})
   assert.equal(report.ok, false)
-  assert.ok(report.summary.warn + report.summary.fail >= 7)
+  assert.ok(report.summary.warn + report.summary.fail >= 8)
   const text = formatEnvReport(report)
   assert.match(text, /环境体检/)
   assert.match(text, /合计：/)

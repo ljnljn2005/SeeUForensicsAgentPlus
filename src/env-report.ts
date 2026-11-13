@@ -5,6 +5,7 @@
  * 它是廉价的（只读清单 + 解析 CLI 路径）。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { app } from 'electron'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { buildEnvReport, envFixTargets, formatEnvReport } from '../tools/env-report.mjs'
@@ -52,6 +53,24 @@ function skillSetIds(dir: string): string[] {
   } catch {
     return []
   }
+}
+
+/** 内置 SeeU MCP：dev 在 appRoot/tools/seeu-mcp，打包在 app.asar.unpacked/tools/seeu-mcp。 */
+function mcpFacts(): { server: string; exists: boolean; tools: number } {
+  const dir = app?.isPackaged
+    ? join(process.resourcesPath, 'app.asar.unpacked', 'tools', 'seeu-mcp')
+    : join(appRoot(), 'tools', 'seeu-mcp')
+  const server = join(dir, 'server.mjs')
+  let tools = 0
+  try {
+    const text = readFileSync(server, 'utf8')
+    const names = new Set<string>()
+    for (const match of text.matchAll(/^\s{4}name: '([a-z_]+)',$/gm)) names.add(match[1])
+    tools = names.size
+  } catch {
+    // 文件不存在时保留 0，由报告判 fail。
+  }
+  return { server, exists: existsSync(server), tools }
 }
 
 /** 判断标准与 dsh 一致：先看会话 profile 的 node_modules，再看安装目录。 */
@@ -134,7 +153,7 @@ export async function collectEnvReport(): Promise<EnvReport> {
   // 本机模型配置。
   const localModel = describeLocalModelConfig()
 
-  const report = buildEnvReport({ tools, plugins, skills: { bundled: bundledSkills, sets, installed }, indexDirs, mounts, myos, localModel })
+  const report = buildEnvReport({ tools, mcp: mcpFacts(), plugins, skills: { bundled: bundledSkills, sets, installed }, indexDirs, mounts, myos, localModel })
   return report as EnvReport
 }
 

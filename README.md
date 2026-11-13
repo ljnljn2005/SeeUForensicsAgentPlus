@@ -85,6 +85,11 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 - 实测：`ok:true`、`seeuToolCount:5`、工具结果 512 字符、`looksReal:true`、共 3 轮请求。
 - MCP 新增第 6 个工具 `read_record`：按记录 id 取正文 + 证据路径/行号 + Goldeneyes 引用 + `ges read` 复核命令（插件新增 `GET /cite?id=`，`tests/cite.test.mjs` 3 例）。
 
+### v0.3.22 待发布（未打包）
+
+- 运行环境体检新增第 8 项「内置 SeeU MCP」：服务端缺失判 fail（提示重装/重新解包），正常时显示「6 个只读工具已就绪（index_list / evidence_list / index_search / index_tables / read_record / chain_check）」；`src/env-report.ts` 的 `mcpFacts()` 会按 dev/打包路径读取 `tools/seeu-mcp/server.mjs` 统计工具数。
+- `scripts/e2e/settings-check.mjs` 体检断言升到 8 项（dev 实测 7 正常 · 1 注意 · 0 不可用）。
+
 ### v0.3.21 改了什么
 
 - **内置 MCP 扩展到 5 个工具**：除 `index_list`（列案件、拿 caseNumber）与 `chain_check`（链路体检），新增：
