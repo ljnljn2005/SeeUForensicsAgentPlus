@@ -16,47 +16,69 @@ const JsExpr = new yaml.Type('tag:yaml.org,2002:js', {
 })
 const schema = yaml.JSON_SCHEMA.extend(JsExpr)
 
-function insertRows() {
+function loadOverlay() {
   const layers = yaml.load(readFileSync(OVERLAY, 'utf8'), { schema })
-  const rows = []
+  const entries = []
   for (const layer of layers) {
-    if (layer && Array.isArray(layer.insert)) rows.push(...layer.insert)
+    if (!layer || typeof layer !== 'object') continue
+    if (Array.isArray(layer.insert)) entries.push(...layer.insert)
+    else if (layer.id) entries.push(layer)
   }
-  return rows
+  return { layers, entries }
 }
 
-test('星睿连接器：7 个 streamable-http MCP，端口与星睿客户端一致', () => {
-  const rows = insertRows().filter((row) => String(row?.id ?? '').startsWith('seeu-mcp-xingrui-'))
-  assert.equal(rows.length, 7, '应有 7 个星睿连接器（computer/server/data/files/iot/apk/traffic）')
+function presetPlugins(entries, id) {
+  const preset = entries.find((entry) => entry?.id === id)
+  assert.ok(preset, `缺少预设 ${id}`)
+  const plugins = preset.config?.plugins
+  assert.ok(Array.isArray(plugins), `${id} 缺少 plugins`)
+  return plugins
+}
 
-  const byServer = new Map(rows.map((row) => [row.config.serverName, row.config]))
-  const expected = {
-    'xingrui-computer': 'http://127.0.0.1:30188/mcp',
-    'xingrui-server': 'http://127.0.0.1:30190/mcp',
-    'xingrui-data': 'http://127.0.0.1:30191/mcp',
-    'xingrui-files': 'http://127.0.0.1:30193/mcp',
-    'xingrui-iot': 'http://127.0.0.1:30196/mcp',
-    'xingrui-apk': 'http://127.0.0.1:30195/mcp/',
-    'xingrui-traffic': 'http://127.0.0.1:3008/mcp/streamable',
-  }
-  for (const [server, url] of Object.entries(expected)) {
-    const config = byServer.get(server)
-    assert.ok(config, `缺少 ${server}`)
-    assert.equal(config.transport, 'streamable-http')
-    assert.equal(config.url, url)
-    assert.equal(config.failOnStartupError, false, `${server} 未运行时应只告警`)
-    assert.ok(config.toolCallTimeoutMs >= 120000, `${server} 工具调用超时应放宽`)
-    assert.equal(config.reconnect?.enabled, true, `${server} 应自动重连`)
-  }
-  for (const row of rows) {
-    assert.equal(row.name, '@deepseek-ai/dsh-mcp-client', `${row.id} 应使用 dsh-mcp-client`)
-  }
-})
+function mcpRows(plugins) {
+  return plugins.filter((row) => row?.name === '@deepseek-ai/dsh-mcp-client')
+}
 
-test('MYOS MCP 仍以 stdio 注册', () => {
-  const row = insertRows().find((item) => item?.id === 'seeu-mcp-myos')
-  assert.ok(row, '缺少 seeu-mcp-myos')
-  assert.equal(row.config.transport, 'stdio')
-  assert.equal(row.config.serverName, 'myos-forensics')
-  assert.match(String(row.config.command), /myos_mcp_server\.exe$/i)
+test('星睿连接器按预设注入，不再全局注册', () => {
+  const { layers, entries } = loadOverlay()
+
+  // 不应再有全局星睿连接器行（上一版是全量注册）。
+  const globalXingrui = entries.filter((row) => String(row?.id ?? '').startsWith('seeu-mcp-xingrui'))
+  assert.equal(globalXingrui.length, 0, '星睿连接器不应再作为全局 insert 行')
+
+  const mapping = {
+    'preset-standard': 'xingrui-server',
+    'preset-mobile': 'xingrui-computer',
+    'preset-apk': 'xingrui-apk',
+    'preset-traffic': 'xingrui-traffic',
+    'preset-data': 'xingrui-data',
+    'preset-files': 'xingrui-files',
+    'preset-iot': 'xingrui-iot',
+  }
+  for (const [preset, server] of Object.entries(mapping)) {
+    const rows = mcpRows(presetPlugins(entries, preset))
+    assert.equal(rows.length, 1, `${preset} 应恰好挂 1 个星睿连接器`)
+    assert.equal(rows[0].config.serverName, server)
+    assert.equal(rows[0].config.transport, 'streamable-http')
+    assert.equal(rows[0].config.failOnStartupError, false)
+    assert.ok(String(rows[0].config.url).startsWith('http://127.0.0.1:'))
+  }
+
+  // 轻量/专用预设保持不挂星睿（避免工具面膨胀与依赖星睿运行）。
+  for (const preset of ['preset-seeu-lite', 'preset-log', 'preset-memory', 'preset-exe', 'preset-db']) {
+    assert.equal(mcpRows(presetPlugins(entries, preset)).length, 0, `${preset} 不应挂星睿连接器`)
+  }
+
+  // 每个预设内的 MCP serverName 不应重复（同一 server 不能挂两次）。
+  const allServers = []
+  for (const entry of entries) {
+    if (!entry?.id?.startsWith('preset-')) continue
+    for (const row of mcpRows(entry.config?.plugins ?? [])) allServers.push(row.config.serverName)
+  }
+  assert.equal(new Set(allServers).size, allServers.length, '同一 serverName 被多个预设重复注册')
+
+  // MYOS 仍是全局 stdio MCP。
+  const myos = entries.find((row) => row?.id === 'seeu-mcp-myos')
+  assert.ok(myos, '缺少全局 MYOS MCP')
+  assert.equal(myos.config.transport, 'stdio')
 })

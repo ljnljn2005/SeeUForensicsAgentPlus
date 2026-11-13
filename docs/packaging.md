@@ -1042,3 +1042,21 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - dsh rc.3 体积上涨：asar 426.6 MB → 566.5 MB（+140 MB），NSIS 281.9 MB → 320.1 MB；冷启动 6.3 s → 7.2 s。
   - asar `entries` 从 34,224 降到 32,976（rc.3 依赖包的文件布局更集中，非丢文件；`missing:[]` 证明必需路径齐全）。
   - 打包态 `m2-ui-check` 首次失败是「活动记录为空」——脚本只在 `SEEU_DSH_HOME` 为绝对路径时才预置活动；打包态必须显式传 `SEEU_DSH_HOME` + `SEEU_USER_DATA`（隔离），否则命中用户真实 profile、断言不成立。
+
+### v0.3.14 回归验证（第 50 轮：星睿 MCP 按预设注入）
+
+- 打包命令：`npx electron-builder --win --x64 -c.directories.output=release-0314`（dsh 0.2.2-rc.3、Electron 44.7.0、无签名）。
+- 产物：NSIS `320,055,823 B`（blockmap `333,015 B`）、portable `270,623,477 B`、`app.asar` `566,541,777 B`（`32,976` entries）、`win-unpacked` `1,262,706,735 B`。
+- `.probe/asar-0314-check.mjs`：`missing: []`，全部检查 true；新增 `version0314`、`xingruiScoped`（7 个 `serverName: xingrui-*` 均在 overlay 内）、`xingruiPerPreset`（`- id: seeu-mcp-xingrui-` 恰好 7 条）、`xingruiNoGlobalRow`（0–3 空格缩进处不再出现该行）、`xingruiStreamable`（`transport: streamable-http` 恰好 7 处）。
+- 启动：目录版 `verify-launch` → `"ok": true, "elapsedMs": 9054`（首跑受杀毒扫描影响）；portable → `"ok": true, "elapsedMs": 63882`。
+- 打包态 e2e（`SEEU_UI_EXE` 指向 `release/win-unpacked/SeeUForensicsAgentPlus.exe`，隔离 `SEEU_DSH_HOME`/`SEEU_USER_DATA`）：
+  - `m2-ui-check` → `ok:true, m2ok:true, errors:[]`；
+  - `settings-check --exe` → `ok:true`（`toolPathsRows:15`、`diagOk:true`、`envReportOk:true`、`thinkingSaved:true`）——mock 网关端口用 `SEEU_SETTINGS_MOCK_PORT=28181`、CDP 用 `SEEU_SETTINGS_CDP_PORT=9353`，避开 MYOS 占用的 18081；
+  - `plugins-check --exe` → `ok:true`（`packagesOk:true`、`activationOk:true`、`activationFailures:[]`）；
+  - `skills-check --exe` → `ok:true`（`leaked:[]`）；
+  - `hero-check --exe` → `ok:true`（`toolsOk:true`）；
+  - `mount-check --exe` → `ok:true`（`inspect.ok:true`、`remountHintOk:true`）。
+- 已知变化与坑：
+  - 星睿连接器从「全局 1 处 × 7 行」改成「预设内 7 行」，缩进不同（`preset-standard` 顶层 6 空格、`- insert:` 内预设 10 空格）；用 `.probe/scope-mcp.py` 按 `plugins:` 第一个子行实际缩进计算，硬编码缩进会 `bad indentation of a mapping entry`。
+  - asar 校验不能再用「全文无 `seeu-mcp-xingrui`」判断，因为预设内行 id 也含该前缀；改为统计 `- id: seeu-mcp-xingrui-` 恰好 7 条 + 断言 0–3 空格缩进处没有该行。
+  - 打包态 `m2-ui-check` 需要隔离 `SEEU_DSH_HOME`（绝对路径）与 `SEEU_USER_DATA`，否则会读到用户真实 profile 的活动/索引状态。

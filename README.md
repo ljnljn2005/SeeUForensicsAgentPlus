@@ -64,20 +64,29 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.13**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
+本轮已验证产物（**v0.3.14**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,703,160 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
 | `release/win-unpacked/resources/app.asar` | 566,538,202 B（32,976 entries；体积上涨主要来自 dsh 0.2.2-rc.3 新增依赖，如 `dsh-error`/`dsh-http-proxy` 等） |
-| `release/SeeUForensicsAgentPlus-0.3.13-x64.exe`（NSIS 安装包） | 320,055,103 B（blockmap 332,917 B） |
-| `release/SeeUForensicsAgentPlus-0.3.13-x64-portable.exe` | 270,609,007 B |
+| `release/SeeUForensicsAgentPlus-0.3.14-x64.exe`（NSIS 安装包） | 320,055,823 B（blockmap 333,015 B） |
+| `release/SeeUForensicsAgentPlus-0.3.14-x64-portable.exe` | 270,623,477 B |
 
-实测冷启动到 dsh UI：目录版 **7175 ms**；portable 首次 **61.6 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **9054 ms**（首轮受杀毒扫描影响，通常 5–7 s）；portable 首次 **63.9 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
+
+### v0.3.14 改了什么
+
+- **星睿 MCP 改为「按预设注入」**（此前是全局注册，会把 242 个工具塞进每个会话，约 9 万 tokens/请求）：
+  - `preset-standard` → `xingrui-server`（13 工具）、`preset-mobile` → `xingrui-computer`（108）、`preset-apk` → `xingrui-apk`（33）、`preset-traffic` → `xingrui-traffic`（39）、`preset-data` → `xingrui-data`（7）、`preset-files` → `xingrui-files`（21）、`preset-iot` → `xingrui-iot`（21）；
+  - `取证分析（本地模型精简）`/日志/内存/EXE/数据库 5 个预设**不挂**星睿连接器，保持轻量；
+  - 连接器均为 `streamable-http`、`toolCallTimeoutMs: 300000`、`failOnStartupError: false`，星睿控制台没开时不阻塞会话。
+- **校验**：`tests/mcp-config.test.mjs` 改为按预设断言（映射、无全局行、serverName 不重复、MYOS 仍全局 stdio）；`scripts/check-overlay.mjs` 逐预设段校验；`npm test` **194/194**。
+- **打包与打包态回归（第 50 轮）**：`npx electron-builder --win --x64 -c.directories.output=release-0314` → NSIS **320,055,823 B**（blockmap 333,015 B）、portable **270,623,477 B**、`app.asar` **566,541,777 B（32,976 entries）**、目录版 **1,262,706,735 B**；`.probe/asar-0314-check.mjs` 全部检查 true、`missing:[]`（含 7 个 `serverName: xingrui-` 均在预设内、无全局 `seeu-mcp-xingrui` 行、`transport: streamable-http` 恰好 7 处）；目录版冷启动 9054 ms、portable 63.9 s；打包态 `m2-ui-check`（`m2ok:true`）、`settings-check`（`toolPathsRows:15`、`diagOk:true`、`envReportOk:true`、`thinkingSaved:true`）、`plugins-check`（`activationOk:true`、`packagesOk:true`）、`skills-check`（`leaked:[]`）、`hero-check`（`toolsOk:true`）、`mount-check`（`inspect.ok:true`、`remountHintOk:true`）全绿。
 
 ### v0.3.13 改了什么
 
@@ -932,21 +941,22 @@ npm run myos:import -- import --case <caseId> \
 
 ### 星睿取证连接器（streamable-http MCP，第 49 轮接入）
 
-星睿客户端（WorkBuddy 系）把专家能力做成本机 **streamable-http MCP** 连接器，配置在 `C:/Users/<用户>/.workbuddy/.mcp.json` 的 `mcpServers` 里（每台 300 s 超时）。实测本机 8 个，其中 7 个是取证专家，全部注册进 SeeU：
+星睿客户端（WorkBuddy 系）把专家能力做成本机 **streamable-http MCP** 连接器，配置在 `C:/Users/<用户>/.workbuddy/.mcp.json` 的 `mcpServers` 里（每台 300 s 超时）。这些连接器**按会话预设注入**（不是全局注册），避免把 242 个工具塞进每个会话：
 
-| serverName | 端口 | 覆盖 |
+| 预设 | 挂载的连接器 | 工具数 |
 | --- | --- | --- |
-| `xingrui-computer` | 30188 | 计算机、手机取证 |
-| `xingrui-server` | 30190 | 服务器分析 |
-| `xingrui-data` | 30191 | 数据分析 |
-| `xingrui-files` | 30193 | 文件目录分析 |
-| `xingrui-iot` | 30196 | 物联网分析 |
-| `xingrui-apk` | 30195（`/mcp/`） | APK 分析 |
-| `xingrui-traffic` | 3008（`/mcp/streamable`） | 流量分析 |
+| 取证分析（Forensics） | `xingrui-server`（30190） | +13 |
+| 手机取证（Mobile） | `xingrui-computer`（30188，计算机+手机） | +108 |
+| APK 分析 | `xingrui-apk`（30195 `/mcp/`） | +33 |
+| 流量分析（Traffic） | `xingrui-traffic`（3008 `/mcp/streamable`） | +39 |
+| 数据分析与研判 | `xingrui-data`（30191） | +7 |
+| 文件目录分析（Files） | `xingrui-files`（30193） | +21 |
+| 物联网分析（IoT） | `xingrui-iot`（30196） | +21 |
+| 本地精简 / 日志 / 内存 / EXE / 数据库 | **不挂载**（保持轻量，走本地 StarMem/IDA/bash） | 0 |
 
-**注册位置**：`resources/forensics/cordis.patch.yml` 末尾 `seeu-mcp-xingrui-*` 七个 `- insert:` 行（`@deepseek-ai/dsh-mcp-client`，`transport: streamable-http`、`toolCallTimeoutMs: 300000`、`failOnStartupError: false` + 自动重连）。星睿没启动时只告警、不影响外壳；启动星睿后按重连策略自动连上。
+**注册位置**：`resources/forensics/cordis.patch.yml` 各预设的 `plugins:` 列表里追加 `@deepseek-ai/dsh-mcp-client` 行（`transport: streamable-http`、`toolCallTimeoutMs: 300000`、`failOnStartupError: false` + 自动重连）。星睿没启动时该连接器只告警、不影响会话；启动星睿后按重连策略连上。MYOS MCP（49 工具）仍是全局 stdio 行。
 
-**实测工具数**（2026-11-13，headless `--json` 抓 tool 列表）：星睿 7 个连接器共 **242 个工具**，加上 MYOS 49 个，MCP 工具合计 **291 个**，全会话工具总数 **317 个**（含原生 bash/技能等）。工具名形如 `mcp__xingrui-apk__<tool>`。
+**实测**（2026-11-13，headless 抓 tool 列表）：7 个星睿连接器全量注册时共 242 工具、会话合计 317 工具（工具 schema ≈ 360 KB ≈ 9 万 tokens/请求）—— 这正是改成按预设注入的原因。
 
 **与星睿技能的关系**：星睿的技能放在用户级 `~/.workbuddy/skills/`（实测 28 个，如 `pcap-forensics`、`apk-script-crypto-recovery`、`reverse-shell-analysis`、`static_and_dynamic_reverse_skills`、`forensics-competition-kb`）与项目级 `{workspace}/.workbuddy/skills/`；星睿靠 Skill 工具按需加载。SeeU 不复用它的目录，而是把其中与取证相关的 43 个技能随包放进 `resources/forensics/skill-sets/qiko/`，按预设注入（见第 13 节）。
 

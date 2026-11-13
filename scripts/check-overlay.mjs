@@ -154,23 +154,25 @@ function main() {
       }
     }
 
-    // 星睿取证连接器：7 个 streamable-http MCP（星睿客户端运行时监听本机端口）。
-    const source = readFileSync(overlay, 'utf8')
-    const xingruiServers = [
-      'xingrui-computer',
-      'xingrui-server',
-      'xingrui-data',
-      'xingrui-files',
-      'xingrui-iot',
-      'xingrui-apk',
-      'xingrui-traffic',
-    ]
-    for (const server of xingruiServers) {
-      if (!source.includes(`serverName: ${server}`)) fail(`overlay 缺少星睿连接器 ${server}`)
-      const pattern = new RegExp(
-        `serverName: ${server}[\\s\\S]{0,400}?transport: streamable-http|transport: streamable-http[\\s\\S]{0,400}?serverName: ${server}`,
-      )
-      if (!pattern.test(source)) fail(`星睿连接器 ${server} 未使用 streamable-http`)
+    // 星睿取证连接器：按预设注入（streamable-http MCP），轻量/专用预设不挂。
+    const xingruiByPreset = {
+      'preset-standard': 'xingrui-server',
+      'preset-mobile': 'xingrui-computer',
+      'preset-apk': 'xingrui-apk',
+      'preset-traffic': 'xingrui-traffic',
+      'preset-data': 'xingrui-data',
+      'preset-files': 'xingrui-files',
+      'preset-iot': 'xingrui-iot',
+    }
+    for (const [preset, server] of Object.entries(xingruiByPreset)) {
+      const section = presetSection(dump, preset)
+      if (!section) fail(`dump 缺少预设 ${preset}`)
+      else if (!new RegExp(`serverName: ${server}`).test(section)) fail(`${preset} 缺少星睿连接器 ${server}`)
+      if (section && !/transport: streamable-http/.test(section)) fail(`${preset} 的星睿连接器未使用 streamable-http`)
+    }
+    for (const preset of ['preset-seeu-lite', 'preset-log', 'preset-memory', 'preset-exe', 'preset-db']) {
+      const section = presetSection(dump, preset)
+      if (section && /serverName: xingrui-/.test(section)) fail(`${preset} 不应挂星睿连接器（会放大工具面）`)
     }
 
     const lineCount = dump.trimEnd().split(/\r?\n/).length

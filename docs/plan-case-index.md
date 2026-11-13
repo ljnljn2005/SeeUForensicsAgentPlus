@@ -2614,3 +2614,32 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 实现：overlay 追加 `seeu-mcp-xingrui-*` 七行（`transport: streamable-http`、`url`、`toolCallTimeoutMs: 300000`、`failOnStartupError: false`、`reconnect`），`--dump-config` 可见 7 行；`tests/mcp-config.test.mjs` 断言 serverName/url/transport/超时/重连与 MYOS stdio 行；`scripts/check-overlay.mjs` 追加 7 个连接器的存在与 streamable-http 校验。
 - 实测：7 个连接器全部连上，星睿工具 **242 个**（MYOS 49），会话工具总数 **317**；`npm test` 195/195、`check:overlay` OK、build OK。
 - 坑：`--dump-config` 只证明配置被接受，真正的工具发现要走 headless 会话（`.probe/mcp-headless-check.mjs` 抓 `toolsCount` 与 `mcp__` 前缀）；30195 必须带尾斜杠、3008 的路径是 `/mcp/streamable`。
+
+## 20.131 星睿 MCP 改为「按预设注入」
+
+- 背景：上一版把星睿 7 个 streamable-http 连接器全量注册（全局 `insert` 行），headless 实测会话工具数 317（星睿 242 + MYOS 49 + 基础工具），工具 schema 360,182 B ≈ 9 万 tokens/请求；对本地模型既贵又容易选错工具。用户决定「保留星睿 MCP，但按预设分类」。
+- 实现：`resources/forensics/cordis.patch.yml` 删除全局 `seeu-mcp-xingrui-*` 行，改为在各预设的 `plugins:` 列表内注入 1 个 `@deepseek-ai/dsh-mcp-client` 行（`transport: streamable-http`、`serverName`、`url`、`toolCallTimeoutMs: 300000`、`failOnStartupError: false`、20 次重连）：
+  - `preset-standard` → `xingrui-server`（13 工具）
+  - `preset-mobile` → `xingrui-computer`（108）
+  - `preset-apk` → `xingrui-apk`（33）
+  - `preset-traffic` → `xingrui-traffic`（39）
+  - `preset-data` → `xingrui-data`（7）
+  - `preset-files` → `xingrui-files`（21）
+  - `preset-iot` → `xingrui-iot`（21）
+  - `preset-seeu-lite` / `preset-log` / `preset-memory` / `preset-exe` / `preset-db` 不挂（轻量或本地工具已足够）。
+- 校验：`tests/mcp-config.test.mjs` 重写为「每个预设恰好 1 个星睿连接器 + 指定 serverName/transport/failOnStartupError + 轻量预设 0 个 + 无全局行 + serverName 不重复 + MYOS 仍全局 stdio」；`scripts/check-overlay.mjs` 按预设断言（dump 中 preset 段内含对应 serverName、lite/log/memory/exe/db 段内不得出现 `serverName: xingrui-`）；`npm test` 194/194、`check:overlay` OK、build OK。
+- 坑：① `preset-standard` 是顶层行（缩进 0）、其余预设在 `- insert:` 内（缩进 4），插件子行缩进分别是 6/10 —— 固定缩进注入会写出 `bad indentation of a mapping entry`，脚本需按 `plugins:` 下第一个子行的实际缩进计算；② 生成器脚本把 `reconnect` 写成 flow mapping 时必须保留 `{ enabled: true, ... }` 空格格式，否则 yaml 报错；③ 删除全局块时要从注释行回退到空行，避免把文件最后一个换行吃掉。
+- 验证方式说明：`dsh --help` 没有 `--preset` 参数（预设由 Web UI 选择），headless 无法直接选预设；因此用 overlay 静态校验 + dump-config 段校验确认映射，运行时由预设加载各自 `plugins:` 列表。
+- 遗留：星睿未启动时各连接器只告警（`failOnStartupError: false` + 重连）；启动星睿后自动连上；真实会话里 108 工具在本地模型上的选择质量仍待观察。
+
+### 20.132 v0.3.14 打包与回归
+
+- 前半节（§20.131）完成星睿 MCP 按预设注入：7 个预设各挂 1 个连接器（server 13 / computer 108 / apk 33 / traffic 39 / data 7 / files 21 / iot 21），lite/log/memory/exe/db 不挂；tests/mcp-config.test.mjs 重写、check-overlay 逐预设断言、README §11 表格更新。
+- `npm version 0.3.14`；`node scripts/build.mjs`；`npm test` 194/194；`check:overlay` OK；`rm -rf release-0314` 后 `npx electron-builder --win --x64 -c.directories.output=release-0314`（job `bash-99d05a6c5aa54b4f`，exit 0）。
+- 产物：NSIS 320,055,823 B（blockmap 333,015 B）、portable 270,623,477 B、app.asar 566,541,777 B（32,976 entries）、win-unpacked 1,262,706,735 B。
+- `.probe/asar-0314-check.mjs`：首次 `xingruiNotGlobal` 误报（预设内行 id 也含 `seeu-mcp-xingrui-`）→ 改为 `xingruiPerPreset`（恰好 7 条）+ `xingruiNoGlobalRow`（0–3 空格缩进处不存在）；修后 `missing: []`、全部检查 true。
+- 启动：目录版 9054 ms（首跑杀毒扫描，通常 5–7 s）、portable 63,882 ms。
+- 打包态 e2e：m2（`m2ok:true`）、settings（`toolPathsRows:15`、`diagOk`、`envReportOk`、`thinkingSaved`；mock 端口 28181/CDP 9353 避开 MYOS 18081）、plugins（175 包、`activationOk`）、skills（`leaked:[]`）、hero（`toolsOk`）、mount（`remountHintOk`）全绿。
+- 文档：README §2 产物表换 0.3.14 +「### v0.3.14 改了什么」；`docs/packaging.md`「### v0.3.14 回归验证」。
+- 坑：① 缩进按 `plugins:` 首个子行计算，不能硬编码；② asar 全文正则判断全局行在「预设内行同前缀」时失效；③ 打包态 e2e 必须隔离 home/userData。
+- 遗留：Gitea（`172.30.211.91:3000`）不可达，多个提交仅本地；Spark 真实网关基准需用户提供 baseURL/模型 id/apiKey；VMware 动态分析需用户确认快照与样本。
