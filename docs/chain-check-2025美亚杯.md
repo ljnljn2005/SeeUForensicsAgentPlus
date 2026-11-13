@@ -68,3 +68,24 @@
 | 31 | AirDrop 成功传送的条数 | **待深挖** | `com.apple.sharingd.plist` 只有 AirDropID/哈希；`Photos.sqlite` 的 40 个资产里无 AirDrop 导入的截图（`ZIMPORTEDBY` 无对应记录）——AirDrop 成功痕迹不在这些库里 |
 
 复现命令（一条链路体检 + 上述解析）：`npm run chain:check -- --caseNumber 2919d298`，详见 `resources/forensics/skills/ios-full-extraction-quick/SKILL.md`。
+
+## 第 50 轮补：USB / WinPE 题（Q77–90）
+
+| 题号 | 答案 | 证据 |
+| --- | --- | --- |
+| 77 | **2** | `pyewf` 读 MBR：`55AA`、2 个有效分区（part0 起始 614400、58,007,224 扇区；part1 起始 60,620,800、716,799 扇区） |
+| 78 | **MBR** | MBR 签名 `55AA` + 4 项分区表（非 GPT：LBA1 无 `EFI PART`） |
+| 79 | **D 以上皆非** | 镜像总容量 31,406,948,352 B（≈29.3 GiB，非 16 GB）；分区文件系统 **exFAT**（part0，卷标 `TIM`）与 **FAT16**（part1，隐藏类型 0x16），没有 FAT32/NTFS；exFAT 分区 29,699,698,688 B（非 16 GB）；卷标 `TIM`≠`SanDisk` |
+| 80 | **C（ii 和 iii）** | part0 根有 `Sunny.zip`（157,777,503 B，5 个条目**全部加密**）；zip 条目时间：`Sunny/` 2025-05-15 21:51:16、`xcontainer` 2025-05-15 21:45:40、`VeraCrypt Setup 1.25.9.exe` 2025-05-15 21:39:50（`VeraCrypt Portable 1.26.24.exe` 为 2025-08-13，疑后期替换）。「连接到 PC」本机证据待补（FAT 卷无注册表痕迹） |
+| 82 | **D 以上皆是** | i) 可引导：MBR part0 boot flag 0x80 + part1 有 `EFI\BOOTootx64.efi`、`bootmgr`（`WEPE/WEPE64`）；ii) FAT16 卷标目录项 = **`EFI`**；iii) 卷标创建日期 0x5aaf/0xacd8 = **2025-05-15 21:38:48**；iv) part1 共 367,001,088 B（350 MB）< 500 MB |
+| 83 | 待解（`tammy.txt` 在 VeraCrypt 容器内） | 需先用压缩包密码解 `Sunny.zip` → 用 VeraCrypt 打开 `xcontainer`（5,242,880 B）→ 挂载后读 `tammy.txt` |
+| 84 | 待解（`xcontainer` 加密算法） | 同上：`xcontainer` 是 VeraCrypt 容器，算法需挂载/`veracrypt --text` 查看卷头 |
+| 85 | **A（只有 i 和 ii）** | `xcontainer` 条目大小 5,242,880 B（题面 4,943,872 B 为容器内可见逻辑卷大小？待 VeraCrypt 头确认）；VeraCrypt 卷默认文件系统 FAT（格式化选项）；VeraCrypt 无嵌入式备份头（`--backup` 除外）；块大小 128 **位**=16 字节不成立 → iii/iv 假 |
+| 86 | **C X:\** | WinPE 启动后把核心映像（boot.wim）挂载为 `X:` 虚拟盘 |
+| 87 | **A（i 和 ii）** | WinPE 预设不含 PowerShell 与事件查看器（Eventvwr），`hostname`、`diskpart` 可用 |
+| 88 | **A WEPE64.wim** | part1 `WEPE\WEPE64.WIM` 336,406,005 B，为 WinPE 核心映像；`install.wim` 是安装镜像、`WinPE.log`/`hiberfil.sys` 与启动无关 |
+| 89 | **B（i, ii, iii）** | part1 有 `WEPE\WEPE64.WIM`、`WEPE\WEPE64`（原 bootmgr）、`EFI\BOOTootx64.efi`；`hiberfil.sys` 与可引导判断无关 |
+| 90 | **C Windows 10 PE** | 微PE（WEPE64.WIM，336 MB）+ `WEPE.TXT` 说明为微PE 2.x，其内核基于 Windows 10；镜像内未检出 Windows 11 构建号 |
+| 97 | **A 正确** | BIP-39 助记词 12–24 个单词 |
+
+- 补充技术记录：`Sunny.zip` 的 5 个条目全部 ZipCrypto 加密；容器 `xcontainer` 与 `VeraCrypt Portable/Setup` 同包分发 ⇒ Q91「加密软件名称」为 **VeraCrypt**；Q92–96（IQ Coin 钱包地址/币种/存入次数/支账地址/BEP-20 数量）需挂载 `xcontainer` 后读取；Q98（助记词文件 MD5）同。

@@ -2715,3 +2715,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - Q39 = **D（IMG_0015.MOV 制作时名称被更改为 IMG_0016.MOV）**：由「编号跳号 + pk 连续 + 无 0015 文件」推断，属证据支持度最高的选项，建议与官方答案复核。
 - 技能更新：`ios-full-extraction-quick` 增加「相册 / 照片库」小节（ZIMPORTEDBY 判 App、Z_PK 判先后、隐藏/回收站/磁盘文件三方核对）。
 - 坑：Photos.sqlite 是 WAL 模式，必须把 `-wal`/`-shm` 一起复制；否则查不到最新资产/会误导（grep 命中也可能来自 WAL 残留）。
+
+## §20.139 美亚杯 USB/WinPE 题实测（Q77–90）
+
+- 方法：`pyewf` 直接读 E01（绕开 LovelyCarve inspect 只返回 `{index}` 的限制），解析 MBR、VBR、exFAT 根目录、FAT16 卷标目录项；LovelyCarve 挂载分区核对目录结构；`python zipfile` 读加密 zip。
+- 答案：Q77=2；Q78=MBR；Q79=D；Q80=C；Q82=D（卷标 `EFI`、创建 2025-05-15 21:38:48、part1 350 MB、boot flag 0x80 + EFI 文件）；Q86=C；Q87=A；Q88=A；Q89=B；Q90=C；Q97=A。
+- 待解：Q81（`Sunny.zip` 密码，103 个候选未命中）、Q83/84（VeraCrypt 容器）、Q85（容器属性）、Q91–96/98（钱包与助记词，需挂载容器）。
+- 坑：① LovelyCarve `inspect` 不给 offset/label/fs，必须 `pyewf`；② `7z.exe` 在仓库目录执行被拒（沙箱），用 Python；③ `copyFileSync` 从只读挂载复制部分文件 `EPERM`，用 `readFileSync` 流式写或换文件；④ FAT 卷的 `mtime` 经挂载读取恒为 1970（LovelyCarve 未透出），卷标日期需从目录项原始时间字段解析。
+- 技能：新增 `resources/forensics/skills/usb-winpe-quick/SKILL.md`（E01 解析/WinPE 判断/VeraCrypt 线索/只读纪律）。
