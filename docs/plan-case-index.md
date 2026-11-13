@@ -2590,3 +2590,14 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 坑：rc.3 中 `@deepseek-ai/dsh-subprocess` 把 `@deepseek-ai/dsh-error`、`@deepseek-ai/dsh-http-proxy` 声明为 **peerDependencies**，`--legacy-peer-deps` 不会自动装 → dsh host 启动即 `ERR_MODULE_NOT_FOUND: Cannot find package '@deepseek-ai/dsh-error' imported from …/dsh-subprocess/lib/index.js`（`tools/lovely-cli/test/host.test.mjs` 2 例失败暴露）。补装 `dsh-error@0.2.2-rc.3`、`dsh-http-proxy@0.2.2-rc.3` 后恢复。
 - 兼容性：dsh-app-boot 的 profile/bundle 解析路径未变（`tools/dsh-plugins.mjs` 的 `installBundledPluginBundles` 逻辑仍有效）；overlay 与 12 个预设解析正常；`plugins-check` 证明 175 个插件包从 asar/profile 注入后全部激活（`activationFailures:[]`）。
 - 验证：`npm test` 194/194、`check:overlay` OK、build OK、`plugins-check`（`activationOk:true`）、`settings-check`（`toolPathsRows:15`、`diagOk:true`、`envReportOk:true`）、`m2-ui-check`、`hero-check` 全绿；dev 预览重启后 `/seeu-index/list` 200（首次重启因旧进程占 54053 出现一次 `EACCES`，重试即正常）。
+
+### 20.128 v0.3.13 打包交付（第 49 轮）
+
+- `npm version 0.3.13`；build OK、`npm test` 193/193、`check:overlay` OK；`npx electron-builder --win --x64 -c.directories.output=release-0313`（后台 job `bash-fa1965eefa304297`，exit 0，约 17 分钟）。
+- 产物：`win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B、`app.asar` **566,538,202 B（32,976 entries）**、NSIS **320,055,103 B**（blockmap 332,917 B）、portable **270,609,007 B**、目录版 **1,262,703,160 B**；0.3.12 三件删除（portable 因占用保留）。
+- asar 自检 `.probe/asar-0313-check.mjs`：**125 项全 true、`missing:[]`**。排障两处：① 从 0312 复制时 `version0311` 检查残留、与 0.3.13 冲突 → 删除并加 `version0313`；② `toolPaths15` 原先断言 `mainJs.includes("id: 'ldplayer'")` 失败（esbuild 输出用双引号/合并写法）→ 改为 `mainJs.includes('ldplayer') && mainJs.includes('vmware') && mainJs.includes('LDPlayer')`。
+- 启动验证：目录版 7175 ms、portable 61,634 ms。
+- 打包态 e2e：`m2-ui-check`（`m2ok/activityOk/myosImportOk`）、`settings-check`（15 行工具路径、`diagOk`、`envReportOk`）、`plugins-check`（`activationOk:true`）、`skills-check`（`leaked:[]`）、`hero-check`（`toolsOk:true`）、`mount-check` 全绿。
+- 坑：打包态 m2 首次失败（活动行为 0）——m2 脚本只在 `SEEU_DSH_HOME` 为**绝对路径**时预置活动；打包态要同时传 `SEEU_DSH_HOME` + `SEEU_USER_DATA` 隔离，否则读用户真实 profile。
+- 文档：README §2 产物表换 v0.3.13（含体积上涨说明）、`### v0.3.13 改了什么` 加打包与回归条；`docs/packaging.md`「v0.3.13 回归验证」。
+- 提交：本地 `git commit`（Gitea `172.30.211.91:3000` 仍不可达，push 失败，待网络恢复补推）；`present` portable + NSIS。

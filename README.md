@@ -64,22 +64,22 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.12**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.3.13**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,937,976 B ≈ 1.03 GiB，含随包 dsh 插件与技能库） |
-| `release/win-unpacked/resources/app.asar` | 426,562,813 B（34,224 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory,qiko}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的十个预设 + MYOS MCP 行） |
-| `release/SeeUForensicsAgentPlus-0.3.12-x64.exe`（NSIS 安装包） | 281,896,527 B（blockmap 293,199 B） |
-| `release/SeeUForensicsAgentPlus-0.3.12-x64-portable.exe` | 236,577,274 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,703,160 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
+| `release/win-unpacked/resources/app.asar` | 566,538,202 B（32,976 entries；体积上涨主要来自 dsh 0.2.2-rc.3 新增依赖，如 `dsh-error`/`dsh-http-proxy` 等） |
+| `release/SeeUForensicsAgentPlus-0.3.13-x64.exe`（NSIS 安装包） | 320,055,103 B（blockmap 332,917 B） |
+| `release/SeeUForensicsAgentPlus-0.3.13-x64-portable.exe` | 270,609,007 B |
 
-实测冷启动到 dsh UI：目录版 **6305 ms**；portable 首次 55.0s（先要把 ~1.1GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **7175 ms**；portable 首次 **61.6 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-### v0.3.13 待发布（未打包）
+### v0.3.13 改了什么
 
 - **dsh 运行时升级到 0.2.2-rc.3（第 48 轮）**：`@deepseek-ai/dsh` 及全部 `@deepseek-ai/dsh-*` 依赖从 `0.2.2-rc.1` 升到 **`0.2.2-rc.3`**（`latest` tag 仍是 rc.1，rc.3 在 `next`）。rc.3 把 `dsh-error` / `dsh-http-proxy` 等拆成 peer 依赖，用 `--legacy-peer-deps` 安装后需补装 `@deepseek-ai/dsh-error@0.2.2-rc.3`、`@deepseek-ai/dsh-http-proxy@0.2.2-rc.3`，否则 `dsh-subprocess` 启动即 `ERR_MODULE_NOT_FOUND: @deepseek-ai/dsh-error`。验证：`npm test` **194/194**、`check:overlay` OK、build OK、`plugins-check`（175 插件包、`activationFailures:[]`）、`settings-check`（15 行工具路径、`diagOk`、`envReportOk`）、`m2-ui-check`、`hero-check` 全绿；dev 预览重启正常（`/seeu-index/list` 200）。
 
@@ -100,6 +100,9 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
   - 新增随包技能 `forensics-competition-kb`（竞赛知识库检索：默认 `D:/forensics-kb`，`$SEEU_KB_DIR` 可覆盖；答案必须来自文件并标来源）；
   - **上下文窗口**：Spark 单机预设 `qwen3.8-flash-next` 的 `contextWindow` 从 131072 调到 **262144**（与双机一致），设置页说明同步；
   - 校验：`scripts/check-overlay.mjs` 的 `expertPresets` 加入 IoT/Files（名称、只读工具面、Qiko 技能组）；`tests/presets-config.test.mjs` 扩展到 11 个预设与 `forensics-competition-kb` 目录；`npm test` **194/194**、`check:overlay` OK、build OK；`settings-check` 通过（单机 262144）；`m2-ui-check`、`hero-check` 通过。
+
+- **打包与打包态回归（第 49 轮）**：`npx electron-builder --win --x64 -c.directories.output=release-0313` → NSIS **320,055,103 B**（blockmap 332,917 B）、portable **270,609,007 B**、`app.asar` **566,538,202 B（32,976 entries）**、目录版 **1,262,703,160 B**；`.probe/asar-0313-check.mjs` **125 项全 true、`missing:[]`**（含 dsh rc.3 版本、`dsh-error`/`dsh-http-proxy` 包、IoT/Files 预设、竞赛知识库技能、动态分析环境、15 行工具路径）；冷启动 **7175 ms**、portable **61,634 ms**；打包态 `m2-ui-check`（`m2ok/activityOk/myosImportOk`）、`settings-check`（`toolPathsRows:15`、`diagOk`、`envReportOk`）、`plugins-check`（`activationOk:true`）、`skills-check`（`leaked:[]`）、`hero-check`（`toolsOk:true`）、`mount-check` 全绿。
+- **体积说明**：dsh rc.3 增加 `dsh-error`/`dsh-http-proxy` 等包，asar 426.6 MB → **566.5 MB**（+140 MB），NSIS 281.9 MB → **320.1 MB**；启动时间 6.3 s → 7.2 s（仍在正常范围）。
 
 ### v0.3.12 改了什么
 

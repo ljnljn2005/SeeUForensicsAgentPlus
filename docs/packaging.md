@@ -1018,3 +1018,27 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - `verify-launch`：目录版 `ok:true, elapsedMs:6305`；portable `ok:true, elapsedMs:54994`。
 - 打包态 e2e：`m2-ui-check`（`m2ok:true`、`activityOk:true`、`myosImportOk:true`、`errors:[]`）；`settings-check --exe`（`ok:true`：`envReportOk/envCopyOk/envFixOk:true`、`toolPathsRows:13`、`diagOk:true`）；`mount-check --exe`（`ok:true`：`lastMountReleasedOk:true`、`remountHintOk:true`）；`hero-check --exe`（`ok:true`、`toolsOk:true`）；`plugins-check --exe`（`ok:true`、`packagesOk:true`、`activationOk:true`、175 包）；`skills-check --exe`（`ok:true`、`qikoSet.count:43`、`leaked:[]`）。
 - 坑：① `tools/image-mount.mjs` 与 `tools/env-report.mjs` 被 esbuild 打进 `dist/main.cjs`，不在 asar 顶层单列，asar 自检要改查 `mainJs`；② `settings-check` 的 mock 网关默认端口 `18081` 会和 MYOS `PhoneForensics` 服务撞车（EADDRINUSE），已支持 `SEEU_SETTINGS_MOCK_PORT`/`SEEU_SETTINGS_CDP_PORT` 覆盖（默认值不变）；误杀 MYOS 服务后用 `Start-Process D:/Programs/MYOS/Client/bin/ForensicDesktop.exe -WindowStyle Minimized` 恢复；③ 打包中途 harness 重启会导致 job 被杀、产物不全，重跑或单 target 补打即可。
+
+### v0.3.13 回归验证
+
+- 版本：`0.3.13`，dsh 运行时 **0.2.2-rc.3**（Electron 44.7.0，Windows x64，无签名）。
+- 打包：`npx electron-builder --win --x64 -c.directories.output=release-0313`（约 17 分钟）。
+- 产物（已搬进 `release/`，删 0.3.12 三件；0.3.12 portable 因被运行占用保留）：
+  - `release/win-unpacked/SeeUForensicsAgentPlus.exe` 246,329,856 B
+  - `release/win-unpacked/resources/app.asar` **566,538,202 B（32,976 entries）**
+  - NSIS **320,055,103 B**（blockmap 332,917 B）
+  - portable **270,609,007 B**
+  - `win-unpacked` 总计 **1,262,703,160 B**
+- asar 自检：`.probe/asar-0313-check.mjs` **125 项全 true、`missing:[]`**（新增 `version0313`、`dshRc3`、`dshPeers`、`starRuiPresets`、`starRuiKb`、`dynamicEnv`、`toolPaths15`、`sparkContext256`）。
+- 启动：`verify-launch` 目录版 `ok:true, elapsedMs:7175`；portable `ok:true, elapsedMs:61634`。
+- 打包态 e2e（`SEEU_UI_EXE` 用 Windows 正斜杠路径 + 隔离 home）：
+  - `m2-ui-check` → `m2ok:true, activityOk:true, myosImportOk:true, errors:[]`
+  - `settings-check --exe` → `ok:true`（`toolPathsRows:15`、`diagOk:true`、`envReportOk:true`、`errors:[]`）
+  - `plugins-check --exe` → `ok:true`（`bundlesOk/packagesOk/activationOk` 全 true）
+  - `skills-check --exe` → `ok:true`（`leaked:[]`，含 `myos-import` 与 Qiko 43 个）
+  - `hero-check --exe` → `ok:true`（`toolsOk:true`，本机工具 15 项中 13 个就绪）
+  - `mount-check --exe` → `ok:true`
+- 已知变化与坑：
+  - dsh rc.3 体积上涨：asar 426.6 MB → 566.5 MB（+140 MB），NSIS 281.9 MB → 320.1 MB；冷启动 6.3 s → 7.2 s。
+  - asar `entries` 从 34,224 降到 32,976（rc.3 依赖包的文件布局更集中，非丢文件；`missing:[]` 证明必需路径齐全）。
+  - 打包态 `m2-ui-check` 首次失败是「活动记录为空」——脚本只在 `SEEU_DSH_HOME` 为绝对路径时才预置活动；打包态必须显式传 `SEEU_DSH_HOME` + `SEEU_USER_DATA`（隔离），否则命中用户真实 profile、断言不成立。
