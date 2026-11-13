@@ -20,8 +20,8 @@ import { fileURLToPath } from 'node:url'
 const REPO = resolve(fileURLToPath(new URL('../..', import.meta.url)))
 const argOut = process.argv.indexOf('--out')
 const OUT = argOut > -1 ? process.argv[argOut + 1] : join(REPO, '.probe', 'shots', 'local-model-settings.png')
-const CDP_PORT = 9351
-const MOCK_PORT = 18081
+const CDP_PORT = Number(process.env.SEEU_SETTINGS_CDP_PORT) || 9351
+const MOCK_PORT = Number(process.env.SEEU_SETTINGS_MOCK_PORT) || 18081
 const argExe = process.argv.indexOf('--exe')
 const EXE = argExe > -1 ? resolve(process.argv[argExe + 1]) : join(REPO, 'node_modules', 'electron', 'dist', 'electron.exe')
 const EXE_ARGS = argExe > -1 ? [] : [REPO]

@@ -2554,3 +2554,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 设置页：体检操作行新增【一键修复可自动项】`#btn-env-fix`（`renderEnvReport()` 里按 plugins/skills 是否非 ok 启用），点击后重渲染报告并在 `#env-copy-status` 显示「已自动修复：插件包、技能」/「没有需要自动修复的项」。
 - 测试：`tests/env-report.test.mjs` +1（可修复项筛选、全 ok 返回空）→ 6/6；`settings-check` 断言 `envFixApiOk:true`（直接调用返回 ok+repaired+report）与隔离 home 下按钮置灰 `envFixButtonDisabled:true`。
 - 坑：① `src/main.ts` 的 env-report import 是 `{ collectEnvReport, envReportMarkdown, envReportText }`（顺序与预期不同），替换未命中导致 `envFixTargets is not defined`——靠 e2e 捕获 IPC 返回 error 才看到；② `skillsItem` 判定是 `installed > 0` 即 ok，单测里造「技能缺」要 `installed: 0`，不能只给 `sets`。
+
+### 20.124 v0.3.12 打包与打包态回归（第 45 轮）
+
+- 版本：0.3.12（含第 36~44 轮：活动按天条形/点选过滤/逐条移除/文本筛选、挂载最近记录与一键重挂载、体检一键修复、活动统计、体检复制与导出 .md）。
+- 打包：`rm -rf release-0312` → `npx electron-builder --win --x64 -c.directories.output=release-0312`。首个 job 因 harness 重启被 kill（只剩 win-unpacked 与 NSIS 半成品），改用 `npx electron-builder --win portable --x64` 单独补 portable 成功。
+- 产物：NSIS `281,896,527 B`（blockmap `293,199 B`）、portable `236,577,274 B`、`app.asar` `426,586,748 B`（34,224 entries）、目录版 `1,110,937,976 B`。
+- asar 自检：`.probe/asar-0312-check.mjs` 由 0311 扩展，新增 `activityBars`/`activityDayFilter`/`activityRemove`/`activitySearch`/`mountLastRecord`/`mountRemount`/`envFixModule`/`envFixUi`；修了两处读取来源（image-mount/env-report 被 esbuild 打进 main.cjs）与 `mountsHtml` 变量。
+- 验证：`verify-launch` 目录版 6305 ms / portable 54,994 ms；打包态 m2（`activityOk`/`myosImportOk`）、settings（`envReportOk`/`envCopyOk`/`envFixOk`、13 行工具路径、五项自检）、mount（`lastMountReleasedOk`/`remountHintOk`）、hero（`toolsOk`）、plugins（175 包、`activationOk`）、skills（Qiko 43、`leaked:[]`）全部通过。
+- 坑：① `settings-check` 的 mock 网关默认端口 18081 与 MYOS `PhoneForensics` 服务冲突，已支持 `SEEU_SETTINGS_MOCK_PORT`/`SEEU_SETTINGS_CDP_PORT` 覆盖，本次用 28181/9353；② 为腾端口误杀 MYOS `PhoneForensics`，处理后重启 `ForensicDesktop` 恢复；③ 长任务（打包/portable 压缩）不要与 harness 重启交叠，必要时分 target 补打。

@@ -1009,3 +1009,12 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - `mount-check --exe` → `ok:true`（inspect 169 ms、mount 338 ms、unmount 2 ms）；
   - `myos-real-import` → `ok:true, skipped:false`。
 - 说明：`tools/env-report.mjs` 被 esbuild 打包进 `dist/main.cjs`（与 `tools/lovely-tools.mjs` 同），asar 里没有独立文件——自检脚本不要把它列进必需路径，改用 `mainJs.includes(...)` 校验。
+
+### v0.3.12 回归验证
+
+- 打包：`npm version 0.3.12 --no-git-tag-version` → `node scripts/build.mjs` → `npx electron-builder --win --x64 -c.directories.output=release-0312`（约 15 分钟；本次 harness 重启把首个 job 杀掉，NSIS 已完成、portable 未出，改用 `npx electron-builder --win portable --x64 -c.directories.output=release-0312` 单独补出便携包）。
+- 产物：NSIS `281,896,527 B`（blockmap `293,199 B`）、portable `236,577,274 B`、`app.asar` `426,586,748 B`（34,224 entries）、目录版总计 `1,110,937,976 B`。
+- `.probe/asar-0312-check.mjs`：全部检查 true、`missing: []`；新增 `activityBars`/`activityDayFilter`/`activityRemove`/`activitySearch`/`mountLastRecord`/`mountRemount`/`envFixModule`/`envFixUi`。
+- `verify-launch`：目录版 `ok:true, elapsedMs:6305`；portable `ok:true, elapsedMs:54994`。
+- 打包态 e2e：`m2-ui-check`（`m2ok:true`、`activityOk:true`、`myosImportOk:true`、`errors:[]`）；`settings-check --exe`（`ok:true`：`envReportOk/envCopyOk/envFixOk:true`、`toolPathsRows:13`、`diagOk:true`）；`mount-check --exe`（`ok:true`：`lastMountReleasedOk:true`、`remountHintOk:true`）；`hero-check --exe`（`ok:true`、`toolsOk:true`）；`plugins-check --exe`（`ok:true`、`packagesOk:true`、`activationOk:true`、175 包）；`skills-check --exe`（`ok:true`、`qikoSet.count:43`、`leaked:[]`）。
+- 坑：① `tools/image-mount.mjs` 与 `tools/env-report.mjs` 被 esbuild 打进 `dist/main.cjs`，不在 asar 顶层单列，asar 自检要改查 `mainJs`；② `settings-check` 的 mock 网关默认端口 `18081` 会和 MYOS `PhoneForensics` 服务撞车（EADDRINUSE），已支持 `SEEU_SETTINGS_MOCK_PORT`/`SEEU_SETTINGS_CDP_PORT` 覆盖（默认值不变）；误杀 MYOS 服务后用 `Start-Process D:/Programs/MYOS/Client/bin/ForensicDesktop.exe -WindowStyle Minimized` 恢复；③ 打包中途 harness 重启会导致 job 被杀、产物不全，重跑或单 target 补打即可。

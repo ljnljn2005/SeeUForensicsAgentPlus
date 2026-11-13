@@ -64,22 +64,24 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.11**，Windows x64、Electron 44.7.0、无签名）：
+本轮已验证产物（**v0.3.12**，Windows x64、Electron 44.7.0、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,914,041 B ≈ 1.03 GiB，含随包 dsh 插件与技能库） |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,110,937,976 B ≈ 1.03 GiB，含随包 dsh 插件与技能库） |
 | `release/win-unpacked/resources/app.asar` | 426,562,813 B（34,224 entries，含 4 个随包 dsh 插件与 `node_modules` 依赖闭包、`plugins/seeu-case-index/**`、`plugins/seeu-theme/**`、`tools/ges-index/**`、`tools/lovely-cli/**`（同时放进 `app.asar.unpacked`）、`tools/lovely-tools.mjs`、`resources/forensics/skill-sets/{traffic,log,memory,qiko}/**`、`dist/renderer/{local-model,mounts,skills}.html`、`resources/forensics/cordis.patch.yml` 的十个预设 + MYOS MCP 行） |
-| `release/SeeUForensicsAgentPlus-0.3.11-x64.exe`（NSIS 安装包） | 281,893,366 B（blockmap 293,297 B） |
-| `release/SeeUForensicsAgentPlus-0.3.11-x64-portable.exe` | 236,555,068 B |
+| `release/SeeUForensicsAgentPlus-0.3.12-x64.exe`（NSIS 安装包） | 281,896,527 B（blockmap 293,199 B） |
+| `release/SeeUForensicsAgentPlus-0.3.12-x64-portable.exe` | 236,577,274 B |
 
-实测冷启动到 dsh UI：目录版 **6107 ms**；portable 首次 58.5s（先要把 ~1.1GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **6305 ms**；portable 首次 55.0s（先要把 ~1.1GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-### v0.3.12 待发布（未打包）
+### v0.3.12 改了什么
+
+- **打包与打包态回归（第 45 轮）**：v0.3.12 已出 NSIS `281,896,527 B`（blockmap `293,199 B`）、portable `236,577,274 B`、`app.asar` `426,586,748 B`（34,224 entries）、目录版总计 `1,110,937,976 B`；`.probe/asar-0312-check.mjs` **全部检查 true、`missing: []`**（新增活动按天/筛选/移除/文本筛选、挂载最近记录与重挂载、体检一键修复校验）；目录版冷启动 **6305 ms**、portable 55.0 s；打包态 `m2-ui-check`（`m2ok:true`、`activityOk:true`、`myosImportOk:true`）、`settings-check --exe`（`ok:true`：`envReportOk:true`、`envCopyOk:true`、`envFixOk:true`、13 行外部工具、五项自检）、`plugins-check --exe`（175 包、`packagesOk:true`、`activationOk:true`）、`skills-check --exe`（6 个随包技能 + Qiko 43 个、`leaked:[]`）、`hero-check --exe`（本机工具 13/13）、`mount-check --exe`（`lastMountReleasedOk:true`、`remountHintOk:true`）全部通过。
 
 - **体检「一键修复可自动项」**（第 44 轮）：体检发现随包插件/技能缺失时，新增按钮【一键修复可自动项】可自动补齐（重跑 `installBundledPluginBundles` + `ensureBundledPluginPackages` + `installBundledSkills`），修复后自动重新体检；无可修复项时按钮置灰。接口 `seeu:env:fix` 返回 `{ok, repaired, targets, report, text, markdown}`，`envFixTargets(report)` 纯函数单测覆盖，`settings-check` 断言 API 可用与按钮状态。
 - **最近活动文本筛选**（第 43 轮）：「最近活动」标题行新增筛选框（`data-activity-search`，按案件名/表名/类型），旁边显示「N 条匹配」；无匹配时列表位显示「没有匹配的活动」；与「点选某天」过滤叠加生效，清空恢复。`m2-ui-check` 断言筛选/空态/恢复（`activitySearchOk:true`）。
