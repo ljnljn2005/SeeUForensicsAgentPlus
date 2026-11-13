@@ -64,20 +64,27 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.14**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
+本轮已验证产物（**v0.3.15**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,703,160 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
 | `release/win-unpacked/resources/app.asar` | 566,538,202 B（32,976 entries；体积上涨主要来自 dsh 0.2.2-rc.3 新增依赖，如 `dsh-error`/`dsh-http-proxy` 等） |
-| `release/SeeUForensicsAgentPlus-0.3.14-x64.exe`（NSIS 安装包） | 320,055,823 B（blockmap 333,015 B） |
-| `release/SeeUForensicsAgentPlus-0.3.14-x64-portable.exe` | 270,623,477 B |
+| `release/SeeUForensicsAgentPlus-0.3.15-x64.exe`（NSIS 安装包） | 320,055,949 B（blockmap 333,051 B） |
+| `release/SeeUForensicsAgentPlus-0.3.15-x64-portable.exe` | 270,591,032 B |
 
-实测冷启动到 dsh UI：目录版 **9054 ms**（首轮受杀毒扫描影响，通常 5–7 s）；portable 首次 **63.9 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **7348 ms**（首轮可能受杀毒扫描影响，通常 5–7 s）；portable 首次 **53.8 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
+
+### v0.3.15 改了什么
+
+- **修复检索接口 500**：`/seeu-index/search` 对 ≥3 字关键词报 `{"error":"ftsQuery is not defined"}`（`search()` 里调用了历史遗留的不存在函数）——现在短词（<3 字）走 LIKE、长词（≥3 字）走 FTS5 `record_fts match`，异常回退 LIKE；2 字关键词「加密」一直是正常的，所以旧 e2e 没暴露。
+- 回归：新增 `tests/search-fts.test.mjs`（2 例）；`m2-ui-check` 增加长关键词「Investors」断言（`引擎 fts5-trigram · 11 命中`）。
+- **真实链路实测记录**：见 [`docs/chain-check-2025美亚杯.md`](docs/chain-check-2025美亚杯.md)——W:\ 的 2025 美亚杯检材（5 份手机/USB/Android 镜像）上，火眼挂载、SeeU 索引、LovelyCarve 分区挂载（含 31.9 GB Android eMMC）逐环实测；本套题无流量/内存/可执行样本，LovelySpark/StarMem/VMware 动态分析未测。
+- 打包：见下方 v0.3.15 产物表（v0.3.14 及更早的包检索 ≥3 字关键词会失败，建议升级）。
 
 ### v0.3.14 改了什么
 

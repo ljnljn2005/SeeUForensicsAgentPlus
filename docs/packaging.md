@@ -1060,3 +1060,18 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - 星睿连接器从「全局 1 处 × 7 行」改成「预设内 7 行」，缩进不同（`preset-standard` 顶层 6 空格、`- insert:` 内预设 10 空格）；用 `.probe/scope-mcp.py` 按 `plugins:` 第一个子行实际缩进计算，硬编码缩进会 `bad indentation of a mapping entry`。
   - asar 校验不能再用「全文无 `seeu-mcp-xingrui`」判断，因为预设内行 id 也含该前缀；改为统计 `- id: seeu-mcp-xingrui-` 恰好 7 条 + 断言 0–3 空格缩进处没有该行。
   - 打包态 `m2-ui-check` 需要隔离 `SEEU_DSH_HOME`（绝对路径）与 `SEEU_USER_DATA`，否则会读到用户真实 profile 的活动/索引状态。
+
+### v0.3.15 回归验证（第 51 轮：检索 500 修复 + 美亚杯链路实测）
+
+- 打包命令：`npx electron-builder --win --x64 -c.directories.output=release-0315`（dsh 0.2.2-rc.3、Electron 44.7.0、无签名）。
+- 产物：NSIS `320,055,949 B`（blockmap `333,051 B`）、portable `270,591,032 B`、`app.asar` `566,541,732 B`（`32,976` entries）、`win-unpacked` `1,262,706,690 B`（0.3.14 portable 被占用保留在 `release/`）。
+- `.probe/asar-0315-check.mjs`：`missing: []`、全部检查 true；新增 `version0315`、`searchFtsFix`（`tools/ges-index/query.mjs` 不含 `ftsQuery(`、含 `record_fts match` 与「短关键词」注释）。
+- 启动：目录版 `verify-launch` → `"ok": true, "elapsedMs": 7348`；portable → `"ok": true, "elapsedMs": 53801`。
+- 打包态 e2e（`SEEU_UI_EXE` 隔离 home/userData）：
+  - `m2-ui-check` → `m2ok:true`、`searchOk:true`、`searchLongText:"引擎 fts5-trigram · 11 命中"`、`searchLongOk:true`、`errors:[]`（长关键词回归在打包态通过）；
+  - `settings-check --exe` → `ok:true`（`toolPathsRows:15`、`diagOk`、`envReportOk`、`thinkingSaved`）；
+  - `plugins-check --exe` → `ok:true`（175 包、`activationOk`、`activationFailures:[]`）；
+  - `skills-check --exe` → `ok:true`（`leaked:[]`）；
+  - `hero-check --exe` → `ok:true`（`toolsOk`）；
+  - `mount-check --exe` → `ok:true`（E01 inspect 244 ms、`remountHintOk`）。
+- 关联：`docs/chain-check-2025美亚杯.md` 记录 W:\ 检材逐环实测（火眼挂载/索引/LovelyCarve），本版即修复该实测中发现的 `/search` 500。

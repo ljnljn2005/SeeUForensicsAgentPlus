@@ -2643,3 +2643,15 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 文档：README §2 产物表换 0.3.14 +「### v0.3.14 改了什么」；`docs/packaging.md`「### v0.3.14 回归验证」。
 - 坑：① 缩进按 `plugins:` 首个子行计算，不能硬编码；② asar 全文正则判断全局行在「预设内行同前缀」时失效；③ 打包态 e2e 必须隔离 home/userData。
 - 遗留：Gitea（`172.30.211.91:3000`）不可达，多个提交仅本地；Spark 真实网关基准需用户提供 baseURL/模型 id/apiKey；VMware 动态分析需用户确认快照与样本。
+
+### 20.133 真实链路实测：2025 美亚杯个人赛（v0.3.15 修复检索 500）
+
+- 目标：用户要求「W:\ 检材 + 2025美亚杯个人赛复现.md，实测链路能不能打通」。写 `docs/chain-check-2025美亚杯.md` 记录逐环结果。
+- 链路结果：
+  - 火眼：未打开案件时 `ges status --json` → `case_backend_unreachable`；案件打开后 `cid:1`、`ges_url: http://127.0.0.1:8621`、4 个 `evidence_mounts`；`C:\hlnet\*` 可直接读 `iDevice_info.txt`（`BuildVersion 21B91` → iOS 17.1.1）。
+  - SeeU 索引：`/evidences` 5 条（recordCount 1/8443/14331/1/1 vs reported 3065/13718/25669/68/3）；`/search` 最初对 `Investors` 返回 `{"error":"ftsQuery is not defined"}`。
+  - LovelyCarve：E01 inspect 276 ms、挂 `X:` 687–701 ms（`WEPE`/`Sunny.zip`/`vera_key`）、卸载 163 ms；`blk0_sda.bin` inspect 244 ms、18 个分区（`BOTA0…USERDATA`）、`USERDATA` 挂 `Y:` 838–1001 ms（`/data` 下 `com.whatsapp`/`com.instagram.android`/`com.facebook.katana`）、`SYSTEM` 501 ms、卸载均成功。
+- Bug 修复：`tools/ges-index/query.mjs` 的 `search()` 里 `ftsQuery(kw)` 调用不存在（重构遗留），≥3 字关键词走 FTS 分支必 500；2 字关键词走 LIKE 所以旧 e2e（「加密」）一直绿。修复：短词 LIKE、长词单路径 FTS5（删重复过滤），异常回退 LIKE。
+- 回归：`tests/search-fts.test.mjs` 2 例（FTS/ LIKE / E_NO_QUERY）；`scripts/e2e/m2-ui-check.mjs` 增加长关键词 `Investors` 断言（`引擎 fts5-trigram · 11 命中`，且引擎标签允许 `fts5-` 前缀）；`npm test` 196–197 全绿、`check:overlay` OK、build OK。
+- 版本：`npm version 0.3.15`；提交 **`400e3d3`**（fix + 测试）；随后打包 v0.3.15（v0.3.14 及更早的包检索 ≥3 字会失败）。
+- 遗留：本套题无 pcap/内存镜像/可执行样本 → LovelySpark、StarMem、VMware 动态分析未实测（等样本）；E01 的「火眼挂载」是分区节点视图，翻文件应走 LovelyCarve。
