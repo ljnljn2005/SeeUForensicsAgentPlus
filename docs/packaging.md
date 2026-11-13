@@ -1122,3 +1122,13 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 内置 MCP：`ELECTRON_RUN_AS_NODE=1 SeeUForensicsAgentPlus.exe <unpacked>/tools/seeu-mcp/server.mjs` 可完成 initialize/tools/list；headless 会话工具 77 个，含 `mcp__seeu__chain_check`、`mcp__seeu__index_list`。
 - 打包态 e2e：`m2-ui-check`（`idxChainSteps:3`、`errors:[]`）通过。
 - 坑：asarUnpack 条目必须写在 `asarUnpack:` 段（误加到 `files:` 会导致脚本留在 asar 内、`ELECTRON_RUN_AS_NODE` 读不到）；MCP server 不能在 stdin EOF 时立刻退出，要等挂起请求完成（否则 tools/call 无输出）。
+
+### v0.3.21 回归验证
+
+- 打包：`npm version 0.3.21` → build → `npm test` 211/211 → `check:overlay` OK → `npx electron-builder --win --x64 -c.directories.output=release-0321`。
+- 产物：NSIS 320,028,826 B（blockmap 332,580 B）、portable 270,596,906 B、`app.asar` 566,487,574 B（32,966 entries）、目录版 1,262,569,393 B。
+- asar 自检 `.probe/asar-0321-check.mjs`：`missing: []`、0 false；`seeuMcpServer` 现在读取 `app.asar.unpacked/tools/seeu-mcp/server.mjs` 并断言 5 个工具名 + `resolveCaseNumber`；`seeuMcpSkill` 断言技能提到 evidence_list/index_search/index_tables。
+- 启动：目录版首次 29.2 s（杀毒扫描）、复跑 7269 ms；portable 52,643 ms。
+- 内置 MCP 工具探测（headless，mock 网关）：`mcp__seeu__index_list` / `evidence_list` / `index_search` / `index_tables` / `chain_check` 均存在；`evidence_list` 输出含挂载 route 与备注。
+- 打包态 e2e：`m2-ui-check`（`idxChainSteps:3`、`errors:[]`）通过。
+- 坑：`/search` 返回数组字段是 `rows`（不是 hits），摘要字段 `snip`；`resolveDbParam` 只做精确匹配，前缀解析放在 MCP 层；卸载 `win-unpacked` 前要确认别删到只读/被占用文件（本次曾误删，用 `--dir` 重新生成）。

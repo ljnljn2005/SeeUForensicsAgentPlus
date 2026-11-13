@@ -2796,3 +2796,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：`tests/mcp-config.test.mjs` 增加「全局 SeeU MCP 行」断言；`.probe/seeu-mcp-headless.mjs` 用 mock 网关跑 headless，实测 `toolsCount 77`、`mcp__seeu__chain_check`/`mcp__seeu__index_list` 存在。
 - 打包 v0.3.20（NSIS 320,027,278 B / portable 270,578,413 B / asar 566,486,765 B(32,966)）；asar-0320 0 false；打包版 unpacked server 实测可 initialize/list。
 - 坑：MCP server 的 stdin `end` 处理要等 pending 请求结束；`!!js` 的 args 必须写带引号标量（数组表达式）；`asarUnpack` 与 `files` 是两处配置。
+
+### 20.140 v0.3.21：内置 MCP 扩到 5 个工具
+
+- `tools/seeu-mcp/server.mjs` 升级 v0.2.0：`index_list`、`evidence_list`、`index_search`、`index_tables`、`chain_check`；全部转发 `$SEEU_INDEX_API`，不直读索引。
+- `resolveCaseNumber()`：先 `/list` 再按完整/前缀/案件名解析（索引插件 `/evidences`、`/search`、`/tables` 仍是精确匹配，只有 chain-check 的 `findChainTarget` 认前缀）。
+- 返回形态：`/search` 是 `{ engine, total, rows: [{ snip, evidenceName, app, ts }] }`；`/evidences` 行含 `mountRoute`/`mountPoint`/`reportedRecordCount`。
+- 技能 `seeu-chain-check` 改为「五工具 → HTTP 兜底」；`.probe/seeu-mcp-headless.mjs` 断言 5 个 `mcp__seeu__*`。
+- 打包 v0.3.21（NSIS 320,028,826 / portable 270,596,906 / asar 566,487,574(32,966)）；asar-0321 0 false；启动复跑 7269 ms / portable 52,643 ms；打包态 m2 绿。

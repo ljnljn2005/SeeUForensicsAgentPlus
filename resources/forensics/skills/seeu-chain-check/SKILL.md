@@ -15,12 +15,15 @@ description: SeeU 自带链路体检：一键检查「索引可打开 / 检索�
 
 ## 首选：直接调用 SeeU MCP 工具
 
-外壳会随会话启动一个内置 MCP 服务（`seeu`），暴露两个工具：
+外壳会随会话启动一个内置 MCP 服务（`seeu`），暴露五个只读工具：
 
 - `mcp__seeu__index_list`：列出可用案件索引（拿 caseNumber）。
+- `mcp__seeu__evidence_list`：列出检材（eid / 名称 / 入库vs火眼统计 / 原始文件 / 火眼只读挂载路径 / 备注首行）。回答「系统/型号/镜像」类题先看备注。
+- `mcp__seeu__index_search`：索引检索（≥3 字走 FTS5 trigram，短词走 LIKE），参数 `{ caseNumber?, db?, q, limit? }`。
+- `mcp__seeu__index_tables`：列出结构化表与条数（聊天、联系人、浏览器历史等）。
 - `mcp__seeu__chain_check`：链路体检，参数 `{ caseNumber?, db?, probe?, images? }`，返回可读文本。
 
-用法：先 `index_list`，再 `chain_check { caseNumber }`；需要解析镜像时 `{ caseNumber, images: true }`。
+用法：`index_list` → `evidence_list { caseNumber }`（看备注与挂载）→ 需要数据时 `index_tables` / `index_search { caseNumber, q }` → 查不到再 `chain_check`。caseNumber 支持完整编号、前缀或案件名。
 
 ## 备选：HTTP（MCP 不可用时）
 
@@ -33,6 +36,11 @@ curl -s "$SEEU_INDEX_API/chain-check?caseNumber=2919d298-f083-4a81-9c12-bd4ca393
 
 # 3) 需要顺带解析镜像（E01/DD），加 images=1（会慢几秒~几十秒）
 curl -s "$SEEU_INDEX_API/chain-check?caseNumber=<编号>&images=1&text=1"
+
+# 4) 检材清单 / 结构化表 / 检索
+curl -s "$SEEU_INDEX_API/evidences?caseNumber=<编号>" | head -c 4000
+curl -s "$SEEU_INDEX_API/tables?caseNumber=<编号>"
+curl -s "$SEEU_INDEX_API/search?caseNumber=<编号>&q=Investors&limit=10"
 ```
 
 已知索引库路径时也可以直接指定：

@@ -64,20 +64,31 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.20**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
+本轮已验证产物（**v0.3.21**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,774,137 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
 | `release/win-unpacked/resources/app.asar` | 566,595,818 B（32,984 entries；新增 `tools/chain-check-run.mjs`、`tools/image-mount.mjs`，插件可在 asar 内直接 import） |
-| `release/SeeUForensicsAgentPlus-0.3.20-x64.exe`（NSIS 安装包） | 320,027,278 B（blockmap 332,907 B） |
-| `release/SeeUForensicsAgentPlus-0.3.20-x64-portable.exe` | 270,578,413 B |
+| `release/SeeUForensicsAgentPlus-0.3.21-x64.exe`（NSIS 安装包） | 320,028,826 B（blockmap 332,580 B） |
+| `release/SeeUForensicsAgentPlus-0.3.21-x64-portable.exe` | 270,596,906 B |
 
 实测冷启动到 dsh UI：目录版 **7547 ms**（首轮可能受杀毒扫描影响，通常 5–8 s）；portable 首次 **52.9 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
+
+### v0.3.21 改了什么
+
+- **内置 MCP 扩展到 5 个工具**：除 `index_list`（列案件、拿 caseNumber）与 `chain_check`（链路体检），新增：
+  - `evidence_list`：检材清单（eid / 名称 / 类型 / 入库vs火眼统计 / 原始文件 / 火眼只读挂载路径 / 备注首行）——回答「什么系统/型号/哪个镜像」先看备注；
+  - `index_search`：索引检索（≥3 字 FTS5 trigram、短词 LIKE），返回摘要 + 来源（eid · 应用 · 时间）；
+  - `index_tables`：结构化表清单（聊天、联系人、浏览器历史等）。
+- **caseNumber 宽松解析**：MCP 侧先 `/list` 再按「完整编号 → 前缀 → 案件名」解析，`2919d298` 这样的前缀也能用（索引插件自身只做精确匹配）。
+- 技能 `seeu-chain-check` 更新为「MCP 五工具 → HTTP 兜底」。
+- headless 实测：会话工具含 `mcp__seeu__index_list`、`mcp__seeu__evidence_list`、`mcp__seeu__index_search`、`mcp__seeu__index_tables`、`mcp__seeu__chain_check` 五个，`evidence_list` 能读出「CHAN_MH 入库 1 / 火眼 3065 + 备注 iOS17.1.1 + 挂载 /evidence_mounts/eid-1/」。
+- 打包与回归：NSIS 320,028,826 B（blockmap 332,580 B）、portable 270,596,906 B、`app.asar` 566,487,574 B（32,966 entries）、目录版总计 1,262,569,393 B；asar-0321 自检 0 false（新增 `seeuMcpTools`/`seeuMcpSkill`/`seeuMcpArgs`）；冷启动 7.3 s、便携版 52.6 s；打包态 m2（`idxChainSteps:3`）通过。
 
 ### v0.3.20 改了什么
 
