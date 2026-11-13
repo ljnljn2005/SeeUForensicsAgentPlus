@@ -2601,3 +2601,9 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 坑：打包态 m2 首次失败（活动行为 0）——m2 脚本只在 `SEEU_DSH_HOME` 为**绝对路径**时预置活动；打包态要同时传 `SEEU_DSH_HOME` + `SEEU_USER_DATA` 隔离，否则读用户真实 profile。
 - 文档：README §2 产物表换 v0.3.13（含体积上涨说明）、`### v0.3.13 改了什么` 加打包与回归条；`docs/packaging.md`「v0.3.13 回归验证」。
 - 提交：本地 `git commit`（Gitea `172.30.211.91:3000` 仍不可达，push 失败，待网络恢复补推）；`present` portable + NSIS。
+
+### 20.129 APK 动态分析接雷电模拟器的实测校正（第 49 轮）
+
+- 实测（本机 LDPlayer14, `D:/Games/leidian/LDPlayer14`）：`ldconsole launch --index 0` 后 `list2` 第 5 列变 `2`（约 20–25 s）；`ldconsole adb --index 0 --command "shell ..."` 可用，返回 `x86_64`、Android 14、型号 `25102RKBEC`、96 个已装包；`/data/local/tmp/fs9283` 是 114 MB frida-server。
+- 校正点：**不要用 `adb.exe connect 127.0.0.1:5555`**（实测 `failed to connect` / `adb devices` 显示 offline、`adb -s ... shell` 报 `device not found`），统一走 `ldconsole adb`；persona 同步写明 frida-server 路径与 `ps -A | grep`/`su -c` 启动方式。
+- 验证：`check:overlay` OK、`npm test` 194/194、build OK。

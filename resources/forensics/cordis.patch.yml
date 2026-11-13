@@ -1430,7 +1430,9 @@
               prefix: |
                 ## 动态分析（雷电模拟器，可选）
                 - 模拟器目录：`$SEEU_TOOL_LDPLAYER`（默认 `D:/Games/leidian/LDPlayer14`，内含 `ldconsole.exe` / `dnplayer.exe` / `adb.exe`）。
-                - 实例与启动：`"$SEEU_TOOL_LDPLAYER/ldconsole.exe" list2` 看实例；未运行就 `"$SEEU_TOOL_LDPLAYER/ldconsole.exe" launch --index 0`；随后 `"$SEEU_TOOL_LDPLAYER/adb.exe" connect 127.0.0.1:5555`、`adb devices` 确认。
+                - 实例与启动：`"$SEEU_TOOL_LDPLAYER/ldconsole.exe" list2` 看实例（第 5 列 `2` = 运行中）；未运行就 `"$SEEU_TOOL_LDPLAYER/ldconsole.exe" launch --index 0`（实测约 20–25 秒启动），收尾用 `... quit --index 0` 还原。
+                - ADB 通道：优先用雷电自己的入口 `"$SEEU_TOOL_LDPLAYER/ldconsole.exe" adb --index 0 --command "shell getprop ro.product.cpu.abi"`——本机实测返回 `x86_64`、Android 14、型号 `25102RKBEC`、已装 96 个包；**不要依赖 `adb.exe connect 127.0.0.1:5555`**（实测常报 `failed to connect` / `offline`，`adb -s 127.0.0.1:5555 shell` 直接 `device not found`）。
+                - frida-server：本机实例 `/data/local/tmp/fs9283` 已存在（114 MB，`shell ls -l` 可见）；用 `frida` 注入前先确认它在跑（`shell ps -A | grep fs9283`），没有就 `shell su -c "/data/local/tmp/fs9283 &"`（需 root 镜像）。
                 - 装样本（副本，原文件只读）：`adb install -r -t <样本.apk>`；启动：`adb shell monkey -p <包名> -c android.intent.category.LAUNCHER 1`；日志：`adb logcat -d`；截图：`adb exec-out screencap -p > "$SEEU_WORKSPACE/shot.png"`。
                 - frida：PC 侧 `frida` 17 已在 PATH；模拟器需 x86_64 镜像 + root，frida-server 版本要和 PC 端一致。本机未发现 frida-server 二进制，需要时把对应版本 push 到 `/data/local/tmp`、`chmod 755` 后启动，再 `frida -U -f <包名> --no-pause`。
                 - 本机未装星睿的 `apk_unpack_all_in_one_v3` 一键脱壳 MCP：**不要承诺一键 dump dex**；按上面 adb/frida 手工流程做，缺工具就直说并给替代（jadx/apktool 静态 + frida hook）。
