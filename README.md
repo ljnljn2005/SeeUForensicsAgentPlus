@@ -930,6 +930,26 @@ npm run myos:import -- import --case <caseId> \
 - **「测试连接」升级为五项能力自检（第 6 轮）**：设置页能力自检从「模型列表 / 基础对话 / 工具调用」扩展到五项——新增**流式输出**（首字延迟、流式字符数）与**思考流**（是否返回 `reasoning_content`/`reasoning`，按高级区的思考流格式带 `enable_thinking` 或 `reasoning_effort`）；任一项标红时汇总行给出对应排查建议，诊断文本一并带出。
 - **思考流（reasoning）格式可配（第 5 轮）**：本地网关对推理内容的暴露方式不同。设置页「高级：超时与重试」新增「思考流格式」下拉 + `chat_template_kwargs`（JSON）：`deepseek`（流式 `reasoning_content`，dsv4.1-flash）、`qwen-chat-template`（带 `enable_thinking`，qwen3.8-flash-next）、`qwen`/`chat-template`/`string-thinking`，默认 `auto` 交给运行时判断。Spark 单机预设自动填 `qwen-chat-template` + `{"enable_thinking": true}`，双机预设填 `deepseek`；patch 写进 provider `compat.thinkingFormat` 与 `compat.chatTemplateKwargs`，设置页保存/回填、`settings-check` 断言均覆盖。
 
+### 星睿取证连接器（streamable-http MCP，第 49 轮接入）
+
+星睿客户端（WorkBuddy 系）把专家能力做成本机 **streamable-http MCP** 连接器，配置在 `C:/Users/<用户>/.workbuddy/.mcp.json` 的 `mcpServers` 里（每台 300 s 超时）。实测本机 8 个，其中 7 个是取证专家，全部注册进 SeeU：
+
+| serverName | 端口 | 覆盖 |
+| --- | --- | --- |
+| `xingrui-computer` | 30188 | 计算机、手机取证 |
+| `xingrui-server` | 30190 | 服务器分析 |
+| `xingrui-data` | 30191 | 数据分析 |
+| `xingrui-files` | 30193 | 文件目录分析 |
+| `xingrui-iot` | 30196 | 物联网分析 |
+| `xingrui-apk` | 30195（`/mcp/`） | APK 分析 |
+| `xingrui-traffic` | 3008（`/mcp/streamable`） | 流量分析 |
+
+**注册位置**：`resources/forensics/cordis.patch.yml` 末尾 `seeu-mcp-xingrui-*` 七个 `- insert:` 行（`@deepseek-ai/dsh-mcp-client`，`transport: streamable-http`、`toolCallTimeoutMs: 300000`、`failOnStartupError: false` + 自动重连）。星睿没启动时只告警、不影响外壳；启动星睿后按重连策略自动连上。
+
+**实测工具数**（2026-11-13，headless `--json` 抓 tool 列表）：星睿 7 个连接器共 **242 个工具**，加上 MYOS 49 个，MCP 工具合计 **291 个**，全会话工具总数 **317 个**（含原生 bash/技能等）。工具名形如 `mcp__xingrui-apk__<tool>`。
+
+**与星睿技能的关系**：星睿的技能放在用户级 `~/.workbuddy/skills/`（实测 28 个，如 `pcap-forensics`、`apk-script-crypto-recovery`、`reverse-shell-analysis`、`static_and_dynamic_reverse_skills`、`forensics-competition-kb`）与项目级 `{workspace}/.workbuddy/skills/`；星睿靠 Skill 工具按需加载。SeeU 不复用它的目录，而是把其中与取证相关的 43 个技能随包放进 `resources/forensics/skill-sets/qiko/`，按预设注入（见第 13 节）。
+
 ## 12. 随包 dsh 插件
 
 安装包自带 4 个 dsh 插件，启动即生效（无需联网 `pnpm add`）：

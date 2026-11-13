@@ -2607,3 +2607,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 实测（本机 LDPlayer14, `D:/Games/leidian/LDPlayer14`）：`ldconsole launch --index 0` 后 `list2` 第 5 列变 `2`（约 20–25 s）；`ldconsole adb --index 0 --command "shell ..."` 可用，返回 `x86_64`、Android 14、型号 `25102RKBEC`、96 个已装包；`/data/local/tmp/fs9283` 是 114 MB frida-server。
 - 校正点：**不要用 `adb.exe connect 127.0.0.1:5555`**（实测 `failed to connect` / `adb devices` 显示 offline、`adb -s ... shell` 报 `device not found`），统一走 `ldconsole adb`；persona 同步写明 frida-server 路径与 `ps -A | grep`/`su -c` 启动方式。
 - 验证：`check:overlay` OK、`npm test` 194/194、build OK。
+
+### 20.130 接入星睿取证连接器（7 个 streamable-http MCP，第 49 轮）
+
+- 起因：用户问「他的 mcp 和 skill 是怎么配置的」，查 `C:/Users/ASUS/.workbuddy/.mcp.json` 发现星睿用 8 个本机 streamable-http 连接器（30188 computer / 30190 server / 30191 data / 30193 files / 30196 iot / 30195 apk / 3008 traffic / 30192 文件上传）。
+- 实现：overlay 追加 `seeu-mcp-xingrui-*` 七行（`transport: streamable-http`、`url`、`toolCallTimeoutMs: 300000`、`failOnStartupError: false`、`reconnect`），`--dump-config` 可见 7 行；`tests/mcp-config.test.mjs` 断言 serverName/url/transport/超时/重连与 MYOS stdio 行；`scripts/check-overlay.mjs` 追加 7 个连接器的存在与 streamable-http 校验。
+- 实测：7 个连接器全部连上，星睿工具 **242 个**（MYOS 49），会话工具总数 **317**；`npm test` 195/195、`check:overlay` OK、build OK。
+- 坑：`--dump-config` 只证明配置被接受，真正的工具发现要走 headless 会话（`.probe/mcp-headless-check.mjs` 抓 `toolsCount` 与 `mcp__` 前缀）；30195 必须带尾斜杠、3008 的路径是 `/mcp/streamable`。

@@ -3386,3 +3386,71 @@
           initialDelayMs: 3000
           maxDelayMs: 60000
           maxAttempts: 50
+
+
+# 星睿取证连接器（streamable-http MCP，星睿客户端运行时监听本机端口）。
+# 与星睿-*.mcp.json 一致：各专家按端口提供工具；星睿未启动时连接失败只告警，不阻断外壳。
+- insert:
+    - id: seeu-mcp-xingrui-computer
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: streamable-http
+        serverName: xingrui-computer
+        url: http://127.0.0.1:30188/mcp
+        toolCallTimeoutMs: 300000
+        failOnStartupError: false
+        reconnect: { enabled: true, initialDelayMs: 3000, maxDelayMs: 30000, maxAttempts: 20 }
+    - id: seeu-mcp-xingrui-server
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: streamable-http
+        serverName: xingrui-server
+        url: http://127.0.0.1:30190/mcp
+        toolCallTimeoutMs: 300000
+        failOnStartupError: false
+        reconnect: { enabled: true, initialDelayMs: 3000, maxDelayMs: 30000, maxAttempts: 20 }
+    - id: seeu-mcp-xingrui-data
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: streamable-http
+        serverName: xingrui-data
+        url: http://127.0.0.1:30191/mcp
+        toolCallTimeoutMs: 300000
+        failOnStartupError: false
+        reconnect: { enabled: true, initialDelayMs: 3000, maxDelayMs: 30000, maxAttempts: 20 }
+    - id: seeu-mcp-xingrui-files
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: streamable-http
+        serverName: xingrui-files
+        url: http://127.0.0.1:30193/mcp
+        toolCallTimeoutMs: 300000
+        failOnStartupError: false
+        reconnect: { enabled: true, initialDelayMs: 3000, maxDelayMs: 30000, maxAttempts: 20 }
+    - id: seeu-mcp-xingrui-iot
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: streamable-http
+        serverName: xingrui-iot
+        url: http://127.0.0.1:30196/mcp
+        toolCallTimeoutMs: 300000
+        failOnStartupError: false
+        reconnect: { enabled: true, initialDelayMs: 3000, maxDelayMs: 30000, maxAttempts: 20 }
+    - id: seeu-mcp-xingrui-apk
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: streamable-http
+        serverName: xingrui-apk
+        url: http://127.0.0.1:30195/mcp/
+        toolCallTimeoutMs: 300000
+        failOnStartupError: false
+        reconnect: { enabled: true, initialDelayMs: 3000, maxDelayMs: 30000, maxAttempts: 20 }
+    - id: seeu-mcp-xingrui-traffic
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: streamable-http
+        serverName: xingrui-traffic
+        url: http://127.0.0.1:3008/mcp/streamable
+        toolCallTimeoutMs: 300000
+        failOnStartupError: false
+        reconnect: { enabled: true, initialDelayMs: 3000, maxDelayMs: 30000, maxAttempts: 20 }

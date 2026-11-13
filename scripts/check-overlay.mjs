@@ -154,6 +154,25 @@ function main() {
       }
     }
 
+    // 星睿取证连接器：7 个 streamable-http MCP（星睿客户端运行时监听本机端口）。
+    const source = readFileSync(overlay, 'utf8')
+    const xingruiServers = [
+      'xingrui-computer',
+      'xingrui-server',
+      'xingrui-data',
+      'xingrui-files',
+      'xingrui-iot',
+      'xingrui-apk',
+      'xingrui-traffic',
+    ]
+    for (const server of xingruiServers) {
+      if (!source.includes(`serverName: ${server}`)) fail(`overlay 缺少星睿连接器 ${server}`)
+      const pattern = new RegExp(
+        `serverName: ${server}[\\s\\S]{0,400}?transport: streamable-http|transport: streamable-http[\\s\\S]{0,400}?serverName: ${server}`,
+      )
+      if (!pattern.test(source)) fail(`星睿连接器 ${server} 未使用 streamable-http`)
+    }
+
     const lineCount = dump.trimEnd().split(/\r?\n/).length
     if (lineCount < 1200) fail(`dump 行数异常（${String(lineCount)}），配置可能没生效`)
   } finally {
