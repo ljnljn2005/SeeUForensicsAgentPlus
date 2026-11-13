@@ -107,3 +107,9 @@ JS
 - 通话记录在 `var/mobile/Library/CallHistoryDB/CallHistory.storedata` 的 `ZCALLRECORD`（`ZSERVICE_PROVIDER` 含 `net.whatsapp.WhatsApp`；iOS 时间 = unix-978307200）。
 - 群头像哈希：`Media/Profile/<jid>-<ts>.jpg` 直接 sha256 与选项比对；社群（community）看 session 描述含 “This community is…”。
 - 群消息正文：`ZWAMESSAGE.ZTEXT`；`ZISFROMME=1` 才是本机发出。
+
+## 微信（WeChat）题速查
+- 数据目录：`var/mobile/Applications/com.tencent.xin/Documents/<hash>/`（全量提取）或 `Documents/<hash>/`（备份），DB 目录含 `MM.sqlite`（Friend/Friend_Ext/RevokeMsgTable/RoomHistory 等）、`WCDB_Contact.sqlite`（Friend/MassSendContact/OpenIMContact）、`message_1..4.sqlite`（`Chat_<hash>`/`ChatExt2_<hash>` 分表）、`WCDB_OpLog.sqlite`、`fts/fts_message.db`。
+- 本案例库为**明文 SQLite**（非 SQLCipher），可直接 `node:sqlite` 只读打开；先 `select name from sqlite_master` 看表。
+- 视频号（Channels）：`Documents/<hash>/finder/db/finder_main.db` 的 `finderFollowingListTable`（关注列表，空表=没关注）、`finder_main.aff.db`（feed/profile/contact/comment_list）、`FinderMsg/MsgSessionStatus.db`；全 0 行时答案就是「（无内容）」。
+- 本机 wxid 判定：备份文件名 `com.tencent.xin.backupinfo.wxid_<id>.crc` 指该备份所属账号；同机多个 wxid 时结合 `fts_message.db`/`WCDB_Contact` 关系判断。

@@ -132,3 +132,13 @@
 - Q81/83/84/85/91–96/98 依赖 `Sunny.zip`（AES-256）密码 → `Sunny/xcontainer`（VeraCrypt 卷）→ `tammy.txt` / 钱包地址 / BEP-20 交易 / 助记词文件 MD5。聊天记录显示密码清单在 NAS（检材未提供）。
 - Q31 AirDrop 计数：仅有 FUNG 收到 1 个 `com.apple.sharingd` 导入的 `IMG_0084.MOV` 证据，选项表述为图片/文件，建议对官方答案。
 - Q48 WeChat 视频号关注数：需 wx 视频号表，当前 iOS 备份中未定位。
+
+## 第 51 轮补：19 / 47 / 48 题
+
+| 题号 | 答案 | 证据 |
+| --- | --- | --- |
+| 19 | 待定（倾向 C SEND_DIRECTLY） | Send Anywhere Realm（`com.estmob.sendanywhere.sdk.database.realm`）中该传输记录带 `peerDeviceId`/`peerDeviceName: Samsung SM-G930F`（点对点直传特征）；`transferMode` 为整数枚举（无 SEND_* 字面量），需对照官方答案；选项 A SEND_PARTIALLY / B SEND_PAPRIKA / C SEND_DIRECTLY / D SEND_BYCLOUD / E SEND_BLUETOOTH |
+| 47 | 待确认（倾向 **wxid_zt3dtp69pc7v12**） | CHAN WeChat `Documents/a1c9cfc3…/fts/fts_message.db` 与 `WCDB_Contact.sqlite` 出现两个 wxid：`wxid_c9xyspglub7512`（FUNG 备份文件名 `…backupinfo.wxid_c9xyspglub7512.crc` 指向 FUNG）、`wxid_zt3dtp69pc7v12` ⇒ CHAN 的 WeChat ID 应为后者；题面选项未在提取文本中 |
+| 48 | **D（无内容）** | CHAN `…/finder/db/finder_main.db`：`finderFollowingListTable` 0 行；`finder_main.aff.db`（feed/profile/contact/comment_list）全 0；`finder_main_aff.db` 0；`FinderMsg/MsgSessionStatus.db` 0 ⇒ 视频号关注列表为空（选项含「（无内容）」） |
+
+- 补充发现：CHAN WeChat 数据库为**明文 SQLite**（非 SQLCipher）：`MM.sqlite`（Friend/Friend_Ext/RevokeMsgTable 等 10 表）、`WCDB_Contact.sqlite`（Friend/MassSendContact/OpenIMContact 等 8 表）、`message_1..4.sqlite`（Chat_*/ChatExt2_* 分表）、`WCDB_OpLog.sqlite`；`finder/db/` 下为视频号库；`fts/fts_message.db` 为全文索引。三条手机（CHAN 全量提取 / LEUNG、FUNG 备份）WeChat 数据量都很小（MM.sqlite 均 90,112 B），大量表为空，属「装了但基本没用」。

@@ -2730,3 +2730,9 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 待解：Q31（AirDrop 只找到 FUNG 收到 1 个 sharingd 导入 IMG_0084.MOV，选项为「图片/文件」表述，建议对照官方答案）、Q48（WeChat 视频号关注数）。
 - 技能补：`ios-full-extraction-quick` 增加 WhatsApp 题速查（群/成员/管理员/封存/位置消息/通话/头像哈希/社群判定）。
 - 坑：FUNG 与 LEUNG 的 ChatStorage 同名同路径，复制时务必分目录命名，否则会互相覆盖；ZPICTUREPATH 在多数群为 null，头像实际在 `Media/Profile/` 目录按 jid 命名。
+
+## §20.141 美亚杯 19/47/48 题与微信数据实测
+
+- 微信（CHAN 全量提取、LEUNG/FUNG 备份）数据库为明文 SQLite，`MM.sqlite` 90,112 B，`WCDB_Contact.sqlite` 90,112 B，`message_1..4.sqlite` 5–57 KB；Friend/Friend_Ext 空、Finder 全 0 行 → Q48（关注视频号数）判 **D（无内容）**；Q47（WeChat ID）两个候选 wxid，FUNG 备份文件名带 `wxid_c9xyspglub7512`，故 CHAN 应为 `wxid_zt3dtp69pc7v12`（题面选项缺失，待对官方答案）。
+- Q19 Send Anywhere 传输模式：Realm 记录含 `peerDeviceName: Samsung SM-G930F`（P2P 直传特征），`transferMode` 为整数枚举且无字面量，倾向 **SEND_DIRECTLY**，需对官方答案。
+- 坑：CHAN/LEUNG/FUNG 的 `com.tencent.xin/Documents/<hash>` 命名不同；`FinderMsg/MsgSessionStatus.db` 与 `finder/db/*.db` 都要看；Realm 无标准解析器（pip 的 `realm` 不是 Realm Core 绑定），只能读 schema 字符串与已知字段，枚举值无法直接映射。
