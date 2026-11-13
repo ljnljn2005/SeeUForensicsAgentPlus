@@ -89,3 +89,20 @@
 | 97 | **A 正确** | BIP-39 助记词 12–24 个单词 |
 
 - 补充技术记录：`Sunny.zip` 的 5 个条目全部 ZipCrypto 加密；容器 `xcontainer` 与 `VeraCrypt Portable/Setup` 同包分发 ⇒ Q91「加密软件名称」为 **VeraCrypt**；Q92–96（IQ Coin 钱包地址/币种/存入次数/支账地址/BEP-20 数量）需挂载 `xcontainer` 后读取；Q98（助记词文件 MD5）同。
+
+## 第 50 轮补 2：26/31/40/41/42/48/50/52/55/59 题
+
+| 题号 | 答案 | 证据 |
+| --- | --- | --- |
+| 26 | **B（只有 ii 和 iii）** | FUNG_CC `var/preferences/com.apple.wifi.known-networks.plist` 只有 `wanchai`、`iPhone (2)` 两个 SSID（无 THREE_WIFI/Router） |
+| 31 | 待确认（倾向 A） | FUNG_CC 相册 `ZADDITIONALASSETATTRIBUTES.ZIMPORTEDBYBUNDLEIDENTIFIER=com.apple.sharingd` 有 1 个资产 `IMG_0084.MOV`（AirDrop 收到 1 个多媒体文件）；CHAN 侧无 AirDrop 导入记录，选项表述与「视频」不完全对齐，建议对照官方答案 |
+| 40 | **A (22.2816569, 114.1756115)** | FUNG `Photos.sqlite`：`IMG_0027.HEIC` 的 `ZLATITUDE=22.2816569`、`ZLONGITUDE=114.1756115` |
+| 41 | **B（2）** | FUNG 相册中 `ZIMPORTEDBYBUNDLEIDENTIFIER=com.apple.mobilesafari` 的资产 2 个：`IMG_0026.JPG`、`IMG_0097.JPG` |
+| 42 | **A IMG_0085.mov** | FUNG `Photos.sqlite`：`IMG_0085.MOV` 的 `ZORIGINALFILENAME=IMG_0004.mov`、`ZIMPORTEDBY=com.apple.mobileslideshow`（照片 App 编辑后另存） |
+| 50 | **A 凤凰VIP会员心得交流群** | FUNG `ZWACHATSESSION.ZARCHIVED=1`：`鳳凰VIP會員心得交流群`（`85263834763-1563607573@g.us`） |
+| 52 | **B（i 和 ii）** | LEUNG `ZWAGROUPMEMBER`（Investors 群 `120363417204753192`，ZISADMIN=1）：`85254974406@s.whatsapp.net`、`85260927726@s.whatsapp.net` |
+| 55 | **A** | 四选项哈希逐一比对：`B1A370…`=「We are 3」社群头像（`Media/Profile/120363397792833003-1744811346.jpg`）、`B8BA25…`=Happy Sharing、`E43ADC…`=Foodies、`20E64C…`=Photographers ⇒ 社群「We are 3」对应 A |
+| 59 | **A 诈骗** | IQ COIN 群（FUNG session 38）消息：「impersonate CEO to give instructions… Ask them to pay by the 'Coin'… To our created address」→ 冒充 CEO 诈骗转账 |
+| 48 | 待解 | 需查 WeChat 视频号关注表（`wcdb`），当前未定位到可读表 |
+
+- 技术：WhatsApp 群头像在 `group.net.whatsapp.WhatsApp.shared/Media/Profile/<jid>-<ts>.jpg`，直接 `sha256` 与选项比对即可；社群（community）在 `ZWACHATSESSION` 描述里含 “This community is for members to chat in topic-based groups”。

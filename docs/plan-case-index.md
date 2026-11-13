@@ -2723,3 +2723,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 待解：Q81（`Sunny.zip` 密码，103 个候选未命中）、Q83/84（VeraCrypt 容器）、Q85（容器属性）、Q91–96/98（钱包与助记词，需挂载容器）。
 - 坑：① LovelyCarve `inspect` 不给 offset/label/fs，必须 `pyewf`；② `7z.exe` 在仓库目录执行被拒（沙箱），用 Python；③ `copyFileSync` 从只读挂载复制部分文件 `EPERM`，用 `readFileSync` 流式写或换文件；④ FAT 卷的 `mtime` 经挂载读取恒为 1970（LovelyCarve 未透出），卷标日期需从目录项原始时间字段解析。
 - 技能：新增 `resources/forensics/skills/usb-winpe-quick/SKILL.md`（E01 解析/WinPE 判断/VeraCrypt 线索/只读纪律）。
+
+## §20.140 美亚杯 26/31/40/41/42/48/50/52/55/59 题实测
+
+- Q26=B（FUNG wifi known-networks 仅 wanchai、iPhone (2)）；Q40=A（FUNG Photos IMG_0027.HEIC ZLATITUDE/ZLONGITUDE）；Q41=B（Safari 导入相册 2 张：IMG_0026.JPG、IMG_0097.JPG）；Q42=A（IMG_0085.MOV 的 ZORIGINALFILENAME=IMG_0004.mov）；Q50=A（FUNG ZWACHATSESSION ZARCHIVED=1 = 鳳凰VIP會員心得交流群）；Q52=B（Investors 管理员 85254974406、85260927726）；Q55=A（四个候选哈希逐一比对 WhatsApp Media/Profile 群头像，社群「We are 3」= B1A370…）；Q59=A 诈骗（IQ COIN 群消息：冒充 CEO 指示付款到自建地址）。
+- 待解：Q31（AirDrop 只找到 FUNG 收到 1 个 sharingd 导入 IMG_0084.MOV，选项为「图片/文件」表述，建议对照官方答案）、Q48（WeChat 视频号关注数）。
+- 技能补：`ios-full-extraction-quick` 增加 WhatsApp 题速查（群/成员/管理员/封存/位置消息/通话/头像哈希/社群判定）。
+- 坑：FUNG 与 LEUNG 的 ChatStorage 同名同路径，复制时务必分目录命名，否则会互相覆盖；ZPICTUREPATH 在多数群为 null，头像实际在 `Media/Profile/` 目录按 jid 命名。

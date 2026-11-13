@@ -99,3 +99,11 @@ JS
 ## 输出与红线
 - 比武模式：`Q<n>｜答案｜思路`；事实与推断分开；命中只是线索要回查原文。
 - 原件只读；不整份解压原始 zip/E01；不执行未知样本；无管理员/授权不做动态分析。
+
+## WhatsApp 题速查（ChatStorage.sqlite）
+- 群名/群 ID：`ZWACHATSESSION`（`ZCONTACTJID like '%@g.us'`、`ZPARTNERNAME`）；**封存群** = `ZARCHIVED=1`。
+- 成员数：`ZWAGROUPMEMBER where ZCHATSESSION=? and ZISACTIVE=1`；管理员 = `ZISADMIN=1`。
+- 位置消息：`ZWAMESSAGE.ZMESSAGETYPE=5` → `ZWAMEDIAITEM` 的 `ZLATITUDE`/`ZLONGITUDE`、`ZMEDIAURL`（foursquare 链接）。
+- 通话记录在 `var/mobile/Library/CallHistoryDB/CallHistory.storedata` 的 `ZCALLRECORD`（`ZSERVICE_PROVIDER` 含 `net.whatsapp.WhatsApp`；iOS 时间 = unix-978307200）。
+- 群头像哈希：`Media/Profile/<jid>-<ts>.jpg` 直接 sha256 与选项比对；社群（community）看 session 描述含 “This community is…”。
+- 群消息正文：`ZWAMESSAGE.ZTEXT`；`ZISFROMME=1` 才是本机发出。
