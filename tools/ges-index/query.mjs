@@ -281,16 +281,11 @@ export function search(db, opts = {}) {
   if (opts.category) { filters.push('r.category=?'); params.push(String(opts.category)); }
   if (opts.from) { filters.push('r.ts>=?'); params.push(String(opts.from)); }
   if (opts.to) { filters.push('r.ts<=?'); params.push(String(opts.to)); }
+  // 短关键词（<3 字）走 LIKE 兜底；>=3 字由下面的 FTS5/match 分支负责，这里不要再拼 FTS 过滤条件。
   const kw = typeof opts.q === 'string' ? opts.q.trim() : '';
-  const filterParams = [...params];
-  if (kw) {
-    if (kw.length >= 3) {
-      filters.push('r.id in (select rowid from record_fts where record_fts match ?)');
-      params.push(ftsQuery(kw));
-    } else {
-      filters.push('(r.text like ? or r.body like ?)');
-      params.push('%' + kw + '%', '%' + kw + '%');
-    }
+  if (kw.length > 0 && kw.length < 3) {
+    filters.push('(r.text like ? or r.body like ?)');
+    params.push('%' + kw + '%', '%' + kw + '%');
   }
   const where = filters.length ? ` and ${filters.join(' and ')}` : '';
   let engine = 'like';

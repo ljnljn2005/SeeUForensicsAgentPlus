@@ -292,7 +292,14 @@ await sleep(400)
 report.searchEnter = report.searchTyped
 await sleep(7000)
 text = await bodyText()
-report.searchOk = /引擎 (trigram|like) · \d+ 命中/.test(text)
+report.searchOk = /引擎 (?:fts5-)?(?:trigram|like) · \d+ 命中/.test(text)
+// 长关键词（>=3 字）必须走 trigram 且有命中：回归 ftsQuery is not defined 导致 /search 500 的问题
+report.searchLongTyped = await searchByKeyword('Investors')
+await sleep(7000)
+const searchLongText = await bodyText()
+const longIdx = searchLongText.indexOf('引擎')
+report.searchLongText = longIdx >= 0 ? searchLongText.slice(longIdx, longIdx + 200) : searchLongText.slice(0, 200)
+report.searchLongOk = /引擎 (?:fts5-)?trigram · ([1-9]\d*) 命中/.test(report.searchLongText)
 // 检索视图的应用筛选应是下拉（选项来自 /facets，带记录数）
 report.searchAppOptions = await ev(`(() => {
   const sel = [...document.querySelectorAll('select')].find(s => [...s.options].some(o => /（\\d+）$/.test(o.textContent)))
@@ -390,7 +397,7 @@ report.tabTablesClick = await openTab('表')
 text = await bodyText()
 report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
 report.myosImportOk = String(report.myosButton ?? '').startsWith('clicked') && report.myosDialog === true
-report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true && report.timelineFiltersOk === true && report.entityPagingOk === true && report.entityEvSelectOk === true && report.indexMeta === true && report.myosImportOk === true
+report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true && report.searchLongOk === true && report.timelineFiltersOk === true && report.entityPagingOk === true && report.entityEvSelectOk === true && report.indexMeta === true && report.myosImportOk === true
 
 // ---------- 浅色主题回归（SEEU_E2E_THEME=light；暗色为默认） ----------
 if (process.env.SEEU_E2E_THEME === 'light') {
