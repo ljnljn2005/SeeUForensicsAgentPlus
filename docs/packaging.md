@@ -1132,3 +1132,12 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 内置 MCP 工具探测（headless，mock 网关）：`mcp__seeu__index_list` / `evidence_list` / `index_search` / `index_tables` / `chain_check` 均存在；`evidence_list` 输出含挂载 route 与备注。
 - 打包态 e2e：`m2-ui-check`（`idxChainSteps:3`、`errors:[]`）通过。
 - 坑：`/search` 返回数组字段是 `rows`（不是 hits），摘要字段 `snip`；`resolveDbParam` 只做精确匹配，前缀解析放在 MCP 层；卸载 `win-unpacked` 前要确认别删到只读/被占用文件（本次曾误删，用 `--dir` 重新生成）。
+
+### v0.3.22 回归验证
+
+- `npm test` 215/215、`check:overlay` OK、`node scripts/build.mjs` OK。
+- 打包：`npx electron-builder --win --x64 -c.directories.output=release-0322`；NSIS 320,029,701 B（blockmap 332,509 B）、portable 270,565,325 B、`app.asar` 566,489,972 B（32,966 entries）、目录版 1,262,680,982 B。
+- `.probe/asar-0322-check.mjs`：0 个 false、`missing:[]`（新增 `envMcpItem`：`dist/main.cjs` 含「内置 SeeU MCP」与 `mcpFacts`；`version0322`）。
+- 启动：目录版 6176 ms；portable 52,755 ms（首启解包）。
+- 打包态 e2e：`m2-ui-check`（`m2ok:true`、`idxChainSteps:3`、`errors:[]`）、`settings-check --exe`（`ok:true`、`envItemCount:8`、`toolPathsRows:15`、`diagOk:true`）、`plugins-check`（`ok:true`、175 包、`activationFailures:[]`）、`skills-check`（`ok:true`、10 随包、`leaked:[]`）、`hero-check`（`ok:true`、15/15）、`mount-check`（`ok:true`、inspect 204 ms、`remountHintOk:true`）。
+- 注意：改 `src/env-report.ts` 后必须先 `node scripts/build.mjs` 再跑 settings-check，否则 e2e 用的是旧 `dist/main.cjs`（旧逻辑 7 项 → 等 8 项超时）。

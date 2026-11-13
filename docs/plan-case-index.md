@@ -2831,3 +2831,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `src/env-report.ts` 新增 `mcpFacts()`：dev 取 `appRoot()/tools/seeu-mcp`，打包取 `process.resourcesPath/app.asar.unpacked/tools/seeu-mcp`；读 `server.mjs` 正则统计工具名（`^\s{4}name: '([a-z_]+)'`）；`collectEnvReport` 传入 `mcp`。
 - 测试：`tests/env-report.test.mjs` 升到 8 项（keys 顺序含 mcp），6/6；`settings-check` 等待 ≥8 行、`envReportOk` 阈值 8；dev 实测 `envItemCount:8`、`envKeys: plugins,skills,tools,mcp,localModel,mounts,myos,indexDirs`、`envSummary:"体检结果：7 项正常 · 1 项注意 · 0 项不可用"`。
 - 坑：改 `src/env-report.ts` 后必须先 `node scripts/build.mjs` 再跑 settings-check，否则 e2e 打的还是旧 `dist/main.cjs`（旧逻辑只有 7 项 → 等 8 项超时 `envItemCount:0`）。
+
+### 20.145 v0.3.22 打包与打包态回归
+
+- 版本 0.3.22（含内置 MCP 6 工具、体检第 8 项 MCP、答案汇总与 read_record）；build 后 `electron-builder --win --x64 -c.directories.output=release-0322`。
+- 产物：NSIS 320,029,701 B（blockmap 332,509）、portable 270,565,325、`app.asar` 566,489,972（32,966 entries）、目录版 1,262,680,982；asar-0322 自检 0 false、`missing:[]`。
+- 回归：`npm test` 215/215；目录版 6176 ms / portable 52,755 ms；打包态 m2/settings（体检 8 项）/plugins/skills（10 随包）/hero/mount 全绿。
+- 坑：修改 `src/env-report.ts` 后必须重建再跑 settings-check（否则旧 dist 只返回 7 项）。

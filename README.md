@@ -64,31 +64,30 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.21**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
+本轮已验证产物（**v0.3.22**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,774,137 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
-| `release/win-unpacked/resources/app.asar` | 566,595,818 B（32,984 entries；新增 `tools/chain-check-run.mjs`、`tools/image-mount.mjs`，插件可在 asar 内直接 import） |
-| `release/SeeUForensicsAgentPlus-0.3.21-x64.exe`（NSIS 安装包） | 320,028,826 B（blockmap 332,580 B） |
-| `release/SeeUForensicsAgentPlus-0.3.21-x64-portable.exe` | 270,596,906 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,680,982 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
+| `release/win-unpacked/resources/app.asar` | 566,489,972 B（32,966 entries；含内置 MCP 服务端 `tools/seeu-mcp/server.mjs`（6 工具）与 `tools/chain-check-run.mjs`） |
+| `release/SeeUForensicsAgentPlus-0.3.22-x64.exe`（NSIS 安装包） | 320,029,701 B（blockmap 332,509 B） |
+| `release/SeeUForensicsAgentPlus-0.3.22-x64-portable.exe` | 270,565,325 B |
 
-实测冷启动到 dsh UI：目录版 **7547 ms**（首轮可能受杀毒扫描影响，通常 5–8 s）；portable 首次 **52.9 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **6176 ms**（首轮可能受杀毒扫描影响，通常 5–8 s）；portable 首次 **52.8 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
-### v0.3.22 待发布（未打包）
+### v0.3.22 改了什么
 
 - 新增 `scripts/e2e/seeu-mcp-live-check.mjs`（`npm run test:e2e:mcp-live`）：真实 Electron → dsh 会话 → 内置 MCP（stdio）→ 索引插件 HTTP → 索引库的端到端验证。mock 网关首轮让模型调用 `mcp__seeu__evidence_list`，断言：工具列表里 5 个 `mcp__seeu__*` 都在、工具被执行、回传内容里出现真实检材（`CHAN_MH_mobile.zip`、`eid 1`、火眼挂载 route）。
 - 实测：`ok:true`、`seeuToolCount:5`、工具结果 512 字符、`looksReal:true`、共 3 轮请求。
 - MCP 新增第 6 个工具 `read_record`：按记录 id 取正文 + 证据路径/行号 + Goldeneyes 引用 + `ges read` 复核命令（插件新增 `GET /cite?id=`，`tests/cite.test.mjs` 3 例）。
 
-### v0.3.22 待发布（未打包）
-
 - 运行环境体检新增第 8 项「内置 SeeU MCP」：服务端缺失判 fail（提示重装/重新解包），正常时显示「6 个只读工具已就绪（index_list / evidence_list / index_search / index_tables / read_record / chain_check）」；`src/env-report.ts` 的 `mcpFacts()` 会按 dev/打包路径读取 `tools/seeu-mcp/server.mjs` 统计工具数。
 - `scripts/e2e/settings-check.mjs` 体检断言升到 8 项（dev 实测 7 正常 · 1 注意 · 0 不可用）。
+- **打包与回归**：`npm test` 215/215、`check:overlay` OK；`release-0322` 打包后 asar 自检 0 false、`missing:[]`；目录版与 portable 均能启动（6176 ms / 52.8 s）；打包态 `m2-ui-check`（`idxChainSteps:3`）、`settings-check`（体检 8 项、`mcp` 正常）、`plugins-check`（175 包）、`skills-check`（10 随包）、`hero-check`（15/15）、`mount-check` 全部通过。
 
 ### v0.3.21 改了什么
 
