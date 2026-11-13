@@ -62,6 +62,9 @@
 | 16 | 传送方或接收方 | **B. 接收方**（CHAN_MH 收到文件） | 传的是 `Screenshot_20250423-105307_Gallery.jpg` 这类 **Android 风格命名**（iOS 自己截图为 `IMG_xxxx.PNG`），且文件落在本机 `com.estmob.paprika` 的 Documents（Realm 路径 `.../Application/033732ED-…/Documents/Screenshot_…jpg`）；对端设备名 `Samsung SM-G930F` ⇒ 由三星发出、CHAN 接收 |
 | 18 | 接收至哪一个装置 | **A. CHAN_MH_mobile.zip** | 同上：文件被收到本机 Send Anywhere 容器/Realm 记录里；FUNG_CC/LEUNG_YL 均为 iPhone，且其相册（Photos.sqlite）未见这两个文件 |
 | 19 | 传送方的传输模式 | **待深挖** | Realm 字段 `transferMode` 是枚举整数（不是字符串），需要 App 枚举表/动调才能映射 `SEND_DIRECTLY` 等；`strings` 里无 `SEND_*` 字面量 |
+| 30 | 两个 GIF 由哪个软件拍摄/生成 | **A. Infltr** | FUNG_CC 相册 `Photos.sqlite`：`IMG_0057.GIF`/`IMG_0062.GIF` 的 `ZIMPORTEDBYBUNDLEIDENTIFIER = com.Yooshr.Infltr`、`ZIMPORTEDBYDISPLAYNAME = Infltr`，EXIF 2025:04:16 13:25/13:42 |
+| 38 | IMG_0014.MOV 与 IMG_0016.MOV 之间有无其他多媒体文件 | **没有** | FUNG_CC 相册 `ZASSET`：`IMG_0014.MOV` 的 `Z_PK=14`、`IMG_0016.MOV` 的 `Z_PK=15`（连续，无中间资产）；`IMG_0015/0017.MOV` 在 DB 与 `DCIM/100APPLE` 磁盘上都不存在 |
+| 39 | 上一题的陈述哪条正确 | **D（IMG_0015.MOV 制作时名称被更改为 IMG_0016.MOV）** | 由 38 推断：编号跳号（0014→0016、0018）且无 0015 资产/文件，pk 连续说明没有隐藏/额外文件；名称改写是唯一能同时解释「编号缺口 + 无中间资产」的选项（建议与官方答案复核） |
 | 31 | AirDrop 成功传送的条数 | **待深挖** | `com.apple.sharingd.plist` 只有 AirDropID/哈希；`Photos.sqlite` 的 40 个资产里无 AirDrop 导入的截图（`ZIMPORTEDBY` 无对应记录）——AirDrop 成功痕迹不在这些库里 |
 
 复现命令（一条链路体检 + 上述解析）：`npm run chain:check -- --caseNumber 2919d298`，详见 `resources/forensics/skills/ios-full-extraction-quick/SKILL.md`。

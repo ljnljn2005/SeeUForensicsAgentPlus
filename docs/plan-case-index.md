@@ -2706,3 +2706,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 仍未解：Q19 `transferMode` 枚举（Realm 存整数）、Q31 AirDrop 记录（`sharingd.plist` 无清单、Photos 无 AirDrop 导入记录）。
 - 坑：`Photos.sqlite` 里的字符串命中可能来自 `-wal` 残留，查询要用 `ZASSET` 表而不是盲目 grep；`Containers/Data/Application/<UUID>` 在全量提取里可能未保留（本套 extraction 的 `var/mobile/Containers` 为空），此时以 Realm 记录路径为准。
 - 技能更新：`ios-full-extraction-quick` 增加「发送/接收方向三线索」与「Photos.sqlite ≠ 全部接收文件」两条。
+
+## §20.138 美亚杯相册题实测（Q30 / Q38 / Q39，FUNG_CC 检材）
+
+- 关键发现：**相册题要看 FUNG_CC_mobile.zip，不是 CHAN_MH**（先查 eid 与 iDevice_info/Photos 数量对齐，避免拿错检材）。
+- Q30 = **A. Infltr**：FUNG `Photos.sqlite` 的 `ZADDITIONALASSETATTRIBUTES` 中 `IMG_0057.GIF`、`IMG_0062.GIF` 的 `ZIMPORTEDBYBUNDLEIDENTIFIER=com.Yooshr.Infltr`、`ZIMPORTEDBYDISPLAYNAME=Infltr`（EXIF 2025:04:16 13:25:30 / 13:42:11）。
+- Q38 = **没有**：`ZASSET` 中 `IMG_0014.MOV`（Z_PK=14）与 `IMG_0016.MOV`（Z_PK=15）相邻，无中间资产；`IMG_0015.MOV`/`IMG_0017.MOV` 在 DB 与 `DCIM/100APPLE` 磁盘均不存在。
+- Q39 = **D（IMG_0015.MOV 制作时名称被更改为 IMG_0016.MOV）**：由「编号跳号 + pk 连续 + 无 0015 文件」推断，属证据支持度最高的选项，建议与官方答案复核。
+- 技能更新：`ios-full-extraction-quick` 增加「相册 / 照片库」小节（ZIMPORTEDBY 判 App、Z_PK 判先后、隐藏/回收站/磁盘文件三方核对）。
+- 坑：Photos.sqlite 是 WAL 模式，必须把 `-wal`/`-shm` 一起复制；否则查不到最新资产/会误导（grep 命中也可能来自 WAL 残留）。

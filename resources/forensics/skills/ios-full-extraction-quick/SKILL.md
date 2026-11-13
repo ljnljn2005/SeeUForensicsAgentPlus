@@ -72,6 +72,25 @@ ls "$A/com.estmob.paprika/Documents" "$A/com.lenovo.anyshare/Documents"
 - **Photos.sqlite 只代表「照片」App 里的资产**：收到的文件未必进相册（在 App 容器里），别用「相册里没有」去否定接收。
 
 
+## 相册 / 照片库（Photos.sqlite 秒答「谁生成的、先后顺序」）
+```bash
+P="$M/var/mobile/Media/PhotoData/Photos.sqlite"; mkdir -p .dev/ios-copy/p && cp "$P"* .dev/ios-copy/p/
+node - <<'JS'
+const { DatabaseSync } = require('node:sqlite')
+const db = new DatabaseSync('.dev/ios-copy/p/Photos.sqlite', { readOnly: true })
+// 某文件由哪个 App 生成/导入（WPS、Infltr、Snapseed、AirDrop 等）
+console.log(db.prepare(`select a.ZFILENAME fn, x.ZIMPORTEDBYBUNDLEIDENTIFIER bid, x.ZIMPORTEDBYDISPLAYNAME name, x.ZEXIFTIMESTAMPSTRING exif
+  from ZASSET a left join ZADDITIONALASSETATTRIBUTES x on x.ZASSET=a.Z_PK where a.ZFILENAME like 'IMG_%' limit 20`).all())
+// 顺序类问题：Z_PK 与 ZADDEDDATE 是「入库顺序」，FILENAME 只是显示名（可被改）
+console.log(db.prepare(`select Z_PK pk, ZFILENAME fn, ZDATECREATED dc, ZADDEDDATE ad, ZHIDDEN hid, ZTRASHEDDATE tr
+  from ZASSET order by Z_PK limit 30`).all())
+db.close()
+JS
+```
+- `ZIMPORTEDBYBUNDLEIDENTIFIER` 直接给出生成/导入 App（如 `com.Yooshr.Infltr` = Infltr）。
+- 「两个文件之间有没有别的文件」看 **`Z_PK` 是否连续** + `ZADDEDDATE` 排序，不要只看文件名编号（Trust 文件名可能跳号/被改）。
+- 隐藏/回收站：`ZHIDDEN=1`、`ZTRASHEDDATE` 非空；也要看 `DCIM/100APPLE` 目录里实际是否存在同名文件。
+
 ## 第六步：IM 数据（WhatsApp/微信）
 - WhatsApp：`var/mobile/Applications/net.whatsapp.WhatsApp/`（`Documents/` 下 `ChatStorage.sqlite`，媒体在 `Library/Media/` 或 `Message/Media/`；数据库可能是 WAL，同样先复制）。
 - 微信：`var/mobile/Applications/com.tencent.xin/Documents/`（`MM.sqlite`、`WCDB_Contact.sqlite`；新版可能拆分库）。
