@@ -2683,3 +2683,14 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
   - Q22 Safari 搜索词 = `escape room hong kong`（History.db + 复制 `-wal` 后 node:sqlite 查询）。
 - 新技能：`resources/forensics/skills/ios-full-extraction-quick/SKILL.md`——路径速查、plist/sqlite 只读解析、WAL 复制坑、IMEI 校验位算法、红线。
 - 验证：`npm test` 201/201、`build` OK、`check:overlay` OK；题目证据表进 `docs/chain-check-2025美亚杯.md`。
+
+## §20.136 文件传输类题目实测（Q12/17 已答，Q16/18/19/31 待深挖）
+
+- 检材：CHAN_MH 全量提取（火眼挂载 `C:/hlnet/4-1793357718/CHAN_MH_mobile.tar/`）。
+- 已答：
+  - Q12 用过哪个传输软件 = **C. Send Anywhere (`com.estmob.paprika`)**：`Documents` 有 `SA_Beat.mp3`/`SA_iTunes.mkv`；`Library/com.estmob.sendanywhere.sdk.database.realm` 有 `peerDeviceId`/`transferMode`/`sentTime`/文件名；SHAREit `shareit.db` 的 `transfer`/`file` 表为空；`com.apple.Sharing.AirDropUI` 无容器数据。
+  - Q17 传送的类型 = **A. 屏幕截图**：Realm 内 `Screenshot_20250423-105307_Gallery.jpg`、`Screenshot_20250424-083131_Gallery.jpg`。
+- 待深挖依据：Realm 的 `transferMode` 是枚举整数（需 App 枚举表或动调验证才能映射 `SEND_DIRECTLY` 等）；对端设备名 `Samsung SM-G930F`（Q16 方向、Q18 接收装置的线索）；AirDrop 成功清单不在 `sharingd.plist`（只有 AirDropID/哈希），需结合 Photos/中转文件或日志。
+- 坑：Send Anywhere 的 `SendAnywhere.sqlite` 常为空（历史只留 Realm），Realm 需 `strings` 读文本并配合字段名推断，不能当 SQLite 打开。
+- 技能更新：`resources/forensics/skills/ios-full-extraction-quick/SKILL.md` 增加「文件传输类应用」小节（Send Anywhere/SHAREit/AirDrop 路径与证据要点）。
+- 验证：文档与技能更新；`npm test` 200/200、`build` OK、`check:overlay` OK。

@@ -56,7 +56,20 @@ JS
 ```
 - 搜索词在 `history_items.url` 的 `q=` 里，`title` 常是「xxx - Google Search」。
 
-## 第五步：IM 数据（WhatsApp/微信）
+## 第五步（前置）：文件传输类应用（AirDrop / SHAREit / Send Anywhere）
+```bash
+A="$M/var/mobile/Applications"
+ls "$A" | grep -E "estmob|anyshare|Sharing"
+ls "$A/com.estmob.paprika/Documents" "$A/com.lenovo.anyshare/Documents"
+```
+- **Send Anywhere**（`com.estmob.paprika`）：
+  - `Library/SendAnywhere.sqlite`：`ZTRANSFERHISTORY`（`ZDIDRECEIVE` 0/1、`ZTRANSFERTYPE`、`ZFIRSTFILENAME`、`ZDATE`、`ZCOUNTOFFILES`）+ `ZTRANSFERFILE`（逐文件 `ZNAME`/`ZITEMTYPE`/`ZSIZEOFDATA`）——但常见情况这张表为空（历史只留在 Realm）。
+  - `Library/com.estmob.sendanywhere.sdk.database.realm`（Realm 二进制，不能当 SQLite 打开）：`strings -n 5` 可读到 `deviceName`/`peerDeviceId`/`transferMode`/`sentTime`、对端设备名（如 `Samsung SM-G930F`）和传输过的文件名（如 `Screenshot_20250423-105307_Gallery.jpg`）——**判断用过哪个传输软件、传了什么的最快证据**。
+- **SHAREit**（`com.lenovo.anyshare`）：`Documents/.shareit/{shareit,downloader,contacts,adcs}.db`；`shareit.db` 有 `transfer`/`file` 表（传过东西才有行）。
+- **AirDrop**：`com.apple.Sharing.AirDropUI` 无数据目录；`var/mobile/Library/Preferences/com.apple.sharingd.plist` 只有 AirDropID/哈希（**没有成功传输清单**）；AirDrop 成功痕迹更多在相册/文件中转（`PhotoData`、`Documents`）或设备日志，不要只凭 sharingd.plist 下结论。
+- 只读：先 `cp` 到 `$SEEU_WORKSPACE` 再解析；WAL 库连同 `-wal`/`-shm` 一起复制。
+
+## 第六步：IM 数据（WhatsApp/微信）
 - WhatsApp：`var/mobile/Applications/net.whatsapp.WhatsApp/`（`Documents/` 下 `ChatStorage.sqlite`，媒体在 `Library/Media/` 或 `Message/Media/`；数据库可能是 WAL，同样先复制）。
 - 微信：`var/mobile/Applications/com.tencent.xin/Documents/`（`MM.sqlite`、`WCDB_Contact.sqlite`；新版可能拆分库）。
 - 以上只做只读复制后解析，不修改挂载目录。

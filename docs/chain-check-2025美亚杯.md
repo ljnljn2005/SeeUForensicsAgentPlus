@@ -57,5 +57,8 @@
 | 10 | 安装了哪些 IM | **A. 只有 i) WhatsApp 和 ii) WeChat** | `var/mobile/Applications`：`net.whatsapp.WhatsApp`、`com.tencent.xin` 存在；`net.whatsapp.WhatsAppSMB`、`com.tencent.mqq` 不存在 |
 | 20 | 从未安装的浏览器（多选） | **B. Chrome、C. Firefox、D. Edge** | Applications 里只有 `com.apple.mobilesafari`；grep `com.google.chrome.ios`/`org.mozilla.ios.Firefox`/`com.microsoft.msedge` 均无 |
 | 22 | Safari 搜索过的字词 | **B. escape room hong kong** | `var/mobile/Library/Safari/History.db`（复制 `-wal` 后只读）搜索 URL `q=escape+room+hong+kong` |
+| 12 | 哪个文件传输软件用过 | **C. com.estmob.paprika（Send Anywhere）** | `com.estmob.paprika/Documents` 有 `SA_Beat.mp3`/`SA_iTunes.mkv`；`Library/com.estmob.sendanywhere.sdk.database.realm` 有传输记录（`peerDeviceId`/`transferMode`/`sentTime` 与截图文件名）；SHAREit `transfer`/`file` 表为空；AirDropUI 无数据 |
+| 17 | 传送的档案类型 | **A. 屏幕截图** | Realm 内文件名 `Screenshot_20250423-105307_Gallery.jpg`、`Screenshot_20250424-083131_Gallery.jpg` |
+| 16/18/19/31 | 收发方向 / 接收装置 / 传输模式 / AirDrop 条数 | **待深挖**（已有线索） | Realm `strings` 含对端设备名 `Samsung SM-G930F`（方向、接收装置的强线索）；`transferMode` 是枚举整数，需按 App 枚举表映射；AirDrop 的 `com.apple.sharingd.plist` 只有 ID/哈希、无传输清单 |
 
 复现命令（一条链路体检 + 上述解析）：`npm run chain:check -- --caseNumber 2919d298`，详见 `resources/forensics/skills/ios-full-extraction-quick/SKILL.md`。
