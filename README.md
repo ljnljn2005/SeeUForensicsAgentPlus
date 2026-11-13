@@ -81,6 +81,15 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 ### v0.3.13 待发布（未打包）
 
+- **APK/EXE 动态分析环境接入（第 47 轮）**：回答用户「apk 接雷电模拟器、exe 接虚拟机，这些你都配置了吗」——
+  - 实测本机：雷电模拟器 = `D:\Games\leidian\LDPlayer14`（`ldconsole.exe`、`dnplayer.exe`、`adb.exe`，实例 1 个，当前未运行）；VMware Workstation 26.0.0 = `D:\Programs\VMware`（`vmrun.exe`，运行中 `E:/Win10Reverse/Win10CNBase.vmx`）；
+  - `tools/tool-paths.mjs` 新增两项目录型路径：`ldplayer`（`SEEU_TOOL_LDPLAYER`）、`vmware`（`SEEU_TOOL_VMWARE`），设置页「外部取证工具路径」从 13 行变 **15 行**，保存后注入会话；
+  - APK persona 追加「动态分析（雷电模拟器）」段：`ldconsole list2/launch` → `adb connect 127.0.0.1:5555` → `adb install -r -t` → `monkey` 启动 → `logcat`/`screencap` → frida attach；并明确「本机没有星睿的一键脱壳 MCP，不要承诺一键 dump dex」；
+  - EXE persona 追加「动态分析（VMware）」段：`vmrun list`、运行前 `vmrun snapshot` 快照、样本只在虚拟机内运行（主机不执行未知 PE）、共享文件夹拷贝、回滚；
+  - 缺口如实告诉用户：① PC 侧 frida 有、模拟器侧 frida-server 二进制未找到；② 星睿 `apk_unpack_all_in_one_v3` / `apk_mcp` 工具链本机未安装（搜过 C:/D:/E: 常见目录）；③ EXE 虚拟机是 VMware（不是 VirtualBox/Hyper-V），已按 VMware 接。
+  - 校验：`npm test` **194/194**、`check:overlay` OK、build OK、`settings-check`（`toolPathsRows:15`）、`m2-ui-check`。
+
+
 - **星睿本地模型提示词最终融合（第 46 轮）**：读取 `E:\取证桌面\星睿-*.txt` 9 份（APK/数据分析/文件目录/服务器/流量/物联网/电子数据取证竞赛知识库/计算机手机/逆向；每份 = 星睿通用 system + 专家 SOP），抽取专家段并按预设融合：
   - 取证分析 ← 星睿-计算机手机 + 星睿-服务器；流量 ← 星睿-流量；数据 ← 星睿-数据；APK ← 星睿-APK；EXE ← 星睿-逆向；手机 ← 星睿-计算机手机；
   - **新增两个预设**：物联网分析（IoT，order 11）、文件目录分析（Files，order 12）；
@@ -953,7 +962,8 @@ npm run myos:import -- import --case <caseId> \
 - **persona（第 46 轮：星睿本地模型提示词最终融合）**：取证/流量/数据/APK/手机/EXE 预设的 persona 改成「星睿专家 SOP + SeeU 运行环境适配 + 既有 SeeU 规则」三段式；新增物联网（IoT，order 11）与文件目录（Files，order 12）两个预设。星睿原文里依赖的 QZOS/星睿服务器/IDA-MCP/文件目录 MCP/ApkCheckPack 等工具，适配段统一改为 SeeU 的 `bash` + 索引 + 火眼挂载 + `$SEEU_TOOL_*`，并注明「上下文 262144，可充分展开、不必过度缩写」。另新增随包技能 `forensics-competition-kb`（检索 `D:/forensics-kb` 的竞赛题解，可用 `$SEEU_KB_DIR` 覆盖）。
 - **persona（更早版本）**：取证/流量/内存/数据/APK/手机/EXE/数据库八个专家预设都带精简版专家 persona（来源见「v0.3.4 改了什么」与「v0.3.5」），日志预设沿用原有 persona。
 - **外部工具（开发机实测 2026-11-12）**：`python 3.13.14`（`D:/Programming/Python31314/python.exe`）已装 pandas/openpyxl/pefile/capstone/lief/pyelftools/yara/scapy/dpkt/pyshark；Wireshark 3.4.0 的 `tshark`/`capinfos`/`editcap`/`mergecap` 已装但**不在 PATH**（`E:/CTFTools/Forensics/4-其他工具/【15】网络分析/Wireshark/`）；`7z`、`sqlite3.exe`、`jadx 1.1.0`、`apktool.jar`、`adb` 在 `E:/CTFTools/…` 下；`frida 17.17.0` 在 PATH；IDA Professional 9.4（`idat.exe`）在 `D:/Programs/IDA Professional 9.4/`；`nfdump`/`zeek`/`suricata`/`snort`/`androguard` 未装；Ghidra 12.1.4 已装（默认 `C:/Users/ASUS/.dsh/plugins/dsh-infinite-gen-5/third_party/sources/ghidra-12.1.4`，源码树，批处理入口 `Ghidra/RuntimeScripts/Windows/support/analyzeHeadless.bat`）。**流量/日志分析一律先 lovelyspark-cli**，tshark 等只在技能覆盖不到时用绝对路径补充或做交叉复核。
-- **外部工具路径可改**：设置页新增「外部取证工具路径」区（12 项：Ghidra 目录、IDA、tshark/capinfos/editcap、python、jadx、apktool.jar、adb、7-Zip、sqlite3、Volatility 目录），默认值就是上面这些本机实测路径；改完写 `<DSH_HOME>/tool-paths.json`，外壳启动 dsh 时以 `SEEU_TOOL_<ID>` 环境变量注入会话（如 `SEEU_TOOL_GHIDRA`、`SEEU_TOOL_TSHARK`、`SEEU_TOOL_PYTHON`），路径不存在的项不注入。**解析顺序：设置里显式指定 → `PATH` 环境变量里能找到的命令（优先）→ 本机默认实测路径**；所以工具装进 PATH 后会优先用 PATH 里的，改机器/改 PATH 不必逐项改设置。
+- **外部工具路径可改**：设置页新增「外部取证工具路径」区（15 项：Ghidra 目录、IDA、tshark/capinfos/editcap、python、jadx、apktool.jar、adb、7-Zip、sqlite3、StarMem、Volatility 目录、雷电模拟器目录、VMware 目录），默认值就是上面这些本机实测路径；改完写 `<DSH_HOME>/tool-paths.json`，外壳启动 dsh 时以 `SEEU_TOOL_<ID>` 环境变量注入会话（如 `SEEU_TOOL_GHIDRA`、`SEEU_TOOL_TSHARK`、`SEEU_TOOL_PYTHON`），路径不存在的项不注入。**解析顺序：设置里显式指定 → `PATH` 环境变量里能找到的命令（优先）→ 本机默认实测路径**；所以工具装进 PATH 后会优先用 PATH 里的，改机器/改 PATH 不必逐项改设置。
+- **动态分析环境（第 47 轮接入）**：APK 预设接**雷电模拟器**（`D:\Games\leidian\LDPlayer14`，实测 `ldconsole.exe` / `dnplayer.exe` / `adb.exe` 齐全，实例列表 `list2` 返回 1 个实例；PC 侧 `frida` 17.17.0 在 PATH；**未发现 frida-server 二进制**，要动态 hook 需按版本 push 到模拟器 `/data/local/tmp`）；EXE 预设接 **VMware Workstation 26.0.0**（`D:\Programs\VMwaremrun.exe`，实测 `list` 显示运行中 `E:/Win10Reverse/Win10CNBase.vmx`）。两者都以 `$SEEU_TOOL_LDPLAYER` / `$SEEU_TOOL_VMWARE` 注入会话，persona 里写明启动/装样本/日志/截图/frida 或快照回滚步骤；星睿原文里的 `apk_unpack_all_in_one_v3` 一键脱壳 MCP 本机未安装，persona 明确「不要承诺一键 dump dex」。
 - **命令执行工具**：全部预设统一优先用随包 `dsh-gitbash-shell` 提供的 `bash` 工具（Git Bash / POSIX 语法，环境变量写 `$SEEU_CLI_NODE`、`$SEEU_LOVELY_CLI`）；只有 `bash` 不可用（插件禁用或执行报错）时才降级 `pwsh`，并切换成 PowerShell 语法（`$env:…`、反斜杠路径）。persona 与技能文档都已按这条写。
 - **Qiko 比武技能组**：从 QikoAgent 技能库精选 43 个取证技能（`resources/forensics/skill-sets/qiko/`，约 1.2 MB：iOS/Android 取证、微信/资金/人物关系、流量/PCAP、内存、服务器/入侵、SQLite 恢复、逆向、图片鉴伪/隐写、URL 溯源等），每个 `SKILL.md` 末尾追加「SeeU 环境适配」段（`ssh-mcp`→`bash`、`ida-mcp`/`jadx-mcp`→`$SEEU_TOOL_IDA`/`$SEEU_TOOL_JADX`、Python→`$SEEU_TOOL_PYTHON`、检材定位四步、比武输出极简）。除「本地模型精简」外的预设都通过 `customSkillDirs` 注入该组（`SEEU_SKILL_SET_QIKO`），流量/日志/内存预设为「专用组 + Qiko 组」并集。
 - **比武比赛风格**：所有专家 persona 默认按比赛作答——逐题 `Q<n>｜答案｜思路`、思路只列关键命令/字段/路径/行号、不写长报告；缺检材/权限/工具或工具连续报错两次就只输出 `⏭️ Q<n>：跳过：缺 XXX`；检材 `JC-`、样本 `YB-` 前缀；数量/比例/金额一律脚本计算；未检出写「未检出」，事实与推断分开。

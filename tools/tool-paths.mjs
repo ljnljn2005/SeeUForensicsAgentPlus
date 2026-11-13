@@ -50,6 +50,22 @@ export const TOOL_PATH_SPECS = [
     defaultPath: CTF + '/1-ComputerAnalysis/3-MemAnalysis',
     hint: 'StarMem / lovelymem 都不可用时的兜底；默认指向 Volatility 2.6 / Workbench 所在目录',
   },
+  {
+    id: 'ldplayer',
+    label: '雷电模拟器（LDPlayer 目录）',
+    kind: 'dir',
+    env: 'SEEU_TOOL_LDPLAYER',
+    defaultPath: 'D:/Games/leidian/LDPlayer14',
+    hint: 'APK 动态分析用；目录内应有 ldconsole.exe / dnplayer.exe / adb.exe',
+  },
+  {
+    id: 'vmware',
+    label: 'VMware Workstation（目录）',
+    kind: 'dir',
+    env: 'SEEU_TOOL_VMWARE',
+    defaultPath: 'D:/Programs/VMware',
+    hint: 'EXE 动态分析用；目录内含 vmrun.exe / vmware.exe',
+  },
 ]
 
 /** PATH 里能直接跑的命令名（用于「优先环境变量 PATH」的解析）。 */

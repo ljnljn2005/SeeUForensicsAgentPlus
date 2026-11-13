@@ -2573,3 +2573,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 上下文：Spark 单机预设 `contextWindow` 131072 → **262144**（与双机一致），设置页 note 同步说明「模型实际更小会报 400，按网关自报窗口改」。
 - 校验：`check-overlay` 的 `expertPresets` 加 IoT/Files（名称、只读、Qiko 组）；`tests/presets-config.test.mjs` 预设列表 11 个、persona 关键词与 `forensics-competition-kb` 目录断言；`npm test` 194/194、`check:overlay` OK、build OK；`settings-check`（单机 262144、`deploySingle` 断言更新）、`m2-ui-check`、`hero-check` 通过。
 - 坑：① 注入脚本里 `node - <<EOF` 的模板字符串含反引号/反斜杠会被 shell 与 JS 双重转义搞坏 → 改成写入 `.probe/fuse-xingrui.mjs` 再运行；② overlay 的 `preset-standard` 是顶层 `- id:`（无缩进），其余预设是 4 空格缩进，块查找必须按实际缩进泛化；③ `m2-ui-check` 的「活动行点开失败提示」偶发超时，等待从 1200 ms 提到 2600 ms 后稳定。
+
+### 20.126 APK/EXE 动态分析环境接入（第 47 轮）
+
+- 用户问（m17540）：「这里面，apk接雷电模拟器，exe接虚拟机，这些你都配置了吗，之前我都安装好了」。
+- 实测本机：雷电模拟器 `D:\Games\leidian\LDPlayer14`（`ldconsole.exe` / `dnplayer.exe` / `adb.exe`；`ldconsole list2` → 1 个实例，state 0 未运行；`adb devices` 为空）；PC 侧 `frida` 17.17.0 在 PATH；**未找到 frida-server 二进制**（LDPlayer 目录、桌面、D:\Programs 深度 3 搜索）；**未找到** `apk_unpack_all_in_one_v3` / `apk_mcp` 工具链（C:/D:/E: 深度 2 搜索）。VMware Workstation 26.0.0 `D:\Programs\VMware`（`vmrun.exe`；`vmrun list` → `E:\Win10Reverse\Win10CNBase.vmx` 运行中；`vmware-vmx` 进程在跑）。
+- 代码：`tools/tool-paths.mjs` 的 `TOOL_PATH_SPECS` 追加两项目录型：`ldplayer`（`SEEU_TOOL_LDPLAYER`，默认 `D:/Games/leidian/LDPlayer14`）、`vmware`（`SEEU_TOOL_VMWARE`，默认 `D:/Programs/VMware`）；`scripts/e2e/settings-check.mjs` 的 `toolPathsRows` 断言 13 → 15。
+- persona（`resources/forensics/cordis.patch.yml`）：`preset-apk` 顶部插入「## 动态分析（雷电模拟器，可选）」段（`ldconsole list2`/`launch --index 0`、`adb connect 127.0.0.1:5555`、`adb install -r -t`、`monkey` 启动、`logcat -d`、`screencap`、frida attach、frida-server 缺失提示、明确「没有星睿一键脱壳 MCP，不要承诺一键 dump dex」）；`preset-exe` 顶部插入「## 动态分析（VMware 虚拟机）」段（`vmrun list`、`vmrun snapshot` 先快照、样本只在虚拟机内跑、主机不执行未知 PE、共享文件夹拷样本、回滚）。
+- 校验：`npm test` 194/194、`check:overlay` OK、build OK、`settings-check`（`toolPathsRows:15`、`envReportOk`）、`m2-ui-check` 通过。
+- 坑：① 往 YAML block scalar 里插文本必须插在 `prefix: |` 之后、且缩进等于正文缩进——第一次按「块末尾」插，落到了 `compaction` 插件行之间，YAML 报 `bad indentation of a sequence entry (1850:17)`、`--dump-config` 行数异常；改为**插在 prefix 之后第一行**即稳定；② 用 `node -e` 内联双反斜杠正则容易被多层转义吃掉（`'^\s*'` 变 `^s*`），改为 `.probe/*.py` 脚本 + `re.escape`。
