@@ -2804,3 +2804,9 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 返回形态：`/search` 是 `{ engine, total, rows: [{ snip, evidenceName, app, ts }] }`；`/evidences` 行含 `mountRoute`/`mountPoint`/`reportedRecordCount`。
 - 技能 `seeu-chain-check` 改为「五工具 → HTTP 兜底」；`.probe/seeu-mcp-headless.mjs` 断言 5 个 `mcp__seeu__*`。
 - 打包 v0.3.21（NSIS 320,028,826 / portable 270,596,906 / asar 566,487,574(32,966)）；asar-0321 0 false；启动复跑 7269 ms / portable 52,643 ms；打包态 m2 绿。
+
+### 20.141 美亚杯答案汇总（v0.3.21 之后）
+
+- 新增 `docs/answers-2025美亚杯.md`：52 题答案表（题号/要点/答案/置信度/关键证据），11 题阻塞项（`Sunny.zip` AES-256 密码 → VeraCrypt 容器 → tammy.txt/钱包），以及已用到的 SeeU 能力清单。
+- README 新增「## 16. 题目实测答案」入口。
+- 结论：iOS 提取/备份、WhatsApp、相册、文件传输、USB/WinPE 题全部实测完成；剩余题只缺压缩包密码（题面说明在 NAS）。

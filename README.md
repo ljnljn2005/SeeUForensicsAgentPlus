@@ -1061,6 +1061,12 @@ npm run myos:import -- import --case <caseId> \
 - **使用**：预设里已写明调用方式（`"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelyspark -- <子命令>`，统一在 `bash` 工具里执行；bash 不可用时才降级 `pwsh`），模型会先 `skill` 加载技能再执行；CLI 路径仍在「设置 → 本地模型与工具路径」里手动指定。
 - **校验**：`npm run check:overlay`（逐预设检查名称/技能根/`customSkillDirs`/`tool-fs` 只读）、`npm run test:e2e:skills`（安装与迁移）、`npm test`（含 `tests/presets-config.test.mjs`）。
 
+## 16. 题目实测答案（2025 美亚杯）
+
+- 答案汇总：`docs/answers-2025美亚杯.md`（Q1–98 中已给 52 题答案 + 置信度 + 证据；11 题因 `Sunny.zip` AES 密码阻塞）。
+- 逐题证据与命令：`docs/chain-check-2025美亚杯.md`。
+- 复现：`npm run chain:check -- --caseNumber 2919d298`；随后可用内置 MCP 工具 `index_list` / `evidence_list` / `index_search` 直接取数。
+
 ## 15. iOS 取证速查（`ios:quick`）
 
 把美亚杯类题目最常问的事实一键取出（只读、不改检材）：
