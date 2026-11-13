@@ -81,6 +81,9 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 ### v0.3.13 待发布（未打包）
 
+- **dsh 运行时升级到 0.2.2-rc.3（第 48 轮）**：`@deepseek-ai/dsh` 及全部 `@deepseek-ai/dsh-*` 依赖从 `0.2.2-rc.1` 升到 **`0.2.2-rc.3`**（`latest` tag 仍是 rc.1，rc.3 在 `next`）。rc.3 把 `dsh-error` / `dsh-http-proxy` 等拆成 peer 依赖，用 `--legacy-peer-deps` 安装后需补装 `@deepseek-ai/dsh-error@0.2.2-rc.3`、`@deepseek-ai/dsh-http-proxy@0.2.2-rc.3`，否则 `dsh-subprocess` 启动即 `ERR_MODULE_NOT_FOUND: @deepseek-ai/dsh-error`。验证：`npm test` **194/194**、`check:overlay` OK、build OK、`plugins-check`（175 插件包、`activationFailures:[]`）、`settings-check`（15 行工具路径、`diagOk`、`envReportOk`）、`m2-ui-check`、`hero-check` 全绿；dev 预览重启正常（`/seeu-index/list` 200）。
+
+
 - **APK/EXE 动态分析环境接入（第 47 轮）**：回答用户「apk 接雷电模拟器、exe 接虚拟机，这些你都配置了吗」——
   - 实测本机：雷电模拟器 = `D:\Games\leidian\LDPlayer14`（`ldconsole.exe`、`dnplayer.exe`、`adb.exe`，实例 1 个，当前未运行）；VMware Workstation 26.0.0 = `D:\Programs\VMware`（`vmrun.exe`，运行中 `E:/Win10Reverse/Win10CNBase.vmx`）；
   - `tools/tool-paths.mjs` 新增两项目录型路径：`ldplayer`（`SEEU_TOOL_LDPLAYER`）、`vmware`（`SEEU_TOOL_VMWARE`），设置页「外部取证工具路径」从 13 行变 **15 行**，保存后注入会话；

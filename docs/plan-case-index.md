@@ -2582,3 +2582,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - persona（`resources/forensics/cordis.patch.yml`）：`preset-apk` 顶部插入「## 动态分析（雷电模拟器，可选）」段（`ldconsole list2`/`launch --index 0`、`adb connect 127.0.0.1:5555`、`adb install -r -t`、`monkey` 启动、`logcat -d`、`screencap`、frida attach、frida-server 缺失提示、明确「没有星睿一键脱壳 MCP，不要承诺一键 dump dex」）；`preset-exe` 顶部插入「## 动态分析（VMware 虚拟机）」段（`vmrun list`、`vmrun snapshot` 先快照、样本只在虚拟机内跑、主机不执行未知 PE、共享文件夹拷样本、回滚）。
 - 校验：`npm test` 194/194、`check:overlay` OK、build OK、`settings-check`（`toolPathsRows:15`、`envReportOk`）、`m2-ui-check` 通过。
 - 坑：① 往 YAML block scalar 里插文本必须插在 `prefix: |` 之后、且缩进等于正文缩进——第一次按「块末尾」插，落到了 `compaction` 插件行之间，YAML 报 `bad indentation of a sequence entry (1850:17)`、`--dump-config` 行数异常；改为**插在 prefix 之后第一行**即稳定；② 用 `node -e` 内联双反斜杠正则容易被多层转义吃掉（`'^\s*'` 变 `^s*`），改为 `.probe/*.py` 脚本 + `re.escape`。
+
+### 20.127 dsh 运行时升级到 0.2.2-rc.3（第 48 轮）
+
+- 用户要求（m17636）：「然后把dsh更新到最新版」。npm 上 `@deepseek-ai/dsh` 的 `latest` 仍是 `0.2.2-rc.1`（当前版本），`next` 是 `0.2.2-rc.3`。
+- 升级：把 `package.json` 里 21 个 `@deepseek-ai/dsh*` 依赖统一装到 `0.2.2-rc.3`（`npm install --save-exact --legacy-peer-deps …`）。
+- 坑：rc.3 中 `@deepseek-ai/dsh-subprocess` 把 `@deepseek-ai/dsh-error`、`@deepseek-ai/dsh-http-proxy` 声明为 **peerDependencies**，`--legacy-peer-deps` 不会自动装 → dsh host 启动即 `ERR_MODULE_NOT_FOUND: Cannot find package '@deepseek-ai/dsh-error' imported from …/dsh-subprocess/lib/index.js`（`tools/lovely-cli/test/host.test.mjs` 2 例失败暴露）。补装 `dsh-error@0.2.2-rc.3`、`dsh-http-proxy@0.2.2-rc.3` 后恢复。
+- 兼容性：dsh-app-boot 的 profile/bundle 解析路径未变（`tools/dsh-plugins.mjs` 的 `installBundledPluginBundles` 逻辑仍有效）；overlay 与 12 个预设解析正常；`plugins-check` 证明 175 个插件包从 asar/profile 注入后全部激活（`activationFailures:[]`）。
+- 验证：`npm test` 194/194、`check:overlay` OK、build OK、`plugins-check`（`activationOk:true`）、`settings-check`（`toolPathsRows:15`、`diagOk:true`、`envReportOk:true`）、`m2-ui-check`、`hero-check` 全绿；dev 预览重启后 `/seeu-index/list` 200（首次重启因旧进程占 54053 出现一次 `EACCES`，重试即正常）。
