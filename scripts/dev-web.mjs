@@ -79,6 +79,9 @@ const env = {
   SEEU_CROSS_DB: join(workspace, 'indexes', 'crosscase.db'),
   // 外部工具：PATH 优先、设置里指定的其次、默认实测路径兜底（与桌面外壳一致）
   ...toolPathsEnv(process.env),
+  // SeeU 内置 MCP（索引列表 / 链路体检）：用 node 直接跑 server.mjs。
+  SEEU_MCP_NODE: process.execPath,
+  SEEU_MCP_SERVER: join(root, 'tools', 'seeu-mcp', 'server.mjs'),
 };
 delete env.ELECTRON_RUN_AS_NODE;
 

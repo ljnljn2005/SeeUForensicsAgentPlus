@@ -1112,3 +1112,13 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版首次 29,186 ms（杀毒扫描）、复跑 6,106 ms；portable 52,590 ms。
 - 打包态 e2e：`m2-ui-check`（`idxChainSteps:3`、`idxChainOk:true`）、settings/plugins/skills（10 随包技能含 `seeu-chain-check`）/hero/mount 全绿。
 - 验证 `text=1`：`curl -s "http://127.0.0.1:54053/seeu-index/chain-check?caseNumber=2919d298&text=1"` 输出四段报告（索引覆盖 / 检索链路 / 火眼挂载 / 镜像）。
+
+### v0.3.20 回归验证
+
+- 打包：`npm version 0.3.20` → build → `npm test` 211/211 → `check:overlay` OK → `npx electron-builder --win --x64 -c.directories.output=release-0320`。
+- 产物：NSIS 320,027,278 B（blockmap 332,907 B）、portable 270,578,413 B、`app.asar` 566,486,765 B（32,966 entries）、目录版 1,262,671,181 B。
+- asar 自检 `.probe/asar-0320-check.mjs`：`missing: []`、0 false；新增 `seeuMcpRow`（overlay 含 `seeu-mcp-tools`/`SEEU_MCP_SERVER`/`ELECTRON_RUN_AS_NODE`）、`seeuMcpServer`（`app.asar.unpacked/tools/seeu-mcp/server.mjs` 存在）、`seeuMcpIpc`（main.cjs 含两个 env 名）。
+- 启动：目录版首次 28,803 ms（杀毒扫描）、复跑 6407 ms；portable 53,984 ms。
+- 内置 MCP：`ELECTRON_RUN_AS_NODE=1 SeeUForensicsAgentPlus.exe <unpacked>/tools/seeu-mcp/server.mjs` 可完成 initialize/tools/list；headless 会话工具 77 个，含 `mcp__seeu__chain_check`、`mcp__seeu__index_list`。
+- 打包态 e2e：`m2-ui-check`（`idxChainSteps:3`、`errors:[]`）通过。
+- 坑：asarUnpack 条目必须写在 `asarUnpack:` 段（误加到 `files:` 会导致脚本留在 asar 内、`ELECTRON_RUN_AS_NODE` 读不到）；MCP server 不能在 stdin EOF 时立刻退出，要等挂起请求完成（否则 tools/call 无输出）。

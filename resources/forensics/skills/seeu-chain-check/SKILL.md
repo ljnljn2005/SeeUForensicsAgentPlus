@@ -13,7 +13,16 @@ description: SeeU 自带链路体检：一键检查「索引可打开 / 检索�
 - 用户问「为什么查不到数据」「是不是索引坏了」。
 - 准备做全量搜索、相册/聊天解析、E01 解析之前，先确认入口。
 
-## 怎么调用（bash 工具）
+## 首选：直接调用 SeeU MCP 工具
+
+外壳会随会话启动一个内置 MCP 服务（`seeu`），暴露两个工具：
+
+- `mcp__seeu__index_list`：列出可用案件索引（拿 caseNumber）。
+- `mcp__seeu__chain_check`：链路体检，参数 `{ caseNumber?, db?, probe?, images? }`，返回可读文本。
+
+用法：先 `index_list`，再 `chain_check { caseNumber }`；需要解析镜像时 `{ caseNumber, images: true }`。
+
+## 备选：HTTP（MCP 不可用时）
 
 ```bash
 # 1) 先看有哪些案件索引，拿 caseNumber

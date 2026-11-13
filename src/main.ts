@@ -57,6 +57,7 @@ import {
   forensicsPatchPath,
   hostLogFile,
   logDir,
+  appRoot,
   preloadFile,
   rendererDir,
   shellLogFile,
@@ -345,7 +346,17 @@ async function startHost(): Promise<void> {
   // 外部取证工具路径：设置窗口里改，随会话以 SEEU_TOOL_<ID> 环境变量下发（不存在的跳过）。
   const extraToolEnv = toolPathsEnv(process.env)
   logShell(`tool paths: 向会话注入 ${Object.keys(extraToolEnv).length} 个外部工具路径：${Object.keys(extraToolEnv).join(', ') || '（无）'}`)
-  const next = new DshHost({ env: { ...mountHostEnv(), ...extraToolEnv } })
+  // SeeU 内置 MCP（stdio）：把索引列表/链路体检暴露成 AI 可调用工具。
+  // 打包后 server.mjs 在 app.asar.unpacked 下；用 Electron 自带的 node 运行（ELECTRON_RUN_AS_NODE）。
+  const seeuMcpDir = app.isPackaged
+    ? join(process.resourcesPath, 'app.asar.unpacked', 'tools', 'seeu-mcp')
+    : join(appRoot(), 'tools', 'seeu-mcp')
+  const seeuMcpEnv: NodeJS.ProcessEnv = {
+    SEEU_MCP_NODE: process.execPath,
+    SEEU_MCP_SERVER: join(seeuMcpDir, 'server.mjs'),
+  }
+  logShell(`seeu mcp: ${seeuMcpEnv.SEEU_MCP_SERVER}`)
+  const next = new DshHost({ env: { ...mountHostEnv(), ...extraToolEnv, ...seeuMcpEnv } })
   host = next
   next.on('state', (state: HostState) => {
     if (state.phase === 'ready') {

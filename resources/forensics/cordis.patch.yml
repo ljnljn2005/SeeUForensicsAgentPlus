@@ -3449,3 +3449,21 @@
           initialDelayMs: 3000
           maxDelayMs: 60000
           maxAttempts: 50
+
+- insert:
+    - id: seeu-mcp-tools
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: stdio
+        serverName: seeu
+        command: !!js "process.env.SEEU_MCP_NODE"
+        args: !!js "[process.env.SEEU_MCP_SERVER]"
+        env:
+          ELECTRON_RUN_AS_NODE: '1'
+        toolCallTimeoutMs: 120000
+        failOnStartupError: false
+        reconnect:
+          enabled: true
+          initialDelayMs: 3000
+          maxDelayMs: 60000
+          maxAttempts: 50

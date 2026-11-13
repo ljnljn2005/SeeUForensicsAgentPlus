@@ -2787,3 +2787,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 新增技能 `resources/forensics/skills/seeu-chain-check/SKILL.md`：触发时机（会话开始/查不到数据/解析检材前）、bash 调用（先 `/list` 拿 caseNumber，再 `chain-check?text=1`，可选 `images=1`）、输出解读、硬规则（失败先修链路，禁止全盘 grep）。
 - 打包 v0.3.19（NSIS 320,022,835 B / portable 270,611,871 B / asar 566,485,135 B，32,964 entries）；asar-0319 0 false；技能随包 10 个（skills-check 实测含 `seeu-chain-check`）。
 - 坑：新增 `resources/forensics/skills/**` 目录后 asar 自检的 required 列表要同步；`text=1` 分支必须 `return true` 防止后续路由再写响应。
+
+### 20.139 v0.3.20：内置 MCP（index_list / chain_check）
+
+- 新增 `tools/seeu-mcp/server.mjs`：stdio JSON-RPC（initialize / tools/list / tools/call），工具 `index_list` 与 `chain_check`；不读索引文件，转发到 `$SEEU_INDEX_API` 的 `/list` 与 `/chain-check?text=1`，因此打包后不依赖 asar 内模块。
+- overlay 新增全局 `- insert:` 行 `seeu-mcp-tools`（`@deepseek-ai/dsh-mcp-client`、stdio、command/args 用 `!!js "process.env.SEEU_MCP_NODE|SERVER"`、`env.ELECTRON_RUN_AS_NODE=1`、120 s）。
+- 外壳：`src/main.ts` 计算 dev/打包两种 `tools/seeu-mcp` 目录并注入两个 env；`scripts/dev-web.mjs` 同步注入；`electron-builder.yml` 的 `files` 与 `asarUnpack` 都含 `tools/seeu-mcp/**`。
+- 测试：`tests/mcp-config.test.mjs` 增加「全局 SeeU MCP 行」断言；`.probe/seeu-mcp-headless.mjs` 用 mock 网关跑 headless，实测 `toolsCount 77`、`mcp__seeu__chain_check`/`mcp__seeu__index_list` 存在。
+- 打包 v0.3.20（NSIS 320,027,278 B / portable 270,578,413 B / asar 566,486,765 B(32,966)）；asar-0320 0 false；打包版 unpacked server 实测可 initialize/list。
+- 坑：MCP server 的 stdin `end` 处理要等 pending 请求结束；`!!js` 的 args 必须写带引号标量（数组表达式）；`asarUnpack` 与 `files` 是两处配置。

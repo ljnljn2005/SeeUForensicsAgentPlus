@@ -81,4 +81,12 @@ test('星睿连接器按预设注入，不再全局注册', () => {
   const myos = entries.find((row) => row?.id === 'seeu-mcp-myos')
   assert.ok(myos, '缺少全局 MYOS MCP')
   assert.equal(myos.config.transport, 'stdio')
+
+  // SeeU 内置 MCP（索引列表 / 链路体检）：全局 stdio，命令与脚本路径由外壳注入。
+  const seeu = entries.find((row) => row?.id === 'seeu-mcp-tools')
+  assert.ok(seeu, '缺少全局 SeeU MCP')
+  assert.equal(seeu.config.transport, 'stdio')
+  assert.equal(seeu.config.serverName, 'seeu')
+  assert.match(String(seeu.config.command?.js ?? ''), /SEEU_MCP_NODE/)
+  assert.match(String(seeu.config.args?.js ?? ''), /SEEU_MCP_SERVER/)
 })

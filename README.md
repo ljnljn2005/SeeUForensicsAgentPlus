@@ -64,20 +64,27 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.19**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
+本轮已验证产物（**v0.3.20**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
 | `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,774,137 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
 | `release/win-unpacked/resources/app.asar` | 566,595,818 B（32,984 entries；新增 `tools/chain-check-run.mjs`、`tools/image-mount.mjs`，插件可在 asar 内直接 import） |
-| `release/SeeUForensicsAgentPlus-0.3.19-x64.exe`（NSIS 安装包） | 320,022,835 B（blockmap 333,132 B） |
-| `release/SeeUForensicsAgentPlus-0.3.19-x64-portable.exe` | 270,611,871 B |
+| `release/SeeUForensicsAgentPlus-0.3.20-x64.exe`（NSIS 安装包） | 320,027,278 B（blockmap 332,907 B） |
+| `release/SeeUForensicsAgentPlus-0.3.20-x64-portable.exe` | 270,578,413 B |
 
 实测冷启动到 dsh UI：目录版 **7547 ms**（首轮可能受杀毒扫描影响，通常 5–8 s）；portable 首次 **52.9 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
+
+### v0.3.20 改了什么
+
+- **SeeU 内置 MCP**：外壳随会话启动一个 stdio MCP 服务（serverName `seeu`），把两个只读能力直接交给模型：`mcp__seeu__index_list`（列案件索引、拿 caseNumber）、`mcp__seeu__chain_check`（链路体检：索引/检索/火眼挂载/镜像，可读文本返回）。实现 `tools/seeu-mcp/server.mjs`（纯 JSON-RPC，转发到索引插件 HTTP，不直读文件）；外壳注入 `SEEU_MCP_NODE`（Electron 自带 node）+ `SEEU_MCP_SERVER`，打包后脚本放 `app.asar.unpacked/tools/seeu-mcp/`，`ELECTRON_RUN_AS_NODE=1` 运行，用户机器无需装 Node。
+- headless 实测：会话工具 77 个，其中 `mcp__seeu__chain_check`、`mcp__seeu__index_list` 均已出现；打包版用 `SeeUForensicsAgentPlus.exe + ELECTRON_RUN_AS_NODE=1` 直接跑 unpacked server 验证通过。
+- 技能 `seeu-chain-check` 更新：优先用 MCP 工具，HTTP `curl` 作为兜底。
+- 打包与回归：NSIS 320,027,278 B（blockmap 332,907 B）、portable 270,578,413 B、`app.asar` 566,486,765 B（32,966 entries）、目录版总计 1,262,671,181 B；asar-0320 自检 0 false（含 `seeuMcpRow`/`seeuMcpServer`/`seeuMcpIpc`）；冷启动 6.4 s、便携版 54.0 s；打包态 m2（`idxChainSteps:3`）等回归全绿。
 
 ### v0.3.19 改了什么
 
