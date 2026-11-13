@@ -2563,3 +2563,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - asar 自检：`.probe/asar-0312-check.mjs` 由 0311 扩展，新增 `activityBars`/`activityDayFilter`/`activityRemove`/`activitySearch`/`mountLastRecord`/`mountRemount`/`envFixModule`/`envFixUi`；修了两处读取来源（image-mount/env-report 被 esbuild 打进 main.cjs）与 `mountsHtml` 变量。
 - 验证：`verify-launch` 目录版 6305 ms / portable 54,994 ms；打包态 m2（`activityOk`/`myosImportOk`）、settings（`envReportOk`/`envCopyOk`/`envFixOk`、13 行工具路径、五项自检）、mount（`lastMountReleasedOk`/`remountHintOk`）、hero（`toolsOk`）、plugins（175 包、`activationOk`）、skills（Qiko 43、`leaked:[]`）全部通过。
 - 坑：① `settings-check` 的 mock 网关默认端口 18081 与 MYOS `PhoneForensics` 服务冲突，已支持 `SEEU_SETTINGS_MOCK_PORT`/`SEEU_SETTINGS_CDP_PORT` 覆盖，本次用 28181/9353；② 为腾端口误杀 MYOS `PhoneForensics`，处理后重启 `ForensicDesktop` 恢复；③ 长任务（打包/portable 压缩）不要与 harness 重启交叠，必要时分 target 补打。
+
+### 20.125 星睿本地模型提示词最终融合（第 46 轮）
+
+- 来源：`E:\取证桌面\星睿-*.txt` 9 份（APK/数据分析/文件目录/服务器/流量/物联网/电子数据取证竞赛知识库/计算机手机/逆向）。每份是「星睿通用 system（38,397 字符，含记忆分层/技能/环境事实）+ user 里的专家 SOP」。专家段用 `# 星睿-…专家` 起收，长度 1.3K~19.7K 字符。
+- 融合策略：专家 SOP 保留为正文；追加「## SeeU 运行环境（本机，优先级高于上文的星睿/QZOS 工具假设）」适配段（bash 优先 / pwsh 降级、索引→火眼挂载→LovelyCarve→原始文件、`$SEEU_TOOL_*`、MYOS MCP、只读与 `$SEEU_WORKSPACE`、上下文 262144）；再接既有 SeeU 规则，保证环境与输出约束不丢。
+- 映射：standard ← 计算机手机 + 服务器；traffic ← 流量；data ← 数据；apk ← APK；exe ← 逆向；mobile ← 计算机手机；新增 `preset-iot`（物联网，order 11）、`preset-files`（文件目录，order 12）。
+- 新技能：`resources/forensics/skills/forensics-competition-kb/SKILL.md`（默认知识库 `D:/forensics-kb`，`$SEEU_KB_DIR` 覆盖；先 glob 找目录、再 grep 关键词、命中后 read 全文；答案标来源；查不到写「知识库未收录」）。
+- 上下文：Spark 单机预设 `contextWindow` 131072 → **262144**（与双机一致），设置页 note 同步说明「模型实际更小会报 400，按网关自报窗口改」。
+- 校验：`check-overlay` 的 `expertPresets` 加 IoT/Files（名称、只读、Qiko 组）；`tests/presets-config.test.mjs` 预设列表 11 个、persona 关键词与 `forensics-competition-kb` 目录断言；`npm test` 194/194、`check:overlay` OK、build OK；`settings-check`（单机 262144、`deploySingle` 断言更新）、`m2-ui-check`、`hero-check` 通过。
+- 坑：① 注入脚本里 `node - <<EOF` 的模板字符串含反引号/反斜杠会被 shell 与 JS 双重转义搞坏 → 改成写入 `.probe/fuse-xingrui.mjs` 再运行；② overlay 的 `preset-standard` 是顶层 `- id:`（无缩进），其余预设是 4 空格缩进，块查找必须按实际缩进泛化；③ `m2-ui-check` 的「活动行点开失败提示」偶发超时，等待从 1200 ms 提到 2600 ms 后稳定。

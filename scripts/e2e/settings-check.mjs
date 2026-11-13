@@ -707,7 +707,7 @@ try {
   })()`)
   report.deploySingle = deploySingle
   if (!deploySingle.models.includes('qwen3.8-flash-next')) throw new Error('Spark 单机预设没填模型：' + JSON.stringify(deploySingle))
-  if (deploySingle.context !== '131072' || deploySingle.lite !== true || deploySingle.usage !== true) {
+  if (deploySingle.context !== '262144' || deploySingle.lite !== true || deploySingle.usage !== true) {
     throw new Error('Spark 单机预设字段不符：' + JSON.stringify(deploySingle))
   }
   if (deploySingle.thinkingFormat !== 'qwen-chat-template' || !/enable_thinking/.test(deploySingle.kwargs)) {

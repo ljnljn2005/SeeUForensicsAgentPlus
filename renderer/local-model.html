@@ -1007,7 +1007,7 @@
     'spark-single': {
       label: 'Spark 单机 · qwen3.8-flash-next',
       models: 'qwen3.8-flash-next | Qwen3.8-Flash-Next（Spark 单机）',
-      contextWindow: 131072,
+      contextWindow: 262144,
       maxTokens: 8192,
       timeoutSec: 900,
       streamIdleSec: 300,
@@ -1017,7 +1017,7 @@
       titleGen: false,
       thinkingFormat: 'qwen-chat-template',
       kwargs: '{"enable_thinking": true}',
-      note: '单机建议保持「精简工具集」：工具表约 10 个、固定开销小，128k 窗口够用；网关模型 id 不一致时点【从网关拉取模型列表】再确认。',
+      note: '单机建议保持「精简工具集」：工具表约 10 个、固定开销小；上下文按 256k 配置（模型实际更小时会报 400，按网关自报窗口改）。网关模型 id 不一致时点【从网关拉取模型列表】再确认。',
     },
     'spark-dual': {
       label: 'Spark 双机 · dsv4.1-flash',

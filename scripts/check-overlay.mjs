@@ -132,6 +132,8 @@ function main() {
       ['preset-mobile', '手机取证（Mobile）'],
       ['preset-exe', 'EXE 逆向分析'],
       ['preset-db', '数据库取证（Database）'],
+      ['preset-iot', '物联网分析（IoT）'],
+      ['preset-files', '文件目录分析（Files）'],
     ]
     for (const [id, label] of expertPresets) {
       const section = presetSection(dump, id)

@@ -79,6 +79,16 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
 
+### v0.3.13 待发布（未打包）
+
+- **星睿本地模型提示词最终融合（第 46 轮）**：读取 `E:\取证桌面\星睿-*.txt` 9 份（APK/数据分析/文件目录/服务器/流量/物联网/电子数据取证竞赛知识库/计算机手机/逆向；每份 = 星睿通用 system + 专家 SOP），抽取专家段并按预设融合：
+  - 取证分析 ← 星睿-计算机手机 + 星睿-服务器；流量 ← 星睿-流量；数据 ← 星睿-数据；APK ← 星睿-APK；EXE ← 星睿-逆向；手机 ← 星睿-计算机手机；
+  - **新增两个预设**：物联网分析（IoT，order 11）、文件目录分析（Files，order 12）；
+  - 每份 persona = 星睿专家 SOP + 「SeeU 运行环境（本机，优先级高于星睿 MCP 假设）」适配段（bash 优先/pwsh 降级、索引→火眼挂载→LovelyCarve→原始文件、`$SEEU_TOOL_*`、MYOS MCP、只读与 `$SEEU_WORKSPACE`、上下文 262144 不必过度缩写）+ 既有 SeeU 规则；
+  - 新增随包技能 `forensics-competition-kb`（竞赛知识库检索：默认 `D:/forensics-kb`，`$SEEU_KB_DIR` 可覆盖；答案必须来自文件并标来源）；
+  - **上下文窗口**：Spark 单机预设 `qwen3.8-flash-next` 的 `contextWindow` 从 131072 调到 **262144**（与双机一致），设置页说明同步；
+  - 校验：`scripts/check-overlay.mjs` 的 `expertPresets` 加入 IoT/Files（名称、只读工具面、Qiko 技能组）；`tests/presets-config.test.mjs` 扩展到 11 个预设与 `forensics-competition-kb` 目录；`npm test` **194/194**、`check:overlay` OK、build OK；`settings-check` 通过（单机 262144）；`m2-ui-check`、`hero-check` 通过。
+
 ### v0.3.12 改了什么
 
 - **打包与打包态回归（第 45 轮）**：v0.3.12 已出 NSIS `281,896,527 B`（blockmap `293,199 B`）、portable `236,577,274 B`、`app.asar` `426,586,748 B`（34,224 entries）、目录版总计 `1,110,937,976 B`；`.probe/asar-0312-check.mjs` **全部检查 true、`missing: []`**（新增活动按天/筛选/移除/文本筛选、挂载最近记录与重挂载、体检一键修复校验）；目录版冷启动 **6305 ms**、portable 55.0 s；打包态 `m2-ui-check`（`m2ok:true`、`activityOk:true`、`myosImportOk:true`）、`settings-check --exe`（`ok:true`：`envReportOk:true`、`envCopyOk:true`、`envFixOk:true`、13 行外部工具、五项自检）、`plugins-check --exe`（175 包、`packagesOk:true`、`activationOk:true`）、`skills-check --exe`（6 个随包技能 + Qiko 43 个、`leaked:[]`）、`hero-check --exe`（本机工具 13/13）、`mount-check --exe`（`lastMountReleasedOk:true`、`remountHintOk:true`）全部通过。
@@ -921,7 +931,7 @@ npm run myos:import -- import --case <caseId> \
 - **额外解包**：`node_modules/@dsh-ops/fastctx-win32-x64/**` 进 `app.asar.unpacked`，因为 `bin/fastctx.exe` 需要真实文件路径才能 spawn。
 - **验收**：`npm run test:e2e:plugins`（dev 或 `--exe <安装包 exe>` 都可）断言四件事：profile bundles、`<profile>/node_modules` 下四个插件包、页面插件 UI（「上下文洞察」「插件」）、以及 dsh 子进程日志不得出现 `did not activate` / `failed to import` / `ERR_MODULE_NOT_FOUND`。
 
-## 13. 分析预设（取证 / 流量 / 日志 / 内存 / 数据 / APK / 手机 / EXE / 数据库）
+## 13. 分析预设（取证 / 流量 / 日志 / 内存 / 数据 / APK / 手机 / EXE / 数据库 / 物联网 / 文件目录）
 
 新建会话时选预设即可切换「工具面 + 技能组」；预设互不影响，取证镜像类分析仍留在默认取证预设。
 
@@ -937,8 +947,11 @@ npm run myos:import -- import --case <caseId> \
 | 手机取证（Mobile） | 10 | Qiko 比武技能组（iOS/Android/微信） | 手机镜像与提取包、iTunes/厂商备份、微信/IM 聊天记录与应用数据（APK 深挖交给 APK 分析） |
 | EXE 逆向分析 | 8 | Qiko 比武技能组 | Windows PE 结构、导入导出、查壳、静态行为研判 |
 | 数据库取证（Database） | 9 | Qiko 比武技能组 | SQLite/MySQL 等数据库原件、备份与日志的只读核验、结构查看、检索与受限恢复 |
+| 物联网分析（IoT） | 11 | Qiko 比武技能组 | 路由器/NAS/摄像头/智能家居固件与文件系统、配置日志、凭据与通信 |
+| 文件目录分析（Files） | 12 | Qiko 比武技能组 | 目录结构、文件类型/哈希、Office/PDF、日志与二进制字符串、关键词与时间线 |
 
-- **persona**：取证/流量/内存/数据/APK/手机/EXE/数据库八个专家预设都带精简版专家 persona（来源见「v0.3.4 改了什么」与「v0.3.5」），日志预设沿用原有 persona。
+- **persona（第 46 轮：星睿本地模型提示词最终融合）**：取证/流量/数据/APK/手机/EXE 预设的 persona 改成「星睿专家 SOP + SeeU 运行环境适配 + 既有 SeeU 规则」三段式；新增物联网（IoT，order 11）与文件目录（Files，order 12）两个预设。星睿原文里依赖的 QZOS/星睿服务器/IDA-MCP/文件目录 MCP/ApkCheckPack 等工具，适配段统一改为 SeeU 的 `bash` + 索引 + 火眼挂载 + `$SEEU_TOOL_*`，并注明「上下文 262144，可充分展开、不必过度缩写」。另新增随包技能 `forensics-competition-kb`（检索 `D:/forensics-kb` 的竞赛题解，可用 `$SEEU_KB_DIR` 覆盖）。
+- **persona（更早版本）**：取证/流量/内存/数据/APK/手机/EXE/数据库八个专家预设都带精简版专家 persona（来源见「v0.3.4 改了什么」与「v0.3.5」），日志预设沿用原有 persona。
 - **外部工具（开发机实测 2026-11-12）**：`python 3.13.14`（`D:/Programming/Python31314/python.exe`）已装 pandas/openpyxl/pefile/capstone/lief/pyelftools/yara/scapy/dpkt/pyshark；Wireshark 3.4.0 的 `tshark`/`capinfos`/`editcap`/`mergecap` 已装但**不在 PATH**（`E:/CTFTools/Forensics/4-其他工具/【15】网络分析/Wireshark/`）；`7z`、`sqlite3.exe`、`jadx 1.1.0`、`apktool.jar`、`adb` 在 `E:/CTFTools/…` 下；`frida 17.17.0` 在 PATH；IDA Professional 9.4（`idat.exe`）在 `D:/Programs/IDA Professional 9.4/`；`nfdump`/`zeek`/`suricata`/`snort`/`androguard` 未装；Ghidra 12.1.4 已装（默认 `C:/Users/ASUS/.dsh/plugins/dsh-infinite-gen-5/third_party/sources/ghidra-12.1.4`，源码树，批处理入口 `Ghidra/RuntimeScripts/Windows/support/analyzeHeadless.bat`）。**流量/日志分析一律先 lovelyspark-cli**，tshark 等只在技能覆盖不到时用绝对路径补充或做交叉复核。
 - **外部工具路径可改**：设置页新增「外部取证工具路径」区（12 项：Ghidra 目录、IDA、tshark/capinfos/editcap、python、jadx、apktool.jar、adb、7-Zip、sqlite3、Volatility 目录），默认值就是上面这些本机实测路径；改完写 `<DSH_HOME>/tool-paths.json`，外壳启动 dsh 时以 `SEEU_TOOL_<ID>` 环境变量注入会话（如 `SEEU_TOOL_GHIDRA`、`SEEU_TOOL_TSHARK`、`SEEU_TOOL_PYTHON`），路径不存在的项不注入。**解析顺序：设置里显式指定 → `PATH` 环境变量里能找到的命令（优先）→ 本机默认实测路径**；所以工具装进 PATH 后会优先用 PATH 里的，改机器/改 PATH 不必逐项改设置。
 - **命令执行工具**：全部预设统一优先用随包 `dsh-gitbash-shell` 提供的 `bash` 工具（Git Bash / POSIX 语法，环境变量写 `$SEEU_CLI_NODE`、`$SEEU_LOVELY_CLI`）；只有 `bash` 不可用（插件禁用或执行报错）时才降级 `pwsh`，并切换成 PowerShell 语法（`$env:…`、反斜杠路径）。persona 与技能文档都已按这条写。
