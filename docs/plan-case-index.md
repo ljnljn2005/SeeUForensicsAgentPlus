@@ -2836,5 +2836,5 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 
 - 版本 0.3.22（含内置 MCP 6 工具、体检第 8 项 MCP、答案汇总与 read_record）；build 后 `electron-builder --win --x64 -c.directories.output=release-0322`。
 - 产物：NSIS 320,029,701 B（blockmap 332,509）、portable 270,565,325、`app.asar` 566,489,972（32,966 entries）、目录版 1,262,680,982；asar-0322 自检 0 false、`missing:[]`。
-- 回归：`npm test` 215/215；目录版 6176 ms / portable 52,755 ms；打包态 m2/settings（体检 8 项）/plugins/skills（10 随包）/hero/mount 全绿。
+- 回归：`npm test` 214/214；目录版 6176 ms / portable 52,755 ms；打包态 m2/settings（体检 8 项）/plugins/skills（10 随包）/hero/mount 全绿。
 - 坑：修改 `src/env-report.ts` 后必须重建再跑 settings-check（否则旧 dist 只返回 7 项）。

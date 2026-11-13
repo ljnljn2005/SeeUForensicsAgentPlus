@@ -87,7 +87,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 - 运行环境体检新增第 8 项「内置 SeeU MCP」：服务端缺失判 fail（提示重装/重新解包），正常时显示「6 个只读工具已就绪（index_list / evidence_list / index_search / index_tables / read_record / chain_check）」；`src/env-report.ts` 的 `mcpFacts()` 会按 dev/打包路径读取 `tools/seeu-mcp/server.mjs` 统计工具数。
 - `scripts/e2e/settings-check.mjs` 体检断言升到 8 项（dev 实测 7 正常 · 1 注意 · 0 不可用）。
-- **打包与回归**：`npm test` 215/215、`check:overlay` OK；`release-0322` 打包后 asar 自检 0 false、`missing:[]`；目录版与 portable 均能启动（6176 ms / 52.8 s）；打包态 `m2-ui-check`（`idxChainSteps:3`）、`settings-check`（体检 8 项、`mcp` 正常）、`plugins-check`（175 包）、`skills-check`（10 随包）、`hero-check`（15/15）、`mount-check` 全部通过。
+- **打包与回归**：`npm test` 214/214、`check:overlay` OK；`release-0322` 打包后 asar 自检 0 false、`missing:[]`；目录版与 portable 均能启动（6176 ms / 52.8 s）；打包态 `m2-ui-check`（`idxChainSteps:3`）、`settings-check`（体检 8 项、`mcp` 正常）、`plugins-check`（175 包）、`skills-check`（10 随包）、`hero-check`（15/15）、`mount-check` 全部通过。
 
 ### v0.3.21 改了什么
 

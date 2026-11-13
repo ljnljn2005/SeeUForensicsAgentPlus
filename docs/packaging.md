@@ -1135,7 +1135,7 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 
 ### v0.3.22 回归验证
 
-- `npm test` 215/215、`check:overlay` OK、`node scripts/build.mjs` OK。
+- `npm test` 214/214、`check:overlay` OK、`node scripts/build.mjs` OK。
 - 打包：`npx electron-builder --win --x64 -c.directories.output=release-0322`；NSIS 320,029,701 B（blockmap 332,509 B）、portable 270,565,325 B、`app.asar` 566,489,972 B（32,966 entries）、目录版 1,262,680,982 B。
 - `.probe/asar-0322-check.mjs`：0 个 false、`missing:[]`（新增 `envMcpItem`：`dist/main.cjs` 含「内置 SeeU MCP」与 `mcpFacts`；`version0322`）。
 - 启动：目录版 6176 ms；portable 52,755 ms（首启解包）。
