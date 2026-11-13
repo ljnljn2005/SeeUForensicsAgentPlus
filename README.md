@@ -83,6 +83,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 - 新增 `scripts/e2e/seeu-mcp-live-check.mjs`（`npm run test:e2e:mcp-live`）：真实 Electron → dsh 会话 → 内置 MCP（stdio）→ 索引插件 HTTP → 索引库的端到端验证。mock 网关首轮让模型调用 `mcp__seeu__evidence_list`，断言：工具列表里 5 个 `mcp__seeu__*` 都在、工具被执行、回传内容里出现真实检材（`CHAN_MH_mobile.zip`、`eid 1`、火眼挂载 route）。
 - 实测：`ok:true`、`seeuToolCount:5`、工具结果 512 字符、`looksReal:true`、共 3 轮请求。
+- MCP 新增第 6 个工具 `read_record`：按记录 id 取正文 + 证据路径/行号 + Goldeneyes 引用 + `ges read` 复核命令（插件新增 `GET /cite?id=`，`tests/cite.test.mjs` 3 例）。
 
 ### v0.3.21 改了什么
 

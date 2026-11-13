@@ -2817,3 +2817,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 关键坑：外壳 `src/host.ts` 用 `<home>/index-state.json` 覆盖 `SEEU_INDEX_SEARCH_DIRS`，所以在 e2e 里必须**预写** `index-state.json`（`{dirs:['E:/forensics']}`）才能让插件扫描到 W 盘案件；否则 MCP 的 `index_list` 为空、`resolveCaseNumber` 原样返回前缀 → `/evidences` 404（首次跑就是 `toolResultLooksReal:false`，结果里写「找不到案件索引：2919d298」）。
 - 断言：`ok = gotReply && toolResultSeen && seeuTool && /CHAN_MH_mobile\.zip/ && /eid 1/`；实测 `ok:true`、`seeuToolCount:5`（chain_check/index_search/evidence_list/index_tables/index_list）、`toolResultChars:512`。
 - 运行需要本机 W 盘美亚杯索引（`E:/forensics`）；CI 无该数据时可跳过。
+
+### 20.143 MCP read_record + /cite 路由
+
+- 插件 `GET /seeu-index/cite?id=<recordId>`：复用 `tools/ges-index/query.mjs` 的 `cite()`，返回正文（clip 300）与 `citable`/`citation`（`[[1]](Goldeneyes://<cid>/<node>#<line>)`）/`verifyCmd`（`ges read "<path>" --offset <line-1> --limit 1`）；无句柄时 `citation:null`、`verifyCmd` 说明只能作导航；不存在返回 404。
+- MCP 第 6 个工具 `read_record { id, caseNumber? , db? }`：格式化输出「记录 #id · 检材 · 应用/账号 · 时间/分类/证据文件/行 · 正文 · 引用 · 复核命令」。
+- 测试 `tests/cite.test.mjs` 3 例（有句柄/无句柄/E_NOT_FOUND），临时 SQLite 造 evidence/artifact/record。
+- 实测：`/cite?id=10972` 返回 `Goldeneyes://2919d298-…/757000000577#96` 与 `ges read` 命令；MCP `read_record` 调用返回完整正文与引用。

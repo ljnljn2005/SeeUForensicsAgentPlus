@@ -105,6 +105,21 @@ const TOOLS = [
     },
   },
   {
+    name: 'read_record',
+    description:
+      '按记录编号取一条记录的正文与溯源信息（证据文件路径、行号、Goldeneyes 引用、复核命令）。先从 index_search / index_tables 拿到 id，再用本工具取原文，答复时引用 citation 或 verifyCmd。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: '记录编号（index_search 结果里的 id）' },
+        caseNumber: { type: 'string', description: '案件编号（完整、前缀或案件名均可）' },
+        db: { type: 'string', description: '直接指定索引库路径（可选）' },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'chain_check',
     description:
       '链路体检：只读检查某案件「索引可打开 / 检索可用 / 火眼只读挂载可读 / 镜像可解析」，返回可读文本。深入取证前或查不到数据时先跑它；失败先修链路，不要用全盘 grep 代替。',
@@ -181,6 +196,22 @@ async function callTool(name, args) {
     if (!rows.length) return textResult('没有结构化表（可能只有原始文件索引）。')
     const lines = rows.map((t) => `- ${t?.name ?? t?.table ?? '?'}${Number.isFinite(t?.count) ? ' · ' + t.count + ' 条' : ''}`)
     return textResult(`结构化表（${rows.length} 张）：` + String.fromCharCode(10) + lines.join(String.fromCharCode(10)))
+  }
+
+  if (name === 'read_record') {
+    const id = Number(args?.id)
+    if (!Number.isFinite(id) || id <= 0) return textResult('缺少记录编号 id（正整数）。', true)
+    const qs = withTarget(target)
+    qs.set('id', String(Math.trunc(id)))
+    const data = await httpJson('/cite?' + qs.toString())
+    const lines = [
+      `记录 #${data?.id ?? id} · ${data?.ev ?? '未知检材'} · ${data?.app ?? '未知应用'}${data?.account ? ' · ' + data.account : ''}`,
+      `时间 ${data?.ts ?? '未知'} · 分类 ${data?.cat ?? ''}/${data?.sub ?? ''} · 证据文件 ${data?.path ?? ''} · 行 ${data?.line ?? '?'}`,
+      '正文：' + firstLine(data?.text ?? ''),
+      data?.citable && data?.citation ? '引用：' + data.citation : '引用：本行无溯源句柄，只能作为导航',
+      data?.verifyCmd ? '复核：' + data.verifyCmd : '',
+    ].filter(Boolean)
+    return textResult(lines.join(String.fromCharCode(10)))
   }
 
   if (name === 'chain_check') {

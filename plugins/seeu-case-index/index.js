@@ -480,6 +480,16 @@ async function handle(req, res) {
         for (const k of ['eid', 'app', 'account', 'category', 'artifact', 'from', 'to']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
         return send(res, 200, records(db, opts));
       }
+      if (path === '/cite') {
+        const id = Number(url.searchParams.get('id'));
+        if (!Number.isFinite(id) || id <= 0) return send(res, 400, { error: '缺少 id（记录编号）' });
+        try {
+          return send(res, 200, cite(db, id));
+        } catch (error) {
+          if (error?.code === 'E_NOT_FOUND') return send(res, 404, { error: error.message });
+          throw error;
+        }
+      }
       if (path === '/export/table.csv') {
         const name = String(url.searchParams.get('name') ?? '');
         if (!name) return send(res, 400, { error: '缺少 name' });
