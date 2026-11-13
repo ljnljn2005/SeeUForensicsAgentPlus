@@ -106,3 +106,29 @@
 | 48 | 待解 | 需查 WeChat 视频号关注表（`wcdb`），当前未定位到可读表 |
 
 - 技术：WhatsApp 群头像在 `group.net.whatsapp.WhatsApp.shared/Media/Profile/<jid>-<ts>.jpg`，直接 `sha256` 与选项比对即可；社群（community）在 `ZWACHATSESSION` 描述里含 “This community is for members to chat in topic-based groups”。
+
+## 第 50 轮补 3：78–90 题（USB / WinPE）
+
+| 题号 | 答案 | 证据 |
+| --- | --- | --- |
+| 77 | **2** | E01 MBR 分区表 2 项 |
+| 78 | **MBR** | 分区表起始 `55AA`，4 项分区项 |
+| 79 | **D 以上皆非** | 总容量 29.7 GB≠16 GB；文件系统仅 exFAT（part0）+FAT16（part1），无 FAT32/NTFS；part0 29.7 GB；卷标 part0=`TIM`、part1=`EFI`（非 SanDisk） |
+| 80 | **C（ii 和 iii）** | ii 有 AES 加密 `Sunny.zip`；iii 压缩包条目时间 2025-05-15 21:39–21:51；i「连接过名为 PC 的电脑」未检出证据（part0/part1 无 PC 痕迹），故不选 D |
+| 81 | **待解** | `Sunny.zip` 为 AES-256（method 99、extra 0x9901），需密码；FUNG 聊天记录「I put the list of password in the NAS…」⇒ 密码清单不在检材中，需 NAS 材料或人工提供 |
+| 82 | **D 以上皆是** | i) part1 boot flag 0x80 + EFI\BOOTootx64.efi；ii) part1 FAT 根目录卷标项 `EFI`；iii) 卷标时间 2025-05-15 21:38:48（UTC+8）；iv) part1 367,001,088 B < 500 MB |
+| 83 | 待解 | 需先解压 `Sunny/xcontainer`（AES 密码）+ VeraCrypt 挂载后读 `tammy.txt` |
+| 84 | 待解（预期 AES） | xcontainer 为 VeraCrypt 卷，默认 AES；需挂载后确认 |
+| 85 | 待解 | 需挂载 xcontainer 看卷属性（大小/文件系统/备份头/块大小） |
+| 86 | **C X:** | WinPE 启动后核心映像挂载为 X:（微PE 默认 RamDisk 盘符 X:） |
+| 87 | **A（Powershell、Eventvwr）** | 微PE 精简环境默认移除 PowerShell 与 Event Viewer；hostname/diskpart 可用 |
+| 88 | **A WEPE64.wim** | 启动必需核心映像（WEPE64.WIM 336,406,005 B） |
+| 89 | **B（i、ii、iii）** | WEPE64.wim/boot.wim + bootmgr + EFI\Bootootx64.efi；hiberfil.sys 非必需（iv 不选） |
+| 90 | **C Windows 10 PE** | 微PE 2.x 内核基于 Windows 10（WEPE64.WIM 为压缩镜像，无法直接读构建号；按微PE 版本判定，建议对官方答案） |
+| 97 | **A 正确** | BIP-39 助记词 12–24 个英文单词 |
+
+## 阻塞项
+
+- Q81/83/84/85/91–96/98 依赖 `Sunny.zip`（AES-256）密码 → `Sunny/xcontainer`（VeraCrypt 卷）→ `tammy.txt` / 钱包地址 / BEP-20 交易 / 助记词文件 MD5。聊天记录显示密码清单在 NAS（检材未提供）。
+- Q31 AirDrop 计数：仅有 FUNG 收到 1 个 `com.apple.sharingd` 导入的 `IMG_0084.MOV` 证据，选项表述为图片/文件，建议对官方答案。
+- Q48 WeChat 视频号关注数：需 wx 视频号表，当前 iOS 备份中未定位。
