@@ -43,3 +43,19 @@
 - 火眼对 `pf`（全量提取）与 `E01` 类检材只提供「元数据 + 只读挂载」，索引里几乎没有记录 → AI 侧必须按「索引 → 挂载目录 → LovelyCarve → 原始文件」顺序工作（提示词已按此加固）。
 - 火眼 E01 挂载是「分区节点视图」（`$FAT1`/`$MBR`/`未使用空间`），不适合直接翻文件；U 盘 E01 建议走 LovelyCarve 分区挂载。
 - 流量/内存/动态分析三类检材本套题未提供，链路仍按此前单点验证，等有对应样本再补。
+
+## 附：题目实测（CHAN_MH_mobile.zip / 火眼挂载目录）
+
+挂载根：`C:/hlnet/4-1793357718/CHAN_MH_mobile.tar/`（eid 4）。
+
+| 题号 | 问题 | 结论 | 证据（可复现） |
+|---|---|---|---|
+| 1 | 手机操作系统 | **A. iOS 17.1.1** | `iDevice_info.txt` 的 `BuildVersion: 21B91` |
+| 3 | IMEI | **A. 357328098205226** | `MobileEquipmentIdentifier: 35732809820522`（14 位 MEID）+ Luhn 校验位 `6` |
+| 4 | 最后使用 SIM 的 ICCID | **A. 89852122206020998419** | `iDevice_info.txt` 的 `IntegratedCircuitCardIdentity`（另 `CFBundleIdentifier: com.apple.CMCC_hk`） |
+| 8 | 没连接过哪个 SSID | **A. Hongn Home** | `var/preferences/com.apple.wifi.known-networks.plist` 已知网络 = `ErrorError` / `1010 free wifi` / `3109` / `.HKT-Hotel`；全盘 grep 无 `Hongn`，`CMHK` 仅出现在网络服务缓存（运营商名） |
+| 10 | 安装了哪些 IM | **A. 只有 i) WhatsApp 和 ii) WeChat** | `var/mobile/Applications`：`net.whatsapp.WhatsApp`、`com.tencent.xin` 存在；`net.whatsapp.WhatsAppSMB`、`com.tencent.mqq` 不存在 |
+| 20 | 从未安装的浏览器（多选） | **B. Chrome、C. Firefox、D. Edge** | Applications 里只有 `com.apple.mobilesafari`；grep `com.google.chrome.ios`/`org.mozilla.ios.Firefox`/`com.microsoft.msedge` 均无 |
+| 22 | Safari 搜索过的字词 | **B. escape room hong kong** | `var/mobile/Library/Safari/History.db`（复制 `-wal` 后只读）搜索 URL `q=escape+room+hong+kong` |
+
+复现命令（一条链路体检 + 上述解析）：`npm run chain:check -- --caseNumber 2919d298`，详见 `resources/forensics/skills/ios-full-extraction-quick/SKILL.md`。

@@ -85,6 +85,7 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
   - 实测 W 盘美亚杯案件：`22776 条记录 · 8191 个实体 · 360 个检材文件`；`Investors` → `fts5-trigram · 11 命中`；4 个火眼挂载可读（`CHAN_MH_mobile.tar` 等）；`AP3_LEUNG_YL_USB.E01` 解析 2 分区（177 ms）。
   - 通过 `describeIndexCoverage()` 标出「有解析内容」与「仅元数据」的检材，避免误以为索引丢了数据。
   - 退出码：0 全通 / 1 有失败环节 / 2 参数错误或找不到索引，可直接进 CI。
+- **iOS 全量提取速查技能**：新增 `resources/forensics/skills/ios-full-extraction-quick`（`iDevice_info.txt` 一次回答系统版本/IMEI/ICCID/蓝牙 → WiFi 已知网络 plist → 已装应用包名 → Safari History.db → WhatsApp/微信库），并把美亚杯 7 道题做成可复现实测表（见 `docs/chain-check-2025美亚杯.md`）。
 
 ### v0.3.15 改了什么
 

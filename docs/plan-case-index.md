@@ -2669,3 +2669,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
   - 案号匹配不能用 `endsWith`（`2919d298` 是完整 UUID 的前缀）→ 用 `includes`。
   - 挂载点列目录只显示 1 项（`<name>.tar` / `.E01`）是正常的（那是火眼展开根）。
 - 验证：`node --test tests/chain-check.test.mjs` 4/4；`npm test` 201/201；`build` OK；`check:overlay` OK。
+
+## §20.135 美亚杯题目实测 + iOS 全量提取技能
+
+- 目标：验证「题目高效完成」——不是只通链路，而是用链路直接答题。
+- 实测（CHAN_MH_mobile.zip，火眼挂载 `C:/hlnet/4-1793357718/CHAN_MH_mobile.tar/`）：
+  - Q1 iOS 17.1.1（`iDevice_info.txt` 的 `BuildVersion: 21B91`）。
+  - Q3 IMEI `357328098205226`（`MobileEquipmentIdentifier` 14 位 + Luhn 校验位）。
+  - Q4 ICCID `89852122206020998419`（`IntegratedCircuitCardIdentity`）。
+  - Q8 未连接 SSID = `Hongn Home`（known-networks plist 仅 4 个：ErrorError / 1010 free wifi / 3109 / .HKT-Hotel；全盘 grep 无 Hongn）。
+  - Q10 IM = WhatsApp + WeChat（Applications 里无 WhatsApp Business / QQ 包名）。
+  - Q20 未装浏览器 = Chrome / Firefox / Edge（仅有 mobileSafari）。
+  - Q22 Safari 搜索词 = `escape room hong kong`（History.db + 复制 `-wal` 后 node:sqlite 查询）。
+- 新技能：`resources/forensics/skills/ios-full-extraction-quick/SKILL.md`——路径速查、plist/sqlite 只读解析、WAL 复制坑、IMEI 校验位算法、红线。
+- 验证：`npm test` 201/201、`build` OK、`check:overlay` OK；题目证据表进 `docs/chain-check-2025美亚杯.md`。
