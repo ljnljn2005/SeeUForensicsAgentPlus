@@ -2754,3 +2754,23 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 打包态 e2e：`m2-ui-check`（需隔离绝对 `SEEU_DSH_HOME`/`SEEU_USER_DATA`，否则活动预置读不到）、`settings-check`（`SEEU_SETTINGS_MOCK_PORT=28181`/`SEEU_SETTINGS_CDP_PORT=9353` 避开 MYOS 18081；15 行工具路径、诊断五项、体检复制/导出、262144 上下文、思考流 kwargs 均通过）、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（9 个随包技能 + Qiko 43 + 三组技能、`leaked:[]`）、`hero-check`（15/15 工具）、`mount-check`（inspect 224 ms / mount 408 ms / 卸载后重新挂载成功）全部 `ok:true`。
 - 文档：README §2 产物表与「### v0.3.16 改了什么」、`docs/packaging.md`「### v0.3.16 回归验证」。
 - 遗留：Gitea `172.30.211.91:3000` 仍不可达，本地领先约 20 个提交；美亚杯 Q81/83/84/85/91–96/98 仍缺 `Sunny.zip` 密码；Spark 真实网关基准需用户提供 baseURL/模型 id/apiKey。
+
+### 20.135 面板「链路体检」与编排器复用（第 54 轮）
+
+- 需求：`chain:check` 只有 CLI，用户要在面板里一键确认「索引 / 检索 / 火眼挂载 / 镜像解析」是否通。
+- 重构：把编排逻辑从 `scripts/chain-check.mjs` 抽到 `tools/chain-check-run.mjs` 的 `runChainCheck({ caseNumber, db, probe, images, env, deps })`，返回 `{ exitCode, report, summary, text }`；支持 `deps` 注入（findIndexes/openIndex/statsOf/evidences/search/loadEvidenceMounts/attachMounts/describeIndexCoverage/inspectImage/createMountManager/resolveLovelyCarveCli）便于单测。CLI 只保留参数解析/输出/退出码；同时导出 `findChainTarget()`。
+- 插件：`plugins/seeu-case-index/index.js` 新增 `GET /seeu-index/chain-check?caseNumber=&db=&images=0&probe=`，直接调用 `runChainCheck`，返回 `{ ok, exitCode, report, summary, text }`（找不到索引 404）。
+- 面板：索引行新增「体检」小按钮（`data-chain-check`），点击后显示结果卡片（`data-chain-result`）：「✅ 全部通过 / ❌ 有环节失败」+ 案件/规模/检索命中/火眼挂载可读数 + 「复制报告」「关闭」。
+- e2e：`scripts/e2e/m2-ui-check.mjs` 新增 `idxChainButton/idxChainResult/idxChainText/idxChainOk`（点体检 → 轮询到结果含「案件：」→ 关闭）；`tests/chain-check-run.test.mjs` 5 例（全通过、索引打不开、找不到索引、镜像解析注入、案号前缀匹配）。
+- 打包白名单教训：插件在 asar 里会被 dsh 以 ESM import，`plugins/**` 静态 import 的每个 `tools/**` 模块都必须进 `electron-builder.yml` 的 files 白名单，否则打包后插件整体加载失败。本轮把 `tools/chain-check-run.mjs`、`tools/image-mount.mjs` 加进白名单（v0.3.17）。
+
+### 20.136 v0.3.17 打包与回归（第 54 轮）
+
+- 起因：v0.3.16 打包后插件新增了 `import { runChainCheck } from '../../tools/chain-check-run.mjs'`，但该文件与它依赖的 `tools/image-mount.mjs` 不在 `electron-builder.yml` 白名单里 → 打包版 dsh 加载插件时会 ESM 解析失败。
+- 修复：白名单加 `tools/chain-check-run.mjs`、`tools/image-mount.mjs`；`npm version 0.3.17`、build、`npm test` 211/211、`check:overlay` OK。
+- 产物：NSIS 320,080,340 B（blockmap 333,200 B）、portable 270,625,844 B、`app.asar` 566,595,818 B（32,984 entries）、目录版 1,262,774,137 B（旧 0.3.16 三件删除，0.3.14 portable 仍被占用保留）。
+- 自检：`.probe/asar-0317-check.mjs` → `missing: []`、0 false（新增 `chainCheckRoute`/`chainCheckPanel`/`chainCheckRunModule`/`version0317`）。
+- 启动：目录版首跑 27.4 s（杀毒扫描新 asar），复跑 7547 ms；portable 52,927 ms。
+- 打包态 e2e：`m2-ui-check`（面板「体检」→「✅ 全部通过 / 火眼挂载 4/4 可读」，`idxChainOk:true`）、`settings-check`、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（9 随包技能）、`hero-check`（15/15）、`mount-check` 全绿。
+- 文档：README §2 与「### v0.3.17 改了什么」、`docs/packaging.md`「### v0.3.17 回归验证」。
+- 遗留：Gitea 仍不可达；美亚杯 Q81/83/84/85/91–96/98 仍需 `Sunny.zip` 密码。

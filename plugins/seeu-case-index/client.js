@@ -1487,6 +1487,7 @@ window.__ModuleLoader__.load({
       const [dir, setDir] = useState(() => localStorage.getItem('seeu.indexDir') ?? '');
       const [indexes, setIndexes] = useState([]);
       const [srcFilter, setSrcFilter] = useState('all');
+      const [chain, setChain] = useState(null);
       const [db, setDb] = useState(null);
       const [node, setNode] = useState('root');
       const [view, setView] = useState(null);
@@ -1495,6 +1496,16 @@ window.__ModuleLoader__.load({
         const saved = localStorage.getItem('seeu.panelTab');
         return TABS.some(([key]) => key === saved) ? saved : 'tree';
       });
+      const runChain = async (ix) => {
+        if (!ix) return;
+        setChain({ dbPath: ix.dbPath, running: true, result: null, error: '' });
+        try {
+          const res = await api('/chain-check', { images: 0, caseNumber: ix.caseNumber || undefined, db: ix.dbPath });
+          setChain({ dbPath: ix.dbPath, running: false, result: res, error: '' });
+        } catch (err) {
+          setChain({ dbPath: ix.dbPath, running: false, result: null, error: String((err && err.message) || err) });
+        }
+      };
       const [recordSeed, setRecordSeed] = useState(null);
       const [query, setQuery] = useState('');
       // 检索筛选：检材 / 应用 / 起止日期（后端 search() 原生支持，空值不传）
@@ -2109,6 +2120,16 @@ window.__ModuleLoader__.load({
                               title: ix.tool ? '索引由 ' + ix.tool + ' 生成' : '',
                             }, ix.sourceLabel) : null,
                             h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, fmtBytes(ix.sizeBytes ?? 0)),
+                            h('span', {
+                              role: 'button',
+                              'data-chain-check': ix.dbPath,
+                              title: '检查索引 / 检索 / 火眼挂载 / 镜像解析',
+                              style: { flex: 'none', color: C_ACC, fontSize: 11, cursor: 'pointer', padding: '0 4px' },
+                              onClick: async (e) => {
+                                if (e && e.stopPropagation) e.stopPropagation();
+                                await runChain(ix);
+                              },
+                            }, chain && chain.dbPath === ix.dbPath && chain.running ? '体检中…' : '体检'),
                             ix.extra ? h('span', {
                               role: 'button',
                               title: '从面板的额外目录列表移除（不删除索引文件）',
@@ -2126,6 +2147,34 @@ window.__ModuleLoader__.load({
                           meta?.warn ? h('div', { style: { color: '#F5A524', fontSize: 11 } }, '⚠ ' + meta.warn) : null);
                       }))
                     : h('div', { style: { ...S.muted, padding: '6px 2px' } }, emptyText),
+                  chain
+                    ? h('div', {
+                        'data-chain-result': chain.dbPath,
+                        style: { ...S.card, gap: 4, marginTop: 6, border: '1px solid ' + (chain.result && chain.result.ok ? C_ACC : C_L2) },
+                      },
+                        h('div', { style: S.row },
+                          h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, '链路体检'),
+                          h('span', { style: S.muted }, chain.running ? '检查中…' : (chain.result && chain.result.ok ? '✅ 全部通过' : (chain.error ? '❌ ' + chain.error : '❌ 有环节失败')))),
+                        chain.result && chain.result.report
+                          ? h('div', { style: { ...S.muted, fontSize: 11.5, lineHeight: 1.6 } },
+                              '案件：' + ((chain.result.report.case && chain.result.report.case.name) || '-') + ' · ' + ((chain.result.report.case && chain.result.report.case.number) || '-'),
+                              chain.result.report.index && chain.result.report.index.counts
+                                ? ' · ' + chain.result.report.index.counts.records + ' 条记录 / ' + chain.result.report.index.counts.entities + ' 个实体'
+                                : '',
+                              chain.result.report.query ? ' · 检索「' + chain.result.report.query.q + '」' + (chain.result.report.query.total ?? 0) + ' 命中' : '',
+                              chain.result.report.mounts ? ' · 火眼挂载 ' + (chain.result.report.mounts.items || []).filter((i) => i.readable).length + '/' + (chain.result.report.mounts.items || []).length + ' 可读' : '')
+                          : null,
+                        chain.result && chain.result.report && (chain.result.report.fails || chain.result.summary && chain.result.summary.fails || []).length
+                          ? h('div', { style: { color: '#F5A524', fontSize: 11.5 } }, '⚠ ' + ((chain.result.summary && chain.result.summary.fails) || []).join('；'))
+                          : null,
+                        h('div', { style: S.row },
+                          actionButton('复制报告', async () => {
+                            try {
+                              await window.seeu.writeClipboard(String((chain.result && chain.result.text) || ''));
+                            } catch (err) { setError(String((err && err.message) || err)); }
+                          }),
+                          actionButton('关闭', () => setChain(null))))
+                    : null,
                 ];
               })(),
             )

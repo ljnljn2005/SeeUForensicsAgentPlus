@@ -1085,3 +1085,12 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 打包态 e2e（隔离 `SEEU_DSH_HOME`/`SEEU_USER_DATA` 绝对路径；`settings-check` 用 `SEEU_SETTINGS_MOCK_PORT=28181`/`SEEU_SETTINGS_CDP_PORT=9353` 避开 MYOS 18081）：`m2-ui-check`、`settings-check`、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（9 个随包技能、`leaked:[]`）、`hero-check`（15/15 工具）、`mount-check`（inspect 224 ms / mount 408 ms / 重新挂载 X:）全部 `ok:true`。
 - 坑 1：`scripts/chain-check.mjs`、`scripts/ios-quick.mjs` 不会进 asar（白名单只对 `tools/**` 生效），自检不要把它们列为必需路径；打包后给用户的是 `tools` 模块，命令行入口仅开发态可用。
 - 坑 2：打包态 `m2-ui-check` 必须传隔离的 `SEEU_DSH_HOME`（绝对路径），否则活动预置写不进去，会报「活动行打开失败时没有提示」。
+
+
+### v0.3.17 回归验证
+
+- 版本与体积：NSIS 320,080,340 B（blockmap 333,200 B）、portable 270,625,844 B、`app.asar` 566,595,818 B（32,984 entries）、目录版 1,262,774,137 B。
+- `node .probe/asar-0317-check.mjs`：`missing: []`、0 false（必需路径新增 `tools/chain-check-run.mjs`、`tools/image-mount.mjs`；新增 `chainCheckRoute`/`chainCheckPanel`/`chainCheckRunModule`/`version0317`）。
+- 启动：目录版 `verify-launch` 首次 27.4 s（杀毒扫描新 asar），复跑 7547 ms；portable 52,927 ms。
+- 打包态 e2e：`m2-ui-check`（含「体检」按钮 → 结果卡片，`idxChainText` = ✅ 全部通过 / 火眼挂载 4/4 可读）、`settings-check`（15 行外部工具、诊断五项、体检复制/导出）、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（9 个随包技能、`leaked:[]`）、`hero-check`（15/15 工具）、`mount-check`（含重新挂载）全部 `ok:true`。
+- **坑（重要）**：插件在 asar 里被 dsh 以 ESM 加载，`plugins/seeu-case-index/index.js` 静态 import 的每个 `tools/**` 模块都必须在 `electron-builder.yml` 的 `files` 白名单里；漏掉会让打包版插件整体 import 失败（面板恢复为空壳）。v0.3.16 曾漏 `tools/chain-check-run.mjs`/`tools/image-mount.mjs`，v0.3.17 已补齐并验证。

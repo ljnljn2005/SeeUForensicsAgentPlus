@@ -23,6 +23,8 @@ files:
   - tools/myos-index/**
   - tools/lovely-cli/cli.mjs
   - tools/chain-check.mjs
+  - tools/chain-check-run.mjs
+  - tools/image-mount.mjs
   - tools/ios-quick.mjs
   - scripts/chain-check.mjs
   - scripts/ios-quick.mjs

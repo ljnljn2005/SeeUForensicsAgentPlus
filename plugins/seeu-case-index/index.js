@@ -13,6 +13,7 @@ import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, s
 import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTableCounts, myosTables } from './myos.mjs';
 import { forgetExtraDir, readExtraDirs, rememberExtraDir } from '../../tools/ges-index/extra-dirs.mjs';
 import { activityFile, clearActivity, formatActivitySummary, readActivity, recordActivity, removeActivity, summarizeActivity } from '../../tools/ges-index/activity.mjs';
+import { runChainCheck } from '../../tools/chain-check-run.mjs';
 
 function pathBase(value) {
   const text = String(value ?? '').replace(/[\/]+$/, '');
@@ -264,6 +265,15 @@ async function handle(req, res) {
       if (!body.dir) return send(res, 400, { error: '缺少 dir' });
       const dirs = forgetExtraDir(body.dir);
       return send(res, 200, { ok: true, dirs });
+    }
+    // ---------- 链路体检（索引 / 检索 / 火眼挂载 / 镜像解析） ----------
+    if (req.method === 'GET' && path === '/chain-check') {
+      const caseNumber = url.searchParams.get('caseNumber') ?? url.searchParams.get('case') ?? '';
+      const db = url.searchParams.get('db') ?? '';
+      const probe = url.searchParams.get('probe') ?? 'Investors';
+      const images = url.searchParams.get('images') !== '0';
+      const result = await runChainCheck({ caseNumber, db, probe, images, env: process.env });
+      return send(res, result.exitCode === 2 ? 404 : 200, { ok: result.exitCode === 0, ...result });
     }
     // ---------- MYOS（超级取证大师）取证结果导入 ----------
     // 面板「从 MYOS 导入」走这里：列案件/检材/结果库表，再把一张表落成 SeeU 索引。

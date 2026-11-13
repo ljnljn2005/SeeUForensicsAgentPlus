@@ -203,6 +203,20 @@ await sleep(700)
   const t = await bodyText()
   report.idxFilterRestore = /W盘/.test(t) && !/没有来源为/.test(t)
 }
+// 链路体检：点索引行的「体检」，出现结果卡片（索引/检索/火眼挂载）
+{
+  report.idxChainButton = await ev("(() => { const el = document.querySelector('[data-chain-check]'); if (!el) return 0; el.click(); return 1 })()")
+  for (let i = 0; i < 60; i += 1) {
+    const textNow = await ev("(() => { const el = document.querySelector('[data-chain-result]'); return el ? el.innerText : '' })()")
+    if (/案件：/.test(textNow) || /有环节失败/.test(textNow)) break
+    await sleep(500)
+  }
+  report.idxChainResult = await ev("document.querySelectorAll('[data-chain-result]').length")
+  report.idxChainText = await ev("(() => { const el = document.querySelector('[data-chain-result]'); return el ? el.innerText : '' })()")
+  report.idxChainOk = report.idxChainButton === 1 && report.idxChainResult === 1 && /链路体检/.test(report.idxChainText) && /案件：/.test(report.idxChainText)
+  await clickText('关闭', 'button')
+  await sleep(400)
+}
 // 最近活动卡片：新 home 里没有历史活动，应显示空提示（有活动时至少有一行 data-activity-kind）
 {
   const t = await bodyText()
@@ -395,7 +409,7 @@ report.timelineFilterOptions = await ev(`(() => {
 report.timelineFiltersOk = report.timelineFilterOptions.ev > 1 && report.timelineFilterOptions.app > 1
 report.tabTablesClick = await openTab('表')
 text = await bodyText()
-report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 700)
+report.tablesText = text.slice(text.indexOf('表'), text.indexOf('表') + 1600)
 report.myosImportOk = String(report.myosButton ?? '').startsWith('clicked') && report.myosDialog === true
 report.m2ok = /联系人/.test(report.tablesText) && report.entityText.length > 10 && report.timelineText.length > 10 && report.briefVisible === true && report.briefRefreshOk === true && report.recordsFilterOk === true && report.recordsAppFilterOk === true && report.kpiRange === true && report.treeFilterOk === true && report.searchEvNames === true && report.searchAppSelect === true && report.searchLongOk === true && report.timelineFiltersOk === true && report.entityPagingOk === true && report.entityEvSelectOk === true && report.indexMeta === true && report.myosImportOk === true
 

@@ -64,20 +64,27 @@ node scripts/verify-launch.mjs --exe <exe> --port 9333
 
 通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
 
-本轮已验证产物（**v0.3.16**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
+本轮已验证产物（**v0.3.17**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
 
 | 产物 | 大小 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,734,964 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
-| `release/win-unpacked/resources/app.asar` | 566,556,645 B（32,982 entries；含 `tools/chain-check.mjs`、`tools/ios-quick.mjs` 与新增技能） |
-| `release/SeeUForensicsAgentPlus-0.3.16-x64.exe`（NSIS 安装包） | 320,064,982 B（blockmap 332,754 B） |
-| `release/SeeUForensicsAgentPlus-0.3.16-x64-portable.exe` | 270,624,840 B |
+| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,774,137 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
+| `release/win-unpacked/resources/app.asar` | 566,595,818 B（32,984 entries；新增 `tools/chain-check-run.mjs`、`tools/image-mount.mjs`，插件可在 asar 内直接 import） |
+| `release/SeeUForensicsAgentPlus-0.3.17-x64.exe`（NSIS 安装包） | 320,080,340 B（blockmap 333,200 B） |
+| `release/SeeUForensicsAgentPlus-0.3.17-x64-portable.exe` | 270,625,844 B |
 
-实测冷启动到 dsh UI：目录版 **7252 ms**（首轮可能受杀毒扫描影响，通常 5–7 s）；portable 首次 **52.7 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
+实测冷启动到 dsh UI：目录版 **7547 ms**（首轮可能受杀毒扫描影响，通常 5–8 s）；portable 首次 **52.9 s**（先要把 ~1.26 GB 解包到 `%TEMP%`，属于预期）。
 
 更细的打包说明见 `docs/packaging.md`。
 
 验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
+
+### v0.3.17 改了什么
+
+- **面板「链路体检」**：索引行新增「体检」按钮，一键检查「索引可打开 → 检索可用 → 火眼挂载可读 → 镜像可解析」，结果卡片显示「✅ 全部通过 / ❌ 有环节失败」+ 案件/规模/检索命中/挂载可读数，可【复制报告】。
+- **编排器复用**：链路逻辑抽到 `tools/chain-check-run.mjs` 的 `runChainCheck()`（支持依赖注入，单测 5 例），CLI（`npm run chain:check`）与插件路由 `GET /seeu-index/chain-check` 共用；实测面板对 W 盘案件返回「22776 条记录 / 8191 个实体 · 检索 Investors 11 命中 · 火眼挂载 4/4 可读」。
+- **修复打包白名单**：插件静态 import 的 `tools/chain-check-run.mjs`、`tools/image-mount.mjs` 必须进 asar，否则打包后插件整体加载失败——v0.3.17 已加入并验证（`chainCheckRoute`/`chainCheckPanel`/`chainCheckRunModule` 检查全 true）。
+- 打包与回归：asar 自检 0 false、`missing:[]`；目录版 7547 ms / portable 52.9 s；打包态 `m2-ui-check`（含面板体检 `idxChainOk:true`）、`settings-check`、`plugins-check`、`skills-check`、`hero-check`、`mount-check` 全绿。
 
 ### v0.3.16 改了什么
 
