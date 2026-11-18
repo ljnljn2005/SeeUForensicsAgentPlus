@@ -349,6 +349,29 @@ const api = {
     info: () =>
       ipcRenderer.invoke('seeu:mcp:info') as Promise<{ ok: boolean; server?: string; exists?: boolean; tools?: number; error?: string }>,
   },
+  // 关于 SeeU：版本、运行时版本、dsh 版本、关键目录（只读）。
+  app: {
+    info: () =>
+      ipcRenderer.invoke('seeu:app:info') as Promise<{
+        ok: boolean
+        info?: {
+          name: string
+          version: string
+          packaged: boolean
+          electron: string
+          chromium: string
+          node: string
+          dshVersion: string | null
+          platform: string
+          arch: string
+          appRoot: string
+          dshHome: string
+          releaseUrl: string
+        }
+        text?: string
+        error?: string
+      }>,
+  },
   // 运行环境体检：插件/技能/工具路径/MCP/本机模型/挂载/MYOS/索引目录。
   env: {
     report: (): Promise<{ ok: boolean; report?: EnvReport; text?: string; markdown?: string; error?: string }> =>

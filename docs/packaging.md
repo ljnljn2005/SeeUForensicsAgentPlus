@@ -1159,3 +1159,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 打包态 e2e（隔离 home，`SEEU_CASE_DIR=E:/forensics/honglian/作业_20261118081854I`，索引 45,237 条）：`m2-ui-check` `m2ok:true`（`recordsAfterCount:20452`、`entityPagingOk`、`timelineFiltersOk`、`idxChainSteps:3`、`idxChainDeepSteps:4`、`errors:[]`）；`settings-check`、`hero-check`、`plugins-check`、`skills-check`、`mount-check` 全部 `ok:true`。
 - 说明：`scripts/e2e/**` 按仓库策略只保留在本地，不进安装包（`.probe` 同样 gitignore）。
 
+### v0.3.25 回归验证
+
+- 产物：`SeeUForensicsAgentPlus-0.3.25-x64.exe` 320,092,663 B、`-portable.exe` 270,622,742 B、`resources/app.asar` 566,618,883 B（32,988 entries）。
+- asar 自检 `.probe/asar-0325-check.mjs`：`missing: []`、0 false（新增 `version0325`、`aboutCard`（设置页含「关于 SeeU」、main 含 `seeu:app:info`/`collectAppInfo`））。
+- 启动：目录版 `verify-launch --port 5416` → `ok:true, elapsedMs:47289`（首启杀软扫描）；portable `--port 5418` → `ok:true, elapsedMs:73489`。
+- 打包态 e2e（隔离 home、`SEEU_CASE_DIR=E:/forensics/honglian/作业_20261118081854I` 45,237 条索引）：`settings-check` `ok:true`（`aboutOk`/`aboutCopyOk`、体检 8 项、15 行外部工具）；`m2-ui-check` `m2ok:true`（`recordsAfterCount:20452`、`idxChainDeepSteps:4`、`errors:[]`）。
+- 说明：`src/app-info.ts` 会随 esbuild 打进 `dist/main.cjs`，asar 不自带单文件，检查用 mainJs 符号断言。
+

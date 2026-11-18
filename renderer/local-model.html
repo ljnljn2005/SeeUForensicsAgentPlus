@@ -341,6 +341,17 @@
     <div id="env-copy-status" class="hint"></div>
   </div>
 
+  <div class="card" id="about-card" data-about-card="1">
+    <label>关于 SeeU</label>
+    <div class="hint">版本与运行时信息；反馈问题或对接排障时，请附上这段内容。</div>
+    <div class="actions" style="margin:10px 0 6px">
+      <button id="btn-about-refresh">刷新</button>
+      <button id="btn-about-copy">复制信息</button>
+      <span id="about-status" class="hint" style="margin-left:8px"></span>
+    </div>
+    <div id="about-rows" data-about-rows="1"></div>
+  </div>
+
   <div class="actions">
     <button class="primary" id="btn-save">保存</button>
     <button id="btn-models">从网关拉取模型列表</button>
@@ -744,6 +755,71 @@
     const cfg = $('tool-paths-config')
     if (cfg) cfg.textContent = view && view.configFile ? '配置文件：' + view.configFile : ''
   }
+
+  // ── 关于 SeeU：版本 / 运行时 / dsh / 目录（只读） ──
+  const appApi = window.seeu && window.seeu.app ? window.seeu.app : null
+  let aboutText = ''
+  function renderAbout(info) {
+    const box = $('about-rows')
+    if (!box) return
+    box.textContent = ''
+    const rows = [
+      ['版本', 'v' + info.version + (info.packaged ? '（安装版）' : '（开发模式）')],
+      ['运行时', 'Electron ' + info.electron + ' · Chromium ' + info.chromium + ' · Node ' + info.node],
+      ['dsh', info.dshVersion || '未找到'],
+      ['平台', info.platform + '/' + info.arch],
+      ['程序目录', info.appRoot],
+      ['数据目录', info.dshHome],
+      ['发布页', info.releaseUrl],
+    ]
+    for (const [key, value] of rows) {
+      const row = document.createElement('div')
+      row.className = 'tool'
+      row.setAttribute('data-about-key', key)
+      const name = document.createElement('span')
+      name.className = 'tool-name'
+      name.textContent = key
+      const text = document.createElement('span')
+      text.className = 'tool-path'
+      text.textContent = value
+      row.appendChild(name)
+      row.appendChild(text)
+      box.appendChild(row)
+    }
+    const v = document.createElement('div')
+    v.setAttribute('data-about-version', info.version)
+    v.style.display = 'none'
+    box.appendChild(v)
+  }
+  async function loadAbout() {
+    if (!appApi || !appApi.info) {
+      const st = $('about-status')
+      if (st) st.textContent = '当前页面未暴露外壳接口（仅桌面版可用）'
+      return
+    }
+    const st = $('about-status')
+    try {
+      const res = await appApi.info()
+      if (!res || !res.ok || !res.info) throw new Error((res && res.error) || '读取失败')
+      aboutText = res.text || ''
+      renderAbout(res.info)
+      if (st) st.textContent = ''
+    } catch (error) {
+      if (st) st.textContent = '读取失败：' + ((error && error.message) || error)
+    }
+  }
+  $('btn-about-refresh').addEventListener('click', function () { void loadAbout() })
+  $('btn-about-copy').addEventListener('click', async function () {
+    if (!aboutText) await loadAbout()
+    const st = $('about-status')
+    if (!aboutText) { if (st) st.textContent = '没有可复制的信息'; return }
+    try {
+      if (window.seeu && window.seeu.writeClipboard) await window.seeu.writeClipboard(aboutText)
+      if (st) st.textContent = '已复制'
+    } catch (error) {
+      if (st) st.textContent = '复制失败：' + ((error && error.message) || error)
+    }
+  })
 
   // ── 运行环境体检 ──
   const envApi = window.seeu && window.seeu.env ? window.seeu.env : null
@@ -1179,6 +1255,7 @@
   }
 
   void loadTools()
+  void loadAbout()
   const envButton = $('btn-env-check')
   if (envButton) envButton.addEventListener('click', () => { void runEnvCheck() })
   const envFixButton = $('btn-env-fix')

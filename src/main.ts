@@ -41,6 +41,7 @@ import { LOVELY_TOOL_SPECS, lovelyToolsView, saveLovelyToolPaths } from './lovel
 import { mountHostEnv, mountManager, setMountLogger } from './mounts.js'
 import { TOOL_PATH_SPECS, saveToolPaths, toolPathsEnv, toolPathsView } from './tool-paths.js'
 import { collectEnvReport, envFixTargets, envReportMarkdown, envReportText, mcpFacts } from './env-report.js'
+import { collectAppInfo, formatAppInfoText } from './app-info.js'
 import { ensureBundledPluginPackages, installBundledPluginBundles } from './dsh-plugins.js'
 import { bundledSkillsDir, installBundledSkills, userSkillsDir } from './skills.js'
 import {
@@ -1032,6 +1033,15 @@ function registerIpc(): void {
   ipcMain.handle('seeu:mcp:info', async () => {
     try {
       return { ok: true, ...mcpFacts() }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle('seeu:app:info', async () => {
+    try {
+      const info = collectAppInfo()
+      return { ok: true, info, text: formatAppInfoText(info) }
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     }

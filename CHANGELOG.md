@@ -10,6 +10,12 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 
 - 更新日志从 `README.md` 迁出到本文件：README 只保留产品说明、快速开始与各功能章节，§2 末尾改为指向本文件；README 章节序号顺延为 14 链路体检 / 15 iOS 取证速查 / 16 题目实测答案 / 17 许可与来源。
 
+## v0.3.25（2026-11-18）
+
+- 设置页新增「关于 SeeU」卡片：版本/安装版标识、Electron·Chromium·Node 版本、dsh 版本、平台、程序目录、数据目录、发布页；支持【刷新】【复制信息】（反馈问题时直接粘贴）。
+- 新增 IPC `seeu:app:info`（`src/app-info.ts` 纯函数 `buildAppInfo/formatAppInfoText`），dev 与打包态路径差异在模块内消化。
+- 打包验证：NSIS 320,092,663 B / portable 270,622,742 B / app.asar 566,618,883 B（32,988 entries）；目录版启动 47,289 ms（首启杀软扫描）、portable 73,489 ms；打包态 `settings-check`（`aboutOk:true`、`aboutVersion:"0.3.25"`、`aboutCopyOk:true`）与 `m2-ui-check`（作业案件 45,237 条，`m2ok:true`、含镜像解析 4 行）全绿。
+
 ## v0.3.24（2026-11-18）
 
 - 修复链路体检【含镜像解析】按钮点击报 `ReferenceError: ix is not defined`（结果卡片在 `indexes.map` 之外，改为从 `chain.caseNumber/dbPath` 取目标）。
