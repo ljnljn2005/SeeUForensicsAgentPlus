@@ -2897,4 +2897,5 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 做法：`search()` 短词分支按 rowid 分块（5000 行/块）顺序读 `text/body` 做 `includes`，先命中达到 `offset+limit+1` 或超 `scanBudgetMs`（默认 2500 ms）即停；命中 id 再回表取 `snip`。返回 `scanned`/`totalRows`/`partialScan`，`hint` 提示「已扫描 N/M 行…用 ≥3 字或加筛选」，面板与 MCP 显示「≥ N 命中」。
 - 实测（842,198 记录 / 2.65 GB）：`加密` 3,086 ms（4 命中、扫 2 万行、partial）、`投资` 3,076 ms、无命中走 FTS 37 ms。
 - 新增 `scripts/perf-index.mjs`（`npm run perf:index`）逐项计时：statsOf 444 ms、tree(root) 758 ms、evidences 4 ms、facets 6 ms、records 77 ms、entity 135 ms、timeline 5 ms、typedTables 36 ms、search 长词 198 ms。
+- 复核（2026-11-19 清进程后重跑）：2.6 GB 案件 `m2ok:true`（recordsBefore 842,198 → 筛选 234,374、应用筛选 132,607、实体聚合 30,737、时间线下拉 ev 6/app 52、含镜像解析 4 步）；45k 案件 `m2ok:true`。
 - 坑：`m2-ui-check` 在大库上需要「千分位解析 + 轮询等渲染 + 独立 `--user-data-dir`」；残留 `electron.exe --remote-debugging-port=9345` 会导致「没有拿到 Web UI 页面」，跑前必须清进程。
