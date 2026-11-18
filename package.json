@@ -72,7 +72,8 @@
     "bench:gateway": "node scripts/bench/local-gateway-bench.mjs",
     "chain:check": "node scripts/chain-check.mjs",
     "ios:quick": "node scripts/ios-quick.mjs",
-    "test:e2e:mcp-live": "node scripts/e2e/seeu-mcp-live-check.mjs"
+    "test:e2e:mcp-live": "node scripts/e2e/seeu-mcp-live-check.mjs",
+    "perf:index": "node scripts/perf-index.mjs"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.1.0",

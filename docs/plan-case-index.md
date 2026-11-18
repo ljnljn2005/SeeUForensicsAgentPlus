@@ -2890,3 +2890,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 问题：2 字关键词只能走 `like '%词%'`，大库上 `count(*)` 要扫完整张表（842k 记录实测 9.2 s），整次检索 45 s。
 - 做法：`search()` 的 LIKE 分支改成「只取 `limit+1` 行」——取不满说明已扫完，`total` 即精确命中数；取满则**不跑全表 count**，返回 `totalApprox:true` 与 `hint`，面板显示「引擎 like · ≥ 20 命中」并提示「用 ≥3 个字可走全文索引更快」，MCP `index_search` 同样显示「≥ N 命中，短词只显示前若干条」；`next` 在近似模式下允许继续翻页。
 - 实测（2.6 GB / 842,198 记录）：`加密` 45,000 ms → **483 ms**（≥20 命中）、`投资` → 538 ms、`Investors`（FTS）5 ms。`npm test` **231/231**。
+
+### 20.148 短词（<3 字）检索的分块预算扫描
+
+- 背景：2 字关键词只能逐行匹配，大库上 `like '%词%'` / `instr()` 实测 114 s / 45 s（`SCAN record`），而 `count(*)` 只要 0.44 s；FTS5 trigram 对 2 字词返回 0 行。
+- 做法：`search()` 短词分支按 rowid 分块（5000 行/块）顺序读 `text/body` 做 `includes`，先命中达到 `offset+limit+1` 或超 `scanBudgetMs`（默认 2500 ms）即停；命中 id 再回表取 `snip`。返回 `scanned`/`totalRows`/`partialScan`，`hint` 提示「已扫描 N/M 行…用 ≥3 字或加筛选」，面板与 MCP 显示「≥ N 命中」。
+- 实测（842,198 记录 / 2.65 GB）：`加密` 3,086 ms（4 命中、扫 2 万行、partial）、`投资` 3,076 ms、无命中走 FTS 37 ms。
+- 新增 `scripts/perf-index.mjs`（`npm run perf:index`）逐项计时：statsOf 444 ms、tree(root) 758 ms、evidences 4 ms、facets 6 ms、records 77 ms、entity 135 ms、timeline 5 ms、typedTables 36 ms、search 长词 198 ms。
+- 坑：`m2-ui-check` 在大库上需要「千分位解析 + 轮询等渲染 + 独立 `--user-data-dir`」；残留 `electron.exe --remote-debugging-port=9345` 会导致「没有拿到 Web UI 页面」，跑前必须清进程。

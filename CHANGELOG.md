@@ -8,6 +8,11 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 
 ## 未发布（文档整理）
 
+### 未发布：大库短词检索与自检工具
+
+- 短关键词（<3 字）在大库上改为「按 rowid 分块顺序读 + 时间预算」（每块 5000 行、默认 2500 ms、可用 `scanBudgetMs` 调整），命中够数或超预算即返回；结果带「已扫描 N/M 行」「结果可能不全」提示，实测 842k 记录案件 2 字词 45 s → 约 3 s。`npm test` 231/231。
+- 新增索引性能自检：`npm run perf:index -- --case <案件目录>`（或 `--db <case-index.db>`）逐项打印 `statsOf/tree/evidences/facets/records/entity/timeline/typedTables/search` 耗时与规模。
+
 - 短关键词检索优化：2 字词在大库上不再跑全表 `count(*)`，只取前 N 行并显示「≥ N 命中」+「用 ≥3 个字更快」提示（842k 记录实测 45 s → 0.5 s）。
 
 - 大库性能：建库时预聚合面板常用统计 —— `meta.stats_json`（计数/实体类型/各检材记录数）、`timeline_bucket`（按天×检材×应用）、`facet_app/facet_category/facet_account`、`entity_group`（实体按 kind+value 聚合），并给 `record(ts/eid/app)`、`entity(kind,value_norm)` 建索引。实测 842,198 记录 / 2.6 GB 索引：`statsOf` 35.6 s → 0.18 s、`timeline` 31.8 s → 2 ms、`entity` 3.2 s → 27 ms、`facets` 2 ms；查询函数保留无预聚合表时的实时回退。
