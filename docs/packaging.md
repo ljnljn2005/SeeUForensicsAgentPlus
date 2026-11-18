@@ -1167,3 +1167,13 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 打包态 e2e（隔离 home、`SEEU_CASE_DIR=E:/forensics/honglian/作业_20261118081854I` 45,237 条索引）：`settings-check` `ok:true`（`aboutOk`/`aboutCopyOk`、体检 8 项、15 行外部工具）；`m2-ui-check` `m2ok:true`（`recordsAfterCount:20452`、`idxChainDeepSteps:4`、`errors:[]`）。
 - 说明：`src/app-info.ts` 会随 esbuild 打进 `dist/main.cjs`，asar 不自带单文件，检查用 mainJs 符号断言。
 
+
+### v0.3.26 回归验证（第 75 轮：大库性能与稳定性）
+
+- 产物：`SeeUForensicsAgentPlus-0.3.26-x64.exe` 320,096,730 B（blockmap 333,337 B）、`-portable.exe` 270,632,199 B、`resources/app.asar` 566,636,793 B（32,988 entries）、`win-unpacked` 总计 1,262,827,933 B。
+- `.probe/asar-0326-check.mjs`：`missing: []`、0 个 false（新增 `mountFastFail` / `shortQueryApprox` / `bigAggregates` / `staleResumeGuard` / `finalizePartial` / `version0326`）。
+- 启动（`scripts/verify-launch.mjs --exe release/win-unpacked/SeeUForensicsAgentPlus.exe --port 5399`）：`ok:true, elapsedMs:13345`（首启被杀软扫描影响）。
+- 打包态 e2e（`SEEU_UI_EXE` 指 `release/win-unpacked`，隔离 home/userData，用 2.6 GB `2026美亚团队` 索引）：
+  - `m2-ui-check` → `m2ok:true, errors:[]`（`recordsBeforeCount:842198`、短词检索 `≥ 20 命中`、长词 FTS、来源筛选、链路体检含镜像解析、活动卡片；
+  - `settings-check` → `ok:true`、`envItemCount:8`（含内置 MCP）、`toolPathsRows:15`、`aboutOk:true`、`toolPathsStarmem` 正确；仅 `probeNoContextWindow:false` 属预期（本机网关可能带 context_window）。
+- 已知限制：`activityEmptyHint` 在预置活动数据的隔离 home 下为 false（预置了两条历史，本就不是空态），属 e2e 数据设计，不影响功能。
