@@ -4,6 +4,8 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 
 ## 未发布（文档整理）
 
+- 「关于 SeeU」的纯整形逻辑抽到 `tools/app-info.mjs`（`buildAppInfo`/`formatAppInfoText`/`RELEASE_URL`），`src/app-info.ts` 只负责采集；新增 `tests/app-info.test.mjs` 3 例（默认值/文案/缺失 dsh），测试 220/220。
+
 - 建库中断的案子不再「消失」：扫描/列表会显示「⚠ 上次建库未完成 · 半成品 X MB」（只存在 `case-index.db.building` 的目录），点该行会把目录填进输入框，点「建库 / 更新」会重新建（默认 rebuild，自动丢弃半成品）。
 
 - 案件索引面板的链路体检支持【含镜像解析】：结果卡片里新增按钮，点击后带 `images=1` 重新体检，额外调用 LovelyCarve 解析案件内 E01/DD 镜像并显示「镜像解析 ✓/×」环节（默认仍是不解析，保持面板秒开）；e2e 增加 `idxChainDeepSteps`/`idxChainDeepOk` 断言。
