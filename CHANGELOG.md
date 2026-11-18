@@ -4,6 +4,8 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 
 ## 未发布（文档整理）
 
+- 短关键词检索优化：2 字词在大库上不再跑全表 `count(*)`，只取前 N 行并显示「≥ N 命中」+「用 ≥3 个字更快」提示（842k 记录实测 45 s → 0.5 s）。
+
 - 大库性能：建库时预聚合面板常用统计 —— `meta.stats_json`（计数/实体类型/各检材记录数）、`timeline_bucket`（按天×检材×应用）、`facet_app/facet_category/facet_account`、`entity_group`（实体按 kind+value 聚合），并给 `record(ts/eid/app)`、`entity(kind,value_norm)` 建索引。实测 842,198 记录 / 2.6 GB 索引：`statsOf` 35.6 s → 0.18 s、`timeline` 31.8 s → 2 ms、`entity` 3.2 s → 27 ms、`facets` 2 ms；查询函数保留无预聚合表时的实时回退。
 
 - 建库支持「个别叶子超时/坏掉」的处理：`--leaf-timeout <秒>`（默认 180，单叶读取超时）、`--allow-partial`（接受少量失败叶子，manifest 记 `coverageOk:false` 与失败清单）、`--finalize`（不重新抓取，直接校验既有 `case-index.db.building` 并原子替换，用于 99% 已完成、只剩个别叶子卡死的收尾）。CLI 实测：980 叶子中 1 个分区 5 文件系统日志 `data.csv` 读超时，用 `--finalize --allow-partial` 收尾成功（979 artifact / 842,198 记录 / 416,963 实体 / 2.65 GB）。修 `finalizeBuilding` 在 Windows 上先关闭数据库再 rename（否则 EBUSY）。

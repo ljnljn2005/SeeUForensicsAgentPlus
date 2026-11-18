@@ -2464,7 +2464,8 @@ window.__ModuleLoader__.load({
             !db ? noDbHint : null,
             result ? h('div', { style: S.card },
               h('div', { style: S.row },
-                h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `引擎 ${result.engine} · ${result.returned} 命中`),
+                h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `引擎 ${result.engine} · ${result.totalApprox ? '≥ ' : ''}${result.returned} 命中`),
+                result.hint ? h('span', { style: { ...S.muted, maxWidth: 420 } }, result.hint) : null,
                 (result.total ?? result.returned) > result.returned
                   ? h('span', { style: S.muted }, `共 ${result.total} 条 · 第 ${(result.offset ?? 0) + 1}–${(result.offset ?? 0) + result.returned} 条`)
                   : null,

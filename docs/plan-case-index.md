@@ -2884,3 +2884,9 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 真因二：2 字关键词只能走 LIKE 全表扫描，大库上 `search('加密')` 实测 **45 s**（`Investors` 走 FTS 仅 73 ms），e2e 写死等 7 s 必然失败。修复：e2e 改成轮询（默认 90 s，`SEEU_SEARCH_WAIT_MS` 可覆盖）。
 - 真因三：`m2-ui-check` 仍写死旧 W 盘案件（`W盘`/`检材 5`/`文件 370`/`CHAN_MH_mobile.zip`/`LEUNG_YL_mobile.zip`/`伤人案`）。修复：`CASE_DIR` 支持 `SEEU_CASE_DIR`，`CASE_NAME_HINT` 按目录名推断；`treeRoot` 用 `/检材 \d+ · 文件 \d+/`、`evNames` 用「检材编号 + 常见检材扩展名」、`evRemark` 用「平台/类型/备注」等通用断言。
 - 后续可选优化：LIKE 短词在大库上的 45 s 仍是真实体验问题，可考虑 `limit` 提前终止（`... and (select 1) limit`）或对 2 字词给出「命中过多/请用 ≥3 字」提示。
+
+### 20.147 短关键词检索的早退优化（大库 2 字词 9 s → 0.5 s）
+
+- 问题：2 字关键词只能走 `like '%词%'`，大库上 `count(*)` 要扫完整张表（842k 记录实测 9.2 s），整次检索 45 s。
+- 做法：`search()` 的 LIKE 分支改成「只取 `limit+1` 行」——取不满说明已扫完，`total` 即精确命中数；取满则**不跑全表 count**，返回 `totalApprox:true` 与 `hint`，面板显示「引擎 like · ≥ 20 命中」并提示「用 ≥3 个字可走全文索引更快」，MCP `index_search` 同样显示「≥ N 命中，短词只显示前若干条」；`next` 在近似模式下允许继续翻页。
+- 实测（2.6 GB / 842,198 记录）：`加密` 45,000 ms → **483 ms**（≥20 命中）、`投资` → 538 ms、`Investors`（FTS）5 ms。`npm test` **231/231**。
