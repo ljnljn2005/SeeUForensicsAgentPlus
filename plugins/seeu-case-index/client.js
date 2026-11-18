@@ -1485,7 +1485,11 @@ window.__ModuleLoader__.load({
     }
 
     function Panel() {
-      const [dir, setDir] = useState(() => localStorage.getItem('seeu.indexDir') ?? '');
+      const [dir, setDir] = useState(() => localStorage.getItem('seeu.indexDir') ?? '')
+      const [buildConc, setBuildConc] = useState(() => {
+        const raw = Number(localStorage.getItem('seeu.buildConcurrency'))
+        return [3, 6, 8].includes(raw) ? raw : 3
+      });
       const [indexes, setIndexes] = useState([]);
       const [srcFilter, setSrcFilter] = useState('all');
       const [chain, setChain] = useState(null);
@@ -1711,7 +1715,7 @@ window.__ModuleLoader__.load({
         setBusy('build');
         setProgress({ phase: 'probe', percent: 0, message: '提交建库任务…' });
         try {
-          const { jobId } = await post('/build', { dir: target });
+          const { jobId } = await post('/build', { dir: target, concurrency: buildConc });
           const poll = async () => {
             const job = await api('/build', { job: jobId });
             setProgress(job);
@@ -2044,6 +2048,17 @@ window.__ModuleLoader__.load({
               onChange: (e) => setDir(e.target.value), spellCheck: false,
             }),
             actionButton('扫描已有索引', () => scan(dir.trim() || undefined), { disabled: busy === 'build' }),
+            h('select', {
+              value: String(buildConc),
+              title: '建库并发：并发越高越快，但对火眼后端压力也越大（大案件建议 6）',
+              'data-build-concurrency': String(buildConc),
+              onChange: (e) => {
+                const value = Number(e.target.value) === 8 ? 8 : Number(e.target.value) === 6 ? 6 : 3
+                setBuildConc(value)
+                localStorage.setItem('seeu.buildConcurrency', String(value))
+              },
+              style: { ...S.input, width: 96, flex: 'none' },
+            }, h('option', { value: '3' }, '并发 3'), h('option', { value: '6' }, '并发 6'), h('option', { value: '8' }, '并发 8')),
             actionButton(busy === 'build' ? '建库中…' : '建库 / 更新', startBuild, { primary: true, disabled: busy === 'build' }),
             actionButton('从 MYOS 导入…', () => setMyosOpen(true), { disabled: busy === 'build', title: '从超级取证大师（MYOS）的结果库导入为 SeeU 索引' })),
           progress ? (() => {
