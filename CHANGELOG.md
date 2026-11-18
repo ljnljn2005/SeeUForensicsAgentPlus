@@ -10,6 +10,12 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 
 - 更新日志从 `README.md` 迁出到本文件：README 只保留产品说明、快速开始与各功能章节，§2 末尾改为指向本文件；README 章节序号顺延为 14 链路体检 / 15 iOS 取证速查 / 16 题目实测答案 / 17 许可与来源。
 
+## v0.3.24（2026-11-18）
+
+- 修复链路体检【含镜像解析】按钮点击报 `ReferenceError: ix is not defined`（结果卡片在 `indexes.map` 之外，改为从 `chain.caseNumber/dbPath` 取目标）。
+- 面板 e2e（m2-ui-check）改为**案件无关**：动态选择检材下拉、通用检材文件名正则、长关键词允许 0 命中、来源筛选不依赖具体案件名；便于任意案件回归。
+- 打包验证：NSIS 320,090,795 B / portable 270,605,967 B / app.asar 566,610,247 B（32,988 entries）；目录版启动 9394 ms、portable 79315 ms；打包态 m2（记录筛选 45237→20452、实体分页、时间线筛选、索引来源筛选、链路体检 3 行 + 含镜像解析 4 行）、settings、plugins、skills、hero、mount 全部 `ok:true`。
+
 ## v0.3.23
 
 - 欢迎页新增「MCP：6 工具」chip：外壳 IPC `seeu:mcp:info` 返回 `mcpFacts()`（dev/打包两套路径、读 `server.mjs` 统计工具数），chip 绿点表示就绪、琥珀表示未就绪；点击打开设置窗口。

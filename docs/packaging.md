@@ -1150,3 +1150,12 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版 20,756 ms（首启杀毒扫描）、portable 42,463 ms。
 - 打包态：`hero-check --exe` → `ok:true`、`mcpOk:true`、`mcpText:"MCP：6 工具"`、`toolsOk:true`；`m2-ui-check` → `m2ok:true`、`idxChainSteps:3`、`errors:[]`。
 - 坑：asar 自检脚本里 `fs.readFileSync` 未导入（脚本只 import 了具名 `readFileSync`），改为直接调用。
+
+### v0.3.24 回归验证
+
+- 产物：`SeeUForensicsAgentPlus-0.3.24-x64.exe` 320,090,795 B（blockmap 333,349 B）、`-portable.exe` 270,605,967 B、`resources/app.asar` 566,610,247 B（32,988 entries）。
+- asar 自检：`.probe/asar-0324-check.mjs` `missing: []`、0 false（新增 `version0324`、`staleBuilding`（半成品可见）、`deepChain`（含镜像解析 + chain.caseNumber））。
+- 启动：目录版 `verify-launch --port 5412` → `ok:true, elapsedMs:9394`；portable `--port 5414` → `ok:true, elapsedMs:79315`。
+- 打包态 e2e（隔离 home，`SEEU_CASE_DIR=E:/forensics/honglian/作业_20261118081854I`，索引 45,237 条）：`m2-ui-check` `m2ok:true`（`recordsAfterCount:20452`、`entityPagingOk`、`timelineFiltersOk`、`idxChainSteps:3`、`idxChainDeepSteps:4`、`errors:[]`）；`settings-check`、`hero-check`、`plugins-check`、`skills-check`、`mount-check` 全部 `ok:true`。
+- 说明：`scripts/e2e/**` 按仓库策略只保留在本地，不进安装包（`.probe` 同样 gitignore）。
+
