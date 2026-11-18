@@ -114,6 +114,7 @@
 - 注册方式：`resources/forensics/cordis.patch.yml` 末尾一行 `- insert: [{ id: seeu-case-index, name: ../../plugins/seeu-case-index/index.js }]`。相对路径以 overlay 文件为基准，开发态解析到仓库根、打包态解析到 `app.asar` 根，两态同形。
 - 会话内查库：外壳把 `SEEU_INDEX_API=http://127.0.0.1:<p>/seeu-index` 放进 dsh 子进程环境；随包技能 `ges-case-index` 教模型用 `curl` 查库。技能根用 dsh 默认的 `<DSH_HOME>/skills`（启动时复制），不需要 customSkillDirs、也不需要生成 runtime patch。
 - 内置 MCP：`tools/seeu-mcp/server.mjs`（stdio JSON-RPC）把同一套 HTTP 接口包成 6 个只读工具（`index_list` / `evidence_list` / `index_search` / `index_tables` / `read_record` / `chain_check`），由 overlay 的全局 `seeu-mcp-tools` 行装配；服务端不读索引文件，只转发 `$SEEU_INDEX_API`。
+- 建库（`tools/ges-index/build.mjs`）：先 `ges glob` 枚举 `**/data.csv` 与 `**/chat.txt` 叶子，再逐叶 `ges read` 解析入库；半成品写 `<dir>/.seeu-index/case-index.db.building`，校验通过才原子改名成正式库，旧库留 `.bak`。**断点续跑守卫**：`--resume` 时若 `ingest_log` 里有不属于当前叶子集的已完成叶子（旧枚举，或案件仍在火眼解析导致叶子数变化）→ 立即 `E_STALE_BUILDING` 并提示 `--rebuild`，避免白跑到校验才失败；校验失败信息区分「失败叶子」与「artifact 残留」。
 - 案件概况注入：`plugins/seeu-case-index/index.js` 的 `briefText()` 生成 `<DSH_HOME>/AGENTS.md` 的标记区块（合并式写入，绝不覆盖用户内容）。
 
 ## 8. 本地模型的实现
