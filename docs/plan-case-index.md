@@ -2876,3 +2876,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 性能：建库时写 `meta.stats_json`（计数/实体类型/各检材行数）、`timeline_bucket`（天×检材×应用）、`facet_app/facet_category/facet_account`、`entity_group`（实体按 kind+value 聚合），并建 `record(ts/eid/eid,cat/app)`、`entity(kind,value_norm)` 索引；`statsOf/timeline/entity/facets` 优先预聚合，缺失回退实时 SQL。
 - 实测（同一 2.6 GB 库）：`statsOf` 35.6 s → 0.18 s、`timeline(day)` 31.8 s → 2 ms、`entity` 3.2 s → 27 ms、`facets` 2 ms、`records` 67 ms、`search` 84 ms；`npm test` 229/229。
 - 遗留：用该 2.6 GB 案件跑 `m2-ui-check` 仍有 `scanFoundCase/treeRoot/evNames/evRemark/searchOk/searchLongOk/recordsFilterOk/recordsAppFilterOk` 为 false（`entityPagingOk/timelineFiltersOk/entityEvSelectOk/idxChainSteps:3` 已通过），说明面板「扫描/检索/记录首屏」在大库上仍有性能或等待逻辑问题，下轮继续（怀疑扫描后的树/检索首次查询超时、或 UI 首屏串行等待 stats→tree→evidences）。
+
+### 20.146 大库面板首屏卡顿修复（挂载探测快失败 + 短词检索轮询）
+
+- 现象：2.6 GB 索引（842,198 记录）上 `m2-ui-check` 仍有多项失败，且这些失败指向真实体验问题。
+- 真因一：`/evidences` 里 `loadEvidenceMounts()` 会调 `ges status --json`，火眼未打开案件时最长等 20 s；实测该调用阻塞 **20,063 ms**，把 `/evidences` 拖住 → 面板检材下拉（记录/检索/实体筛选）长时间为空，`recordsFilterPick:no-option`。修复：挂载探测超时从 20 s 降到 **1.5 s**（`SEEU_MOUNT_TIMEOUT_MS` 可覆盖），成功缓存 5 s、失败缓存 60 s（`cachedOk`），失败返回空表不抛。实测同场景 1.89 s 返回。
+- 真因二：2 字关键词只能走 LIKE 全表扫描，大库上 `search('加密')` 实测 **45 s**（`Investors` 走 FTS 仅 73 ms），e2e 写死等 7 s 必然失败。修复：e2e 改成轮询（默认 90 s，`SEEU_SEARCH_WAIT_MS` 可覆盖）。
+- 真因三：`m2-ui-check` 仍写死旧 W 盘案件（`W盘`/`检材 5`/`文件 370`/`CHAN_MH_mobile.zip`/`LEUNG_YL_mobile.zip`/`伤人案`）。修复：`CASE_DIR` 支持 `SEEU_CASE_DIR`，`CASE_NAME_HINT` 按目录名推断；`treeRoot` 用 `/检材 \d+ · 文件 \d+/`、`evNames` 用「检材编号 + 常见检材扩展名」、`evRemark` 用「平台/类型/备注」等通用断言。
+- 后续可选优化：LIKE 短词在大库上的 45 s 仍是真实体验问题，可考虑 `limit` 提前终止（`... and (select 1) limit`）或对 2 字词给出「命中过多/请用 ≥3 字」提示。
