@@ -17,3 +17,11 @@ Thumbs.db
 /indexes/
 .dev/
 lovely-runs/
+
+# 自研工具与技能不公开（仅本地保留）
+/tools/
+/scripts/
+/tests/
+/resources/forensics/skills/
+/resources/forensics/skill-sets/
+/docs/screenshots/
