@@ -2868,3 +2868,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 面板：半成品行显示「⚠ 上次建库未完成 · 半成品 X MB · 重新建库会丢弃它」，点击行只把目录填入输入框（不打开库），且不提供「体检」；「建库 / 更新」默认 `rebuild: true`，会删掉 `.building` 重来。
 - 测试：`tests/stale-building.test.mjs` 2 例（只有 building → 列出且 `dbPath:null`；同时有正式库 → 只列正式库）；`npm test` 216/216。
 - 本地实测：`.dev/stale-case/案件丙/.seeu-index/case-index.db.building`（3 MB）→ `findIndexes` 返回 `building:true, sizeBytes:3145728`。
+
+### 20.145 大库（842k 记录 / 2.6 GB）性能治理与建库收尾工具
+
+- 背景：`2026美亚团队`（5 检材、980 叶子、13 GB 检材）建库两次失败：一次火眼案件服务中途断开（494 叶子 ConnectionError），一次 1 个叶子 `分区5/文件系统日志/data.csv` 单页读取超过火眼 10 s 超时。索引 842,198 记录 / 416,963 实体 / 2.65 GB。
+- 建库可靠性：`--leaf-timeout <秒>`（单叶超时）、`--allow-partial`（接受少量失败叶子，manifest `coverageOk:false` + 失败清单）、`--finalize`（不重抓，直接校验 `.building` 并原子替换）；`finalizeBuilding` 修 Windows `EBUSY`（先 `db.close()` 再 rename）；`staleResumeLeaves` 守卫旧叶子集合。
+- 性能：建库时写 `meta.stats_json`（计数/实体类型/各检材行数）、`timeline_bucket`（天×检材×应用）、`facet_app/facet_category/facet_account`、`entity_group`（实体按 kind+value 聚合），并建 `record(ts/eid/eid,cat/app)`、`entity(kind,value_norm)` 索引；`statsOf/timeline/entity/facets` 优先预聚合，缺失回退实时 SQL。
+- 实测（同一 2.6 GB 库）：`statsOf` 35.6 s → 0.18 s、`timeline(day)` 31.8 s → 2 ms、`entity` 3.2 s → 27 ms、`facets` 2 ms、`records` 67 ms、`search` 84 ms；`npm test` 229/229。
+- 遗留：用该 2.6 GB 案件跑 `m2-ui-check` 仍有 `scanFoundCase/treeRoot/evNames/evRemark/searchOk/searchLongOk/recordsFilterOk/recordsAppFilterOk` 为 false（`entityPagingOk/timelineFiltersOk/entityEvSelectOk/idxChainSteps:3` 已通过），说明面板「扫描/检索/记录首屏」在大库上仍有性能或等待逻辑问题，下轮继续（怀疑扫描后的树/检索首次查询超时、或 UI 首屏串行等待 stats→tree→evidences）。
