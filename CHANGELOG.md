@@ -4,6 +4,8 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 
 ## 未发布（文档整理）
 
+- 建库断点续跑更安全：半成品里存在「不属于当前叶子集」的已完成叶子时（旧枚举，或案件仍在火眼解析导致叶子数变化），立即 `E_STALE_BUILDING` 提示改用 `--rebuild`，不再白跑 10 分钟到校验才失败；校验失败信息也区分「失败叶子」与「artifact 残留」两类。新增 `staleResumeLeaves()` 纯函数与 3 例单测。
+
 - 「关于 SeeU」的纯整形逻辑抽到 `tools/app-info.mjs`（`buildAppInfo`/`formatAppInfoText`/`RELEASE_URL`），`src/app-info.ts` 只负责采集；新增 `tests/app-info.test.mjs` 3 例（默认值/文案/缺失 dsh），测试 220/220。
 
 - 建库中断的案子不再「消失」：扫描/列表会显示「⚠ 上次建库未完成 · 半成品 X MB」（只存在 `case-index.db.building` 的目录），点该行会把目录填进输入框，点「建库 / 更新」会重新建（默认 rebuild，自动丢弃半成品）。
