@@ -291,6 +291,9 @@ node scripts/ios-quick.mjs wechat  <Documents/<hash>>                 # 视频�
 **Q：建库中断了（火眼被关掉 / 断电 / 报 `E_BACKEND_LOST`）怎么办？**
 半成品会保留：面板里该案件会显示「⚠ 上次建库未完成 · 半成品 X MB」，选中它后点【继续上次建库】即可从已完成处续跑；不要点【建库 / 更新】（那会 `--rebuild` 丢弃半成品重来）。建库期间请保持火眼打开该案件。
 
+**Q：建库最后报「失败叶子 N 个」（个别大文件读超时）？**
+通常是超大 CSV（如分区文件系统日志）单页读取超过火眼 10 秒超时。可命令行收尾：`node tools/ges-index/cli.mjs build --case-dir <案件目录> --finalize --allow-partial`，会把已完成的 99% 原子替换为正式索引（manifest 标记 `coverageOk:false` 并列出失败叶子）。
+
 **Q：打包版首次启动特别慢？**
 首次要解包 + 杀毒扫描（20–40 秒），之后稳定在 5–8 秒（便携版每次解包约 40–60 秒，属正常）。
 
