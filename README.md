@@ -1,686 +1,309 @@
-# SeeUForensicsAgentPlus
+# SeeU 取证智能体增强版（SeeUForensicsAgentPlus）
 
-取证专用（DFIR）桌面版 —— 基于 [DeepSeek Harness](https://github.com/deepseek-ai)（`dsh`，MIT）官方运行时构建的 Electron 外壳，面向电子数据取证与事件响应场景：证据链优先、只读优先、默认关闭遥测。
+面向电子数据取证与事件响应（DFIR）的桌面取证助手：把火眼（GoldenEyes）、Lovely 系列 CLI、MYOS（超级取证大师）、星睿等工具串进一个会话式界面，让本地/内网大模型直接查案件、看检材、出引用。
 
-本仓库只包含 **外壳 + 取证配置层**，不复制官方 monorepo；`dsh` 运行时来自 npm 已发布的 `@deepseek-ai/dsh@0.2.2-rc.1`，随应用一起打包，开机即用、无需另装 Node。
+本页只讲**怎么用**。实现原理、目录结构、开发命令与打包说明见 [`docs/architecture.md`](docs/architecture.md) 和 [`docs/packaging.md`](docs/packaging.md)；版本变更见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 ---
 
-## 1. 它长什么样
+## 1. 安装与启动
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  SeeUForensicsAgentPlus（Electron 44.7.0）                   │
-│  ┌───────────────┐   spawn + 等就绪 URL   ┌───────────────┐  │
-│  │ 主进程 main.ts│ ─────────────────────► │ dsh Web 服务  │  │
-│  │ 窗口/托盘/菜单│ ◄──────────────────── ┌─┤ (web profile) │  │
-│  └───────┬───────┘    http://127.0.0.1:N │ └───────┬───────┘  │
-│          │ loadURL(带一次性 token)        │         │          │
-│          ▼                                 │  --patch 取证 overlay│
-│  ┌───────────────┐                         │  （resources/       │
-│  │ 窗口内 = dsh  │◄────────────────────────┘   forensics/）     │
-│  │ Web UI        │                                             │
-│  └───────────────┘                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+系统要求：Windows 10/11 x64。
 
-- **外壳职责**：窗口、托盘、中文菜单、单实例、权限收紧（全部拒绝）、外链走系统浏览器、加载页/故障页、优雅退出。
-- **技能上传（v0.2.0）**：菜单「技能 → 技能管理器」支持导入技能文件夹 / ZIP 包（SKILL.md + frontmatter 校验、ZIP 路径消毒、随包同名保护）、列出与卸载用户技能；写入 `<DSH_HOME>/skills/` 后由 dsh 的文件监听自动生效，新会话即可使用，无需重启。
-- **运行时职责**：agent 循环、模型接入、工具（文件/搜索/shell/技能/session 等）、会话存储、Web UI。
-- **视觉层**：`plugins/seeu-theme/` 是一个 dsh 客户端插件 + 宿主样式注入——取证深色主题（青蓝强调色、中文字体栈）、侧栏/欢迎页 SeeU 品牌、页面标题替换、欢迎页三步上手提示（选案件目录建库 → 直接提问 → 引用回查）与三个快捷入口（打开取证索引 / 本地模型设置 / 取证工作区）；同时关闭官方 brand 插件避免双份。
-- **取证职责**：`resources/forensics/cordis.patch.yml` 以 dsh 官方 patch-list 机制叠加在 `web` profile 之上——关闭遥测/产品分析行，注入中文取证 persona，并把会话 preset（`preset-standard`）改成**取证专用工具面**：保留官方 22 项里的 19 项（子代理 / 工作流 / 后台作业 / 定时任务 / 目标 / plan / todo 都可用），去掉 `tool-web`（取证会话不联网）、`tool-plugin-manager`（可联网安装/移除插件包）与 `tool-plugin-market`（插件市场），`tool-fs` 收成只读。详见 [docs/forensics-profile.md](docs/forensics-profile.md)。
+到 [Releases 页](https://github.com/ljnljn2005/SeeUForensicsAgentPlus/releases) 下载任一产物：
 
-**打包与打包态回归（第 28 轮）**：v0.3.9 已出 NSIS `281,886,671 B`、portable `236,647,317 B`、`app.asar` `426,530,364 B`（34,223 entries）；`.probe/asar-039-check.mjs` 全部检查通过（含 `tools/ges-index/extra-dirs.mjs`、`resources/forensics/skills/myos-import/SKILL.md`、MYOS 批量/`dbName`/根库、来源标签与筛选、`test:e2e:myos`）；目录版冷启动 **5076 ms**、portable 58.7 s；打包态 `m2-ui-check`（`m2ok:true`、`myosImportOk:true`）、`settings-check`（13 行外部工具路径、五项自检、思考流保存）、`plugins-check`（175 包、`activationFailures:[]`）、`skills-check`（6 个随包技能 + Qiko 43 个）、`hero-check`（本机工具 13/13、快捷入口齐全）、`mount-check`（inspect 165 ms / mount 310 ms）、真实 MYOS 导入（`test:e2e:myos`：`MApps` 10 行、`skipped:false`）全绿。
-
-## 2. 快速开始
-
-本机 **LovelyMem V3 / LovelySpark / LovelyCarve CLI** 已接入：会话按需加载对应技能，通过现有 shell 调用，
-完整输出落盘、模型只接收限长预览，无新增运行依赖；CLI 路径在「设置 → 本机取证工具路径」手动指定（不做自动发现）。详见 [CLI 接入说明](docs/lovely-cli.md)。
-
-```bash
-npm install        # 已配 .npmrc（npmmirror + electron 镜像），D 盘约需 1.1G
-npm start          # 构建 dist/ 并启动桌面版
-```
-
-首次启动会初始化 `%APPDATA%\SeeUForensicsAgentPlus\dsh-home`（与用户自己的 `~/.dsh` 完全隔离），随后窗口载入 dsh Web UI。
-
-其它命令：
-
-| 命令 | 说明 |
+| 产物 | 说明 |
 | --- | --- |
-| `npm run build` | esbuild 打包 `src/main.ts`、`src/preload.ts` → `dist/`，复制 `renderer/` |
-| `npm start` | build + `electron .` |
-| `npm run verify` | 无人工点击的启动验证：拉 Electron，经 CDP 确认窗口真的加载了 dsh Web UI |
-| `npm run check:overlay` | 离线校验取证 overlay（`--dump-config`），确认可解析、工具面符合设计；已挂到打包前置钩子 |
-| `npm run test:skill-upload` | 技能上传模块回归测试（22 条断言：真实技能夹/ZIP、一层包装目录、恶意 `..` 穿越 ZIP、随包同名保护、覆盖与卸载） |
-| `npm run package:dir` | 产出免安装目录版 `release/win-unpacked/`（用于快速验证） |
-| `npm run package:win` | 产出 NSIS 安装包 + portable exe（需签名时另配证书） |
+| `SeeUForensicsAgentPlus-<版本>-x64.exe` | NSIS 安装版，推荐 |
+| `SeeUForensicsAgentPlus-<版本>-x64-portable.exe` | 免安装便携版，双击即用 |
+| `*.exe.blockmap` | 增量更新用，手动安装不需要 |
 
-验证打包产物（把 `<exe>` 换成 `release/win-unpacked/SeeUForensicsAgentPlus.exe`）：
+首次启动会在 `%APPDATA%\SeeUForensicsAgentPlus` 初始化本地数据（与你的开发环境 `~/.dsh` 完全隔离），不需要另装 Node 或 dsh。
 
-```bash
-node scripts/verify-launch.mjs --exe <exe> --port 9333
-```
+升级时请**先完全退出旧版本**（关闭窗口只是隐藏到托盘，需要从托盘菜单退出），否则新版本可能连到旧实例或端口被占。
 
-通过时会打印 `{"ok": true, "url": "http://127.0.0.1:<port>/?token=...", "title": "SeeUForensicsAgentPlus"}`。
+启动后窗口就是 dsh Web UI，工具栏/侧栏是 SeeU 的品牌与取证功能；菜单栏可通过 `Alt` 唤出。
 
-本轮已验证产物（**v0.3.23**，Windows x64、Electron 44.7.0、dsh 0.2.2-rc.3、无签名）：
+## 2. 界面速览
 
-| 产物 | 大小 |
+- **欢迎页**：顶部一排快捷入口（打开取证索引 / 本地模型设置 / 取证工作区 / 镜像挂载 / 技能管理器），右侧芯片显示运行状态——本地模型（含 Spark 单机/双机与延迟）、本机工具 `13/13 就绪`、镜像挂载数、`MCP：6 工具`、最近案件；点芯片可直接打开对应设置。
+- **左侧栏**：会话列表、插件面板；底部「取证索引」图标打开案件索引面板，可与会话并排。
+- **会话区**：输入问题即可；模型会按预设加载对应技能（技能文件在侧栏「技能」里可查看），工具调用与思考过程都以卡片展示。
+- **菜单栏**（`Alt`）：
+  - 「设置 → 本地模型与工具路径…」`Ctrl+,`
+  - 「设置 → 镜像挂载…」`Ctrl+Shift+M`
+  - 「设置 → 技能管理器」`Ctrl+Shift+S`
+  - 「设置 → 本地模型状态… / 重新探测本地网关 / 打开配置文件目录 / 打开日志目录」
+  - 「文件 / 编辑 / 视图 / 工具 / 帮助」其余菜单为 dsh 原生功能。
+
+## 3. 三步开始
+
+1. **先把案件进索引**：火眼跑完检材解析后，打开左侧「取证索引」面板，粘贴火眼案件目录 → 点【建库 / 更新】（只写案件目录下的 `.seeu-index\`，不动火眼数据）→ 3–6 分钟后得到可检索的本地库。
+2. **开一个会话直接问**：选好会话预设（见第 7 节），像问同事一样提问，例如「本机有哪些检材」「CHAN_MH 是什么系统版本」「Investors 群里谁在聊转币」。
+3. **要证据就点引用**：命中结果、记录、实体都能展开到 `Goldeneyes://…` 句柄与可复制的 `ges read` 回查命令，写报告时直接粘贴。
+
+## 4. 案件索引面板
+
+### 4.1 打开
+
+- 左侧栏底部「取证索引」图标；
+- 或「设置」页 →「取证索引」一节。
+
+### 4.2 建库 / 更新
+
+- 填写火眼案件目录，点【建库 / 更新】；进度条显示 探测 → 枚举 → 抓取（i/N、百分比、已用/剩余时间）→ 校验 → 替换。
+- 可以中途取消；失败不会破坏旧库（校验通过才原子替换）。
+- 只写 `<案件目录>\.seeu-index\case-index.db` 与 `manifest.json`，火眼原始数据只读。
+
+### 4.3 扫描与来源
+
+- 面板打开会自动扫描上次的案件目录；也可手填目录点【扫描已有索引】。
+- 索引行左侧标签表示来源：**火眼建库**、**MYOS 导入**、**外部目录**；顶部 chip 可按来源筛选。
+- 外部目录索引行右侧有【移除】（只从扫描清单移除，不删文件）。
+- 面板下方显示「最近活动」：建库/MYOS 导入的时间、条数、用时；可按天条形筛选、按关键词搜索、单条移除。
+
+### 4.4 看数据
+
+- **树**：案件 → 检材（显示火眼里的检材名/平台/备注）→ 应用 → 账号 → 类别 → 文件 → 记录 → 引用；每层可输入关键词过滤当前层。
+- **检索**：回车即搜（≥3 字符走全文索引，1–2 字中文自动退化为模糊匹配）；命中显示「检材 · 应用 / 时间 / 片段」，可翻页；点结果看引用详情。
+- **筛选**：检材（下拉选名称）/ 应用 / 起止日期，可与关键词叠加。
+- **记录**：按检材/应用/类别/关键词/时间浏览原始行，带行数统计与翻页。
+- **实体**：手机号、邮箱、网址、IP、钱包等跨检材聚合，「跨 N 检材」直接可见，点行下钻。
+- **时间线**：按小时/天/月分桶，点柱条钻到该时段记录。
+- **表**：24 张结构化投影表（联系人、账号、消息、通话、短信、浏览搜索、Exif、应用、授权、蓝牙、流量、健康…）。
+
+### 4.5 导出与引用
+
+- 【复制案件概览】：Markdown 抬头（案件名/编号/目录/规模/数据时间范围 + 检材表），可用于交接与报告开头。
+- 【复制引用清单】：逐条 `Goldeneyes://` 句柄 + `ges read` 回查命令。
+- 【导出 CSV】：记录或表视图当前筛选结果整批落盘（UTF-8 BOM，Excel 直接开；可用 `SEEU_EXPORT_DIR` 改输出目录）。
+- 引用一律回到 `record.id` → `Goldeneyes://` 句柄，typed 表只是派生视图。
+
+### 4.6 跨案碰撞
+
+第 7 个标签「跨案」把多个案件索引汇总到中央库：
+
+- 同步：建库后自动同步；也可点【同步全部案件】；
+- 能看：跨案重合实体 Top、按实体值查各案提及（含 recordId、句柄、行号、检材、应用）、同哈希镜像出现在哪些案件。
+- 跨案结果是**线索级**信息，写报告时要落到各案自己的引用。
+
+### 4.7 会话自动带上的「案件概览」
+
+建库完成、扫描到案件或应用启动时，索引面板会把当前索引摘要写进本机 dsh 的 `AGENTS.md`（带专用标记区块，不覆盖你自己的内容），新会话会自动读入：模型一上来就知道本机有几个案件、时间范围、检材清单（`eid | 检材 | 名称 | 平台 | 记录数 | 原始文件 | 备注`）以及「不要猜 eid、不要全盘递归搜索、先索引后挂载」的规则。
+
+面板 KPI 下方有「会话语境」状态行与【刷新会话概览】按钮；索引重建或换库后会自动刷新。
+
+### 4.8 面板按钮一览
+
+| 按钮 | 作用 |
 | --- | --- |
-| `release/win-unpacked/SeeUForensicsAgentPlus.exe` | 246,329,856 B（目录版总计 1,262,683,204 B ≈ 1.18 GiB，含随包 dsh rc.3 运行时、插件与技能库） |
-| `release/win-unpacked/resources/app.asar` | 566,492,194 B（32,966 entries；含内置 MCP 服务端 `tools/seeu-mcp/server.mjs`（6 工具）与欢迎页 MCP chip） |
-| `release/SeeUForensicsAgentPlus-0.3.23-x64.exe`（NSIS 安装包） | 320,029,815 B（blockmap 332,612 B） |
-| `release/SeeUForensicsAgentPlus-0.3.23-x64-portable.exe` | 270,587,054 B |
+| 建库 / 更新 | 从火眼案件目录生成或重建索引 |
+| 扫描已有索引 | 扫描手填目录与默认目录下的 `.seeu-index` |
+| 检索 / 过滤 / 翻页 | 关键词 + 检材/应用/时间筛选 |
+| 引用 / 复制引用清单 / 导出 CSV | 取证据句柄与批量导出 |
+| 体检 | 一键检查「索引 → 检索 → 火眼挂载 → 镜像」链路（见第 10 节） |
+| 跨案 / 同步全部案件 | 多案汇总、重合实体与哈希 |
+| 复制案件概览 / 刷新会话概览 | 报告抬头与会话上下文同步 |
+| 最近活动 / 移除 | 建库与导入历史，单条可删 |
 
-实测冷启动到 dsh UI：目录版 **20.8 s 首次 / 42.5 s portable**（首启有杀毒扫描与解包，稳定后回到 5–8 s / ~53 s 量级）。
+## 5. 本地模型接入
 
-更细的打包说明见 `docs/packaging.md`。
+默认走官方 DeepSeek 账号；模型跑在本地或内网时，只要网关兼容 OpenAI（`POST /v1/chat/completions` 支持 SSE，`GET /v1/models`），在设置页填一个地址即可，不用改代码、不用重打包。
 
-验收清单（含各界面截图、动手步骤、本地模型联调需要提供的信息）见 [`docs/acceptance.md`](docs/acceptance.md)；截图可用 `npm run test:e2e:shots` 重新生成。
+### 5.1 配置
 
-> 版本更新日志见 [CHANGELOG.md](CHANGELOG.md)。
+菜单「设置 → 本地模型与工具路径…」（`Ctrl+,`）打开独立窗口：
 
-## 3. 目录结构
+1. 填 **网关地址**（如 `http://127.0.0.1:8000/v1`）、**API Key**（本地网关通常随意填非空值）；
+2. 【从网关拉取模型列表】自动填模型 id；若网关自报上下文窗口，会顺手填好；
+3. 选 **窗口档位** 或 **本机部署预设**（见下）；
+4. 【测试连接与能力自检】确认网关、对话、流式、思考流、工具调用五项都绿；
+5. 【保存并重启】后，模型选择器里即可选本地模型。
 
-```
-.
-├─ src/
-│  ├─ main.ts          # 主进程：窗口/托盘/菜单/权限/加载页与故障页/IPC/退出编排
-│  ├─ host.ts          # dsh 子进程生命周期：spawn、解析就绪 URL、日志、停止、指纹回退
-│  ├─ paths.ts         # 开发态/打包态统一路径（userData、工作区、日志、overlay、图标）
-│  ├─ preload.ts       # contextBridge 暴露最小只读 API：window.seeu
-│  └─ brand.ts         # 产品名、appId、配色、工作区目录名、桌面版标记环境变量
-├─ renderer/
-│  ├─ loading.html     # 品牌化加载页（运行时状态实时更新）
-│  └─ error.html       # 故障页：错误摘要 + 诊断 + 重试/打开日志/打开工作区/退出
-├─ resources/forensics/
-│  ├─ cordis.patch.yml # 取证 overlay（核心配置产物）
-│  ├─ README.md        # 逐行改动说明与账号链路取舍
-│  └─ skills/          # 3 个取证技能包（默认未接入，见 docs）
-├─ build/              # 图标（icon.ico / tray.ico / icon.png）与生成脚本
-├─ scripts/
-│  ├─ build.mjs        # esbuild 构建
-│  ├─ check-overlay.mjs# 打包前 overlay 校验（--dump-config，防止把坏配置打进 asar）
-│  ├─ verify-launch.mjs# CDP 启动验证（开发态 / 打包产物通用）
-│  └─ kill-app.mjs     # 清理残留实例（打包/验证前先跑，避免单实例锁导致 exit 0）
-├─ docs/
-│  ├─ forensics-profile.md  # overlay 机制、验证命令与实测证据、扩展方式、局限
-│  ├─ plan-case-index.md    # 火眼全解析结果入库 + dsh 只查库 的实施计划与实测
-│  └─ packaging.md          # 打包说明
-├─ tools/ges-index/    # 火眼案件「全解析结果」→ 本地 SQLite 索引（建库 + 树状查询）
-├─ electron-builder.yml
-└─ package.json
-```
+### 5.2 本机部署预设
 
-## 4. 运行时位置
+| 预设 | 模型 | 上下文 | 输出 | 超时 | 重试 | 工具集 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Spark 单机 · qwen3.8-flash-next | `qwen3.8-flash-next` | 262144 | 8192 | 900 s | 3 | 精简（约 10 个工具） |
+| Spark 双机 · dsv4.1-flash | `dsv4.1-flash` | 262144 | 8192 | 900 s | 2 | 完整取证预设 |
 
-| 内容 | 路径 |
-| --- | --- |
-| 用户数据 / dsh HOME | `%APPDATA%\SeeUForensicsAgentPlus\dsh-home`（`SEEU_DSH_HOME` 可覆盖） |
-| 取证工作区（dsh 子进程 cwd） | `%USERPROFILE%\Documents\SeeUForensicsWorkspace`（`SEEU_WORKSPACE` 可覆盖） |
-| 日志 | `%APPDATA%\SeeUForensicsAgentPlus\logs\shell.log`、`dsh-host-<日期>.log` |
-| 取证 overlay | `<app>/resources/forensics/cordis.patch.yml`（`SEEU_FORENSICS_PATCH` 可覆盖） |
+网关地址与 Key 仍需自己填；模型 id 与网关不一致时点【从网关拉取模型列表】覆盖。
 
-启动参数对排障有价值：`shell.log` 记录外壳事件与路径；`dsh-host-*.log` 是 dsh 子进程的完整 stdout/stderr（含拼装后的命令行、profile 解析告警、崩溃栈）。故障页上的「打开日志」直接打开该目录。
+### 5.3 常用选项
 
-## 5. 设计要点与约束
+- **窗口档位**：32k 小窗口 / 128k 个人赛 / 256k 团体赛，一键填上下文与输出上限。
+- **精简工具集**（默认开）：工具描述是每轮固定开销，精简后约 12 个工具，省约 8k tokens；需要子代理/工作流时在会话里切回「取证分析（Forensics）」。
+- **流式 token 用量**：勾选后会话里显示用量；老网关不支持可能返回 400，默认关闭。
+- **思考流格式**：`auto` 交给运行时；Spark 单机预设自动选 `qwen-chat-template` + `{"enable_thinking": true}`，双机预设选 `deepseek`。
+- **超时与重试**（高级折叠区）：请求超时、流式空闲超时、失败重试次数、标题生成上限。
+- **预热模型**：给网关发一次最小请求，把权重先加载进显存，避免会话第一句等冷启动。
+- **复制诊断信息**：当前配置 + 探测结果 + 五项自检结果，排障时直接粘贴。
 
-1. **Electron 必须精确 44.7.0。** dsh 的 `node-addon-require-builtin` 只认有限几个 Electron 的 V8 运行时指纹（43.0.0 / 44.0.0 / 44.7.0 / 45.0.0-alpha.6）。用 44.11.0 会得到：
-   `unsupported Electron runtime fingerprint: Node 24.22.2, V8 15.2.124.45-electron.0`。
-   因此 `package.json` 里 `electron` 是**无 `^` 的精确版本**，请勿随手升级。
-2. **子进程用 Electron 自带的 Node 模式跑 dsh**（`ELECTRON_RUN_AS_NODE=1` + `--expose-internals`），所以最终用户不需要另装 Node。`host.ts` 额外做了回退：若指纹不被支持，自动改用系统 `node`（`SEEU_NODE_BINARY` 可指定）重试一次。
-3. **launcher 选项要配显式 `--profile`。** `dsh web ...` 这种缩写只在 argv[0] 不以 `-` 开头时才会被展开成 `--profile web`；因此带 `--patch` 时必须写
-   `dsh --patch <overlay> --profile web --host 127.0.0.1 --port 0 --no-open`（`--host/--port/--no-open` 透传给 web app），否则会报 `error: --profile <name> is required`。
-4. **端口与 token 由 dsh 自己决定**：`--port 0` 让 OS 选空闲端口，就绪行 `dsh web: http://127.0.0.1:<port>/?token=<token>` 从 stdout 解析；窗口只加载这个带 token 的 URL。不监听外网（`--host 127.0.0.1`）。
-5. **外壳不注入业务代码**：窗口里就是官方 dsh Web UI。取证定制落在 overlay（prompt/preset/遥测开关）与外壳层（品牌、工作区、日志、权限），因此可以跟随官方运行时升级。
-6. **peer 依赖必须显式写进 `dependencies`。** dsh 用 cordis DI，很多 `@deepseek-ai/dsh-*` 只以 `peerDependencies` 声明（如 `@deepseek-ai/cordis-plugin-group`）。electron-builder 只沿 `dependencies`/`optionalDependencies` 收集 node_modules，**忽略 peer**，所以开发态能跑、打包版却报
-   `ERR_MODULE_NOT_FOUND: Cannot find package '@deepseek-ai/cordis-plugin-group'`。本项目把 21 个 peer-only 包（精确版本）写进了根 `package.json`；升级 `@deepseek-ai/dsh` 后必须重跑 `docs/packaging.md` §5.1 的 `330/330` 自检，按缺失清单补齐。
-7. **取证工具面只做最小改动。** 工具描述与参数 schema 每轮请求都进 system prompt，是固定开销，但精简不能拿能力换：`preset-standard.plugins` 保留官方 22 项里的 19 项（子代理 / 工作流 / 后台作业 / 定时任务 / 目标 / plan / todo 全部可用），去掉 `tool-web`（不联网）、`tool-plugin-manager`（联网装插件包）、`tool-plugin-market`（插件市场），并把 `tool-fs` 收成只读（`write/edit/applyPatch: false`，写文件走命令行留痕）。估算省下约 5–6k 字符 ≈ 1.5k token / 次请求（估算，非精确计量）。清单与逐项调整方法见 `docs/forensics-profile.md` §1.1。
+### 5.4 注意
 
-## 6. 退出与容错
+- 不要在 dsh 自带的设置页里改模型相关配置（会被外壳的 patch 覆盖），统一在 SeeU 设置页改。
+- 模型选择器里「设为默认」在这里不生效，默认模型请用设置页的「保存并重启」（等价于配置里的 `useAsDefault`）。
+- 网关必须支持 SSE 流式；首 token 很慢的本地模型把超时调到 900 秒。
+- 启动时会探测一次网关（约 4 秒）：失败不阻塞启动，加载页会提示「本地模型网关暂未连通，仍可用官方模型」。
 
-- 关闭窗口 = 隐藏到托盘；真正退出走托盘菜单 / 文件菜单 / `Alt+F4`（`before-quit` → `requestQuit()`）。
-- 退出时先向 dsh 子进程发 SIGTERM，5s 内未退则 SIGKILL，保证不残留。
-- dsh 未就绪或意外退出 → 故障页展示原因与诊断（`host.ts` 保留最近 64KB stderr），可一键「重试」或打开日志。
-- 权限请求全部拒绝；`window.open`/导航到外部 origin 一律交给系统浏览器。
+## 6. 镜像挂载（取证镜像 → 只读盘符）
 
-## 7. 已知限制 / 后续 TODO
+`.E01` / `.dd` / `.raw` / `.vmdk` / `.vhdx` / `.qcow2` / `.iso` 等镜像不能直接浏览，用本功能挂成只读盘符给会话读。
 
-- **账号登录**：沿用官方账号链路（未在 overlay 中关闭），首次使用需在 Web UI 内登录；离线/内网环境需另行配置模型接入。
-- **技能包默认未接入**：`resources/forensics/skills/*` 因 dsh 要求绝对路径而未写入 overlay，接入方式见 `docs/forensics-profile.md` 第 4 节（推荐启动前复制到 `$DSH_HOME/skills/`）。
-- **品牌文案**：官方 brand 插件（`ui-brand-official`）已在 overlay 里 `disabled: true`，改由 `plugins/seeu-theme/` 注册侧栏与欢迎页品牌（「SeeU 取证」+ 盾牌/放大镜图标），并在客户端加载后用 MutationObserver 把页面 `document.title` 改成「SeeU 取证智能体增强版」。仍不可控的只有：首屏 HTML 里的静态 `<title>`（客户端 bundle 加载前短暂显示）、favicon、以及官方会话/设置页内的文案（同 locale 二次注册会抛错，不能覆盖）。外层窗口/任务栏标题由 `page-title-updated` 拦截，始终是 SeeUForensicsAgentPlus。
-- **打包体积**：asar 约 168MB（含完整 dsh 运行时与原生依赖）；后续可按需裁剪 test/example 文件与未用到的本地组件（libreoffice/sherpa 等）。
-- **更新通道**：未接入，`electron-builder.yml` 里 `publish: null`；要接官方 nightly 通道需另配 feed 与签名（见 `docs/packaging.md`）。
-
-## 8. 案件索引面板（dsh 客户端插件）
-
-火眼（GoldenEyes/GES）本身会产出「全解析结果」（`/case/检材分析数据/**` 下的 `data.csv` / `chat.txt`）。
-本工程把「建库 + 手工检索」做成了一个 **dsh 客户端插件**：在 dsh Web UI 里点按钮建库，再用树状导航 + 关键词检索翻库；
-后续 dsh 会话也只查这个库，不再调用 `ges.exe`。
-
-### 8.1 在哪里
-
-启动桌面版后，dsh Web UI 里有两处入口（同一个面板）：
-
-- **左侧栏底部的「取证索引」图标**（`sidebar.panellist`）——点开就是检索面板，可与会话并排；
-- **设置页 →「取证索引」一节**（`settings.section`）。
-
-### 8.2 怎么用
-
-**首次打开**（一个索引库都没有）时，面板顶部会显示「三步开始」引导：
-先在火眼跑完检材解析并记下案件目录 → 粘进输入框点【建库 / 更新】（约 3–5 分钟，只写 `.seeu-index`）→ 用 树 / 检索 / 记录 / 实体 / 时间线 / 表 查看并用「引用」回查。
-`npm run test:e2e:panel-empty` 在空目录场景验证这张引导卡。
-若打开的是旧版本建的库（`schema_version` 与当前工具不一致），KPI 下方会显示黄色提示「建议点【建库 / 更新】重建」——旧库可能缺字段或查不到新类别。
-
-1. **建库 / 更新**：填案件目录（火眼案件目录，`case-index.db` 会写进其下的 `.seeu-index\`），点【建库 / 更新】。
-   进度条实时显示 探测 → 枚举 → 抓取 i/N（百分比、已用时间、预计剩余）→ 校验 → 替换；可取消，失败不会破坏旧库。
-   校验（`integrity_check` + 覆盖率 + 基址率）通过后才原子替换，并写 `manifest.json`（指纹/统计/耗时/失败清单）。
-2. **扫描已有索引**：面板打开时自动扫描上次用的案件目录（`localStorage.seeu.indexDir`）以及 dsh 工作目录下的 `indexes/`；
-   也可手填目录再点【扫描已有索引】。
-3. **树状导航**：案件 → 检材 N（**带火眼里的检材名称 / 平台 / 备注**）→ 应用 → 账号 → 类别 → 文件 → 记录 → 引用，每层只显示摘要与计数，逐层点开。
-   检材名称来自火眼案件配置 `<案件目录>\<案件名>.gec`（SQLite）的 `evidence` 表，因此界面上叫什么、面板和会话里就叫什么；
-4. **关键词检索**：输入后回车（≥3 字符走 FTS5 trigram，1–2 字中文自动退回 `LIKE`），命中行显示 `检材·应用 / 时间 / 片段`；
-   结果头部显示「共 N 条 · 第 a–b 条」，超过 20 条时可点【上一页】【下一页】翻页；
-   命中多于 20 条时结果区多一个【导出全部 N 条】按钮（翻页取满再逐条回查句柄，上限 200 条），适合一次性把整批命中做进报告；
-   点结果可看引用详情（`Goldeneyes://…` 句柄 + 可复制的 `ges read` 核验命令）。
-   下方筛选行支持**检材（下拉选检材名）/ 应用 / 起止日期**（后端原生 `eid/app/from/to`，可与关键词叠加）；结果区的【复制引用清单】把当前命中导出成
-   Markdown 引用清单（检材名 · 应用 · 时间 · 行号 · `Goldeneyes://` 句柄 · 回查命令 · 摘要），可直接粘进报告。
-   结果区另有【导出 CSV】：把当前关键词与筛选命中的记录整批落成 CSV（检材名/应用/账号/类别/时间/行号/摘要，UTF-8 BOM 兼容 Excel），适合丢进表格里排序统计。
-5. **记录 / 实体 / 时间线 / 表**（M2，v0.1.6 起）：
-   - **记录**：按检材（下拉选检材名）/ 应用 / 类别 / 关键词 / 起止日期过滤浏览原始行（后端原生 `eid/app/category/q/from/to`，可与时间线钻取叠加）；结果行显示「检材名 · 应用」而不是只有 eid，悬停可看检材号；带行数统计、翻页、每条可回查引用；
-   - **实体**：手机号/邮箱/网址/IP/钱包/身份证/车牌/银行卡跨检材聚合（`跨 N 检材` 一目了然），点一行下钻到提及记录；
-   - **时间线**：按小时/天/月分桶，看行为节奏；点柱条直接钻到该时段记录；
-   - **表**：24 张 typed 投影表（联系人、账号、消息、通话、短信、浏览搜索、Exif、应用、授权、蓝牙、网络流量、健康指标…），横向滚动看全部列。
-   - **导出**：KPI 条下方有【复制案件概览】（Markdown 抬头：案件名/编号/目录/索引库/生成时间/规模 + 检材表：编号·名称·持有人·平台·记录数·备注，适合研判报告与交接）；
-     记录视图与表视图都有【复制本页引用清单】（逐条回查 `Goldeneyes://` 句柄 + `ges read` 回查命令，Markdown 可直接粘进报告）；
-     实体视图有【复制实体清单】（`[kind] 值 — 次数 · 检材`，跨检材行高亮）。`npm run test:e2e:export` 用系统剪贴板读回校验（含案件概览）。
-    记录视图与表视图另有【导出 CSV】（v0.2.7）：把当前筛选的整批记录/整张 typed 表写成 CSV 落盘（记录默认前 20000 行，Excel 直接开；`SEEU_EXPORT_DIR` 可改目录），e2e 会读回文件校验 BOM/表头/行数。
-   引用一律回 `record.id` → `Goldeneyes://` 句柄，typed 表只是派生视图。
-
-> **M2 typed 层（v0.1.6）**：把火眼全解析结果按**真实表头签名**投影成 24 张结构化表（不按 app/category 硬编码），
-> 本案实测 370 叶 / 22,777 记录中 21,123 条进入 typed 表（92.7%；CSV 记录 99.7%），并生成 22,772 条 `citation`。
-> 详情见 [docs/plan-case-index.md §17](docs/plan-case-index.md)。
-
-### 8.3 它是怎么接进去的
-
-- 插件源码：`plugins/seeu-case-index/`（宿主 `index.js` + 客户端 `client.js` + `package.json`），**不需要 pnpm 安装**。
-- 宿主端 `ctx.inject(['webServer'], …)` + `webServer.register({ kind:'prefix', path:'/seeu-index' })` 暴露本地 HTTP 接口：
-  `/list`（扫描已有索引）、`/build`（异步建库 + 轮询进度）、`/tree`、`/search`、`/cite`、`/stats`、`/verify`。
-  路由只接受 `.seeu-index` 目录下的 `.db`（防任意路径读取），只监听 127.0.0.1。
-- 客户端 `client.js` 用 `window.__ModuleLoader__.load({ id: '@seeu/case-index', factory })` 包装，只依赖白名单内的 `react`，
-  注册 `settings.section` / `sidebar.panellist` / `main` 三处槽位。
-- 注册方式：`resources/forensics/cordis.patch.yml` 末尾一行 `- insert: [{ id: seeu-case-index, name: ../../plugins/seeu-case-index/index.js }]`。
-  相对路径以 overlay 文件为基准（`resources/forensics/` = 应用根）：开发态解析到仓库根，打包态解析到 `app.asar` 根，两态同形。
-- 打包：`electron-builder.yml` 的 `files` 白名单含 `plugins/**` 与 `tools/ges-index/**`，二者都进 `app.asar`，可被 dsh 直接 ESM import。
-
-### 8.4 命令行等价操作（`tools/ges-index`）
-
-面板背后是同一套模块，命令行也能跑（便于批处理 / 排障）：
-
-```bash
-npm run index:build  -- --case-dir "E:\\forensics\\W盘_2919d298-…"   # 建库（本案 370 叶约 4–6 分钟，DB 约 53 MiB）
-npm run index:list   -- "E:\\forensics"                             # 扫描某个父目录下所有案件索引
-npm run index:tree   -- --db "<案件目录>\\.seeu-index\\case-index.db" "ev:3"
-npm run index:search -- --db "…\\case-index.db" -q 加密
-npm run index:verify -- --db "…\\case-index.db" --sample 20          # 随机回火眼核对正文与基址
-```
-
-- 检材清单：`node tools/ges-index/cli.mjs ev --db "…\case-index.db"` → `{evidences:[{eid,name,holder,platform,remark,...}]}`；
-  同 `npm run index:ev -- --db "…"`（会话里对应 `GET $SEEU_INDEX_API/evidences`）。
-- 应用/类别选项：`GET $SEEU_INDEX_API/facets?db=…` → `{apps:[{app,n}],categories:[{category,n}],accounts:[{account,n}]}`（面板「应用」「类别」下拉与检索筛选就用它）。
-- 记录 CSV：`GET $SEEU_INDEX_API/export/records.csv?db=…&eid=&app=&category=&from=&to=&q=&max=20000` → `text/csv`（UTF-8 BOM + CRLF；响应头 `x-seeu-rows/x-seeu-total/x-seeu-truncated`）。
-- 表 CSV：`GET $SEEU_INDEX_API/export/table.csv?db=…&name=联系人&q=&eid=&max=20000` → `text/csv`（表头即 typed 表列：`id,record_id,eid,app,account,subcat,…`）。
-- 只读火眼：仅调用 `case ls / case open / status / glob / read`；唯一写入是 `<案件目录>\.seeu-index\`。
-- 本案实测：370/370 叶、22,777 条记录、1,594 条消息、8,185 个实体、0 失败、建库 242–329 s、引用回查 20/20 一致。
-- 设计、schema、里程碑与实测明细见 `docs/plan-case-index.md`；工具用法见 `tools/ges-index/README.md`。
-- 已知限制：建库需要本机有火眼（`ges.exe`，可用 `SEEU_GES_EXE` 指定）且案件已打开；会话内自动查库（M3 技能）尚未接入，当前先用面板检索。
-
-### 8.5 会话内查库（M3，无需生成 runtime patch）
-
-面板是给人用的；**会话里的模型也能直接查同一个库**，靠的是三件事：
-
-1. **外壳先挑好端口再启动 dsh**：过去用 `--port 0` 让 dsh 自己选端口，外壳拿不到端口号，也就没法告诉后面启动的工具。
-   现在外壳用 `node:net` 先探一个空闲端口，再 `--port <p>` 传给 dsh，同时把
-   `SEEU_INDEX_API=http://127.0.0.1:<p>/seeu-index` 放进 dsh 子进程的环境变量（bash / pwsh 工具会继承）。
-2. **技能装进 dsh 的默认技能根**：启动时外壳把随包的 `resources/forensics/skills/**` 复制到
-   `%APPDATA%\SeeUForensicsAgentPlus\dsh-home\skills\`（带 `version:文件名:大小` 指纹，内容没变就跳过）。
-   这个目录本来就是 dsh 的默认发现根（`user-dsh`，见 `dsh-skill-filesystem` 的 `roots()`），因此**不需要 customSkillDirs，也不需要外壳生成 runtime patch**。
-3. **`ges-case-index` 技能**（约 90 行）教模型用 `curl -G "$SEEU_INDEX_API/tree|search|cite|stats|verify" --data-urlencode "db=$DB"` 查库，
-   并约定：先树后搜、`truncated` 用 `next` 翻页、`citable=0` 的内容不得当证据引用、库太旧看 `builtAt` 提醒更新。
-
-为什么不走「外壳生成带绝对路径的 patch」：`customSkillDirs` 里的相对路径是相对 **dsh 子进程的 cwd（工作区）** 解析的
-（`dsh-skill-filesystem/lib/index.js:78` 的 `resolve(root)`），而绝对路径在「源码运行 / 安装目录 / 便携版 %TEMP% 解包」三种形态下都不同，
-patch 又必须在启动前静态写好 —— 所以任何写死绝对路径的方案都会在另一种形态下失效。默认技能根 + 固定端口这条路没有这个耦合。
-
-面板里选过的案件目录会写进 `dsh-home\index-state.json`，外壳下次启动自动把它拼进 `SEEU_INDEX_SEARCH_DIRS`，
-所以**第二次开应用就能直接看到上次的库**，不用再选目录。
-
-### 8.6 跨案碰撞（M5，v0.1.7 起）
-
-面板第 7 个标签「跨案」，把多个案件的索引库汇总到一个**中央库**：
-
-- 位置：`<dsh 工作目录>\indexes\crosscase.db`（外壳注入 `SEEU_CROSS_DB`，可用环境变量覆盖）；
-- 同步：每建好一个案件库会自动同步该案；也可以点【同步全部案件】重新扫描 `SEEU_INDEX_SEARCH_DIRS` 下的所有库；
-- 能看什么：跨案重合实体 Top（同一手机号 / 邮箱 / URL 出现在 ≥2 个案件）、按实体值查询各案的提及（含 `recordId`、`Goldeneyes://` 句柄、行号、所在检材与应用）；同哈希镜像（`sha256`）能查出现在哪些案件；
-- 接口：`GET /seeu-index/cross/{list,entity,top,files,stats}`、`POST /seeu-index/cross/sync`（都不需要 `db` 参数）；CLI 等价命令：
-
-```bash
-npm run index:xcase:sync    # 扫描默认目录并同步
-npm run index:xcase:stats   # 案件数 / 实体数 / 跨案重合数
-npm run index:xcase:top     # 跨 >=2 案的重合实体
-npm run index:xcase:list    # 已同步案件清单
-node tools/ges-index/cli.mjs xcase entity --value 85254877240
-```
-
-注意：跨案结果是**线索级**信息，不是证据引用；写报告时要落到各案自己的 `base_handle`（面板里点提及行可直接取该案引用）。同步语义与排障见 `docs/plan-case-index.md` §18（按案删了重写、不自动清理已移除的案件、SQLITE_BUSY 等待 1–2 秒重试）。
-
-### 8.7 会话自动带上的「案件概览」（本地模型尤其需要）
-
-小模型（7B/14B）经常在第一次回答前「不知道分析哪个检材」，要么乱猜 eid，要么反复调 `/evidences` 浪费上下文。为此索引插件在**建库完成、扫描到案件、应用启动**时，把当前所有索引库的摘要写进 dsh 的用户级指令文件 `<DSH_HOME>/AGENTS.md`（带 `<!-- seeu-case-brief` 标记的区块），dsh 的 `agent-instructions` 每个会话都会自动读入——**跟会话工作区在哪无关**，所以本地模型一上来就知道：
-
-- 本机有几个案件、每个案件的数据时间范围、记录/实体规模；
-- 面板 KPI 直接显示当前案件的数据时间范围（`2016-12-11 ~ 2025-05-16` 这种），不用再翻树根；
-- 树视图每层上方有「过滤本层节点」输入框：一个分类里几百个文件时，输入应用名/分类名/文件名片段就能筛出来，右侧显示「显示 12/201」，清空即恢复；
-- 「复制案件概览」导出的 Markdown 现在带「数据时间范围」一行，报告抬头不用手抄。
-- 检材表：`eid | 检材 | 名称 | 平台 | 记录数`（就是火眼里设置的检材名）；
-- 查询入口 `$SEEU_INDEX_API`，以及「用户说检材名时按表对应 eid，不要猜」的规则。
-
-写入是**合并式**的：只替换自己的标记区块，绝不覆盖用户手写的 `AGENTS.md`；没有 `DSH_HOME` 时退回写到 `<工作区>/SEEU-CASE-BRIEF.md`（overlay 已把该文件名加进 `instructionFileCandidates`）。
-
-实测（`npm run test:e2e:tools`，mock 网关检查请求里的 messages）：`briefSeen: true`，真实案件（W盘）生成的区块约 700 字符，含 5 个检材的名称/平台/记录数。索引重建或换库后区块会自动刷新，不需要手工维护。
-
-**面板里能看见**：KPI 下方一行「● 会话语境：已注入 N 个案件概览（含本库/不含本库） · HH:MM:SS · 新会话会自动带上检材清单」，旁边【刷新会话概览】按钮可立即重写 `AGENTS.md`（点完显示「已刷新」）。绿点=注入成功、黄点=尚未注入/读取失败、红点=注入失败。对应接口 `GET /seeu-index/brief?db=…`（最近一次注入状态 + 当前库是否在列表里）与 `POST /seeu-index/brief`。
-
-## 9. 本地模型（OpenAI 兼容网关）接入
-
-默认走官方 DeepSeek 账号链路；如果模型跑在本地/内网，只要网关兼容 **OpenAI**（`POST /v1/chat/completions` 支持 SSE 流式、`GET /v1/models`），改一个 JSON 就能接入——不用改代码、不用重打包。
-
-### 9.1 配置
-
-安装版：把 `resources/forensics/local-model.example.json` 复制到 `%APPDATA%\SeeUForensicsAgentPlus\local-model.json`，改 `baseURL` 与 `models[].id`：
-
-```json
-{
-  "enabled": true,
-  "route": "local-openai",
-  "displayName": "本地模型（OpenAI 兼容网关）",
-  "baseURL": "http://127.0.0.1:8000/v1",
-  "apiKey": "local",
-  "models": [{ "id": "qwen2.5-32b-instruct", "name": "Qwen2.5 32B（本地）" }],
-  "contextWindow": 131072,
-  "maxTokens": 8192,
-  "useAsDefault": true
-}
-```
-
-开发预览：`npm run dev:web -- --workspace "<案件目录>" --local-model resources/forensics/local-model.example.json`
-临时覆盖：环境变量 `SEEU_LOCAL_MODEL_JSON='<同一段 JSON>'`（优先级最高，自动化测试用这个）。
-
-**设置界面（推荐）**：菜单 `设置 → 本地模型与工具路径…`（`Ctrl+,`，托盘菜单里也有）打开一个独立窗口，可以直接填网关地址、模型、上下文窗口，并且：
-
-- 【测试连接与能力自检】由主进程直接请求网关（走 Electron `net`，不受页面 CORS 限制），一次跑三项并逐项给结果：① `GET <baseURL>/models`（地址/鉴权，列出模型 id）；② 一次非流式对话（`max_tokens: 16`，确认模型真能出字）；③ 一次带 `ping_tool` 函数定义的请求（确认网关/模型支持 OpenAI 工具调用——**这项不过，模型在本产品里只能聊天，不能查案件库、不能用技能**）。每项都带耗时；不支持工具的模型会明确提示「只能聊天」；
-- 【从网关拉取模型列表】读一次 `GET <baseURL>/models`，把拿到的模型 id 直接填进「模型列表」（已填过「id | 显示名」的显示名会保留）——不用手抄模型名，也避免 id 抄错导致 `model not found`；如果网关自报上下文窗口（vLLM 的 `max_model_len`、llama.cpp/LM Studio 的 `n_ctx` / `context_length`），会顺手把它填进「上下文窗口」，并在状态行提示「已按网关自报填上下文窗口 N」；多个模型自报值不一致时只提示、不自动选；
-- 【模型 id 检查】启动探测（以及【重新探测网关】）会把「配置里写的模型」和网关 `/models` 返回的列表比对：配置了网关没有的模型时，探测行变成黄色提示「配置的模型 X 不在网关列表」，并写进 shell 日志——通常意味着模型改名了或 id 抄错，这种配置在会话里只表现为请求失败，没有这条提示很难排查；
-- 【窗口档位】32k 小窗口 / 128k 个人赛 / 256k 团体赛 三个按钮一键填「上下文窗口 + 输出上限」（32k→32768/4096、128k→131072/8192、256k→262144/8192），不用记数字，也不会把模型名里的数字误当窗口；
-
-- 【本机部署预设】两个按钮一键填「模型 + 窗口 + 超时/重试 + 精简集/用量/标题」：
-  - **Spark 单机 · qwen3.8-flash-next**：模型 `qwen3.8-flash-next`、窗口 131072、输出 8192、超时 900 s、流式空闲 300 s、重试 3 次、保留「精简工具集」（工具表约 10 个）、开流式用量、关标题生成；
-  - **Spark 双机 · dsv4.1-flash**：模型 `dsv4.1-flash`、窗口 262144、输出 8192、超时 900 s、流式空闲 300 s、重试 2 次、**关闭「精简工具集」**（完整取证预设，27 个工具 + 子代理/工作流）、开流式用量、关标题生成；
-  - 网关地址与 Key 仍需自己填；模型 id 与网关 `/v1/models` 不一致时点【从网关拉取模型列表】覆盖即可。
-- 【部署状态可见】启动探测会记录 `/v1/models` 往返耗时并按模型 id 推断部署类型（`qwen3.8-flash-next`→Spark 单机、`dsv4.1-flash`/`deepseek-flash`→Spark 双机）：设置页探测行显示「可用 · 模型 · 地址 · 时间 · Spark 单机/双机 · 8 ms」，欢迎页「本地模型」chip 也显示「Spark 单机 · 128k · 网关可用 · 694 ms」，点 chip 直接打开设置页。
-- 配置健康度提示：窗口、输出上限、重试次数、超时配比不合理时（输出上限超过窗口的 1/4、窗口小于 32k、重试超过 5 次、超时低于 60s、窗口不在常用档位），表单下方直接给黄色/红色提示和建议值；
-- 【复制诊断信息】把当前配置（apiKey 只说「已设置」不输出原文）、启动探测结果、能力自检逐项结果拼成一段文本写进剪贴板，排障时直接粘贴，不用截图；
-- 【预热模型（加载进显存）】给网关发一次最小非流式请求（`max_tokens: 1`）把模型权重先加载好——vLLM / llama.cpp / LM Studio 这类网关在**第一次**请求时才加载模型，冷启动几十秒到几分钟；先在这里付掉，会话里第一句就不会卡住。成功显示「预热完成：<模型> 已加载（首次响应 N ms/s）」；失败复用同一套中文提示（网关没起 / 模型 id 不在网关列表 / 超时）。超时给到 5 分钟，冷启动慢的模型也够；
-- 表单每次改动都会在下方实时预览「将要生成的 patch 文本」，保存前就能看到 `retryPolicy`、`session-title-llm` 这些行；
-- 【保存并重启】写入 `<userData>\local-model.json` 后自动重启应用，重启后模型选择器里就能看到本地模型。
-
-它写的就是上面那个 JSON 文件，两种方式等价；设置页存在的原因是 dsh 自己的设置页在同一服务行上会被 overlay 覆盖并硬拒。
-
-| 字段 | 默认 | 说明 |
-| --- | --- | --- |
-| `enabled` | `true` | `false` 时忽略本配置，回到官方账号链路 |
-| `route` | `local-openai` | 路由名，必须小写连字符（dsh 要求，否则 `UNSTORABLE_PROVIDER_ID`） |
-| `displayName` | `本地模型（OpenAI 兼容网关）` | 显示在模型选择器里 |
-| `baseURL` | `http://127.0.0.1:8000/v1` | 网关根地址（要带 `/v1`，不含 `/chat/completions`） |
-| `apiKey` | `local` | 写进 `apiKeyEnv` 指定的环境变量（很多本地网关不校验，但不能为空） |
-| `apiKeyEnv` | `SEEU_LOCAL_LLM_API_KEY` | 外壳负责注入，dsh 经 credentials seam 读取 |
-| `model` / `models[]` | 必填 | `models` 可写 `{id,name,contextWindow,maxTokens}`；`contextWindow` 个人赛常用 131072（128k），团体赛 262144（256k） |
-| `contextWindow` / `maxTokens` | `131072` / `8192` | 生成 patch 时的默认上下文与单次输出上限 |
-| `useAsDefault` | `false` | 为 `true` 时覆盖 `agent-default-model`，新会话直接用它 |
-| `litePreset` | `true` | 新会话默认用「取证分析（本地模型精简）」预设（工具表约 12 个，省约 8k tokens 固定开销）；`false` 时回到完整取证预设 |
-| `usageInStreaming` | `false` | 让网关在流式响应里带回 token 用量（`stream_options.include_usage`）；打开后会话里才显示「用量 N tok」，vLLM / LM Studio / llama.cpp 新版一般支持，老网关可能 400 |
-| `titleGeneration` | `true` | 每次新会话让本地模型生成标题（`session-title-llm` 的小输出配置）；`false` 时把该行整行 `disabled`，首轮少发一次请求（低并发网关更快），标题回退到首句截断 |
-| `timeoutMs` / `streamIdleTimeoutMs` | `600000` | 本地模型首 token 可能很慢，默认给 10 分钟 |
-| `retryMaxRetries` | `3` | 低并发网关的失败重试次数（dsh 默认 5 次，排队时会放大成 5 次长超时） |
-| `titleMaxOutputTokens` / `titleTimeoutMs` | `512` / `20000` | 会话标题生成的输出上限与超时（本地模型不值得给 4096 tokens） |
-
-外壳启动时把它编译成 `<userData>\local-model.patch.yml`，作为**第二个 `--patch`** 传给 dsh（后层覆盖前层，优先级高于取证 overlay 与 profile），并注入 API key；启动日志（`%APPDATA%\SeeUForensicsAgentPlus\logs\shell.log`）会打印 `local-model: …` 摘要，`--dump-config` 能看到 `provider: local-openai`。
-
-生成的行固定：
-
-- `api: openai-completions`（OpenAI 兼容协议）；
-- `compat: { supportsUsageInStreaming: <取 usageInStreaming>, maxTokensField: max_tokens, supportsStore: false, supportsDeveloperRole: false }`——默认不带 `stream_options.include_usage`（部分本地网关会 400），`usageInStreaming: true` 时才带（流式末段回 usage，会话里显示 token 用量）；用 `max_tokens` 而不是 `max_completion_tokens`，不发 `store` 字段，系统提示走 `system` 角色而不是 OpenAI 新的 `developer` 角色（vLLM/Ollama/LM Studio 一类网关对这几个字段很敏感，最保守的请求体实测只有 `model,messages,stream,max_tokens,tools`）；需要时可在 `local-model.json` 的 `compat` 里逐项覆盖；
-- 每个模型 `input: [text]`、`reasoningEfforts: false`（本地模型一般不支持思考档位）；
-- `retryPolicy: { mode: normal, maxRetries: 3 }`（覆盖 dsh 默认的 5 次）；
-- 顶层 `session-title-llm` 覆盖：`maxOutputTokens: 512, timeoutMs: 20000`（每次新会话多一次标题请求，本地模型要省）；
-- `litePreset: true`（默认）时追加 `agent-preset-registry` 行，把默认预设指到 `seeu-lite`（见 §9.2）。
-
-启动探测会同时比对**配置窗口 vs 网关自报窗口**：如果配置的上下文窗口比网关 `/v1/models` 自报的更大（例如配了 131072、但 vLLM 实际只有 32768），探测行会用黄字提示「配置窗口 131.1k 超过网关自报的 32.8k，超出部分请求会被拒」，日志里也有同样一条；这是最常见的一类「聊两句就报错」原因。拉取模型列表时网关若自报窗口，会自动把表单填成实际值。
-
-**会话标题生成（`titleGeneration`，默认开启）**：dsh 每开一个新会话会额外发一次「起标题」的小请求（约 700 字符输入、512 输出上限）。本机网关一次只能跑一个请求时，这次请求会跟首轮对话抢队列，首字延迟可感知地变长。设置页取消勾选「用本地模型生成会话标题」后，生成的 patch 把 `session-title-llm` 整行置为 `disabled: true`：实测 mock 网关带工具的首轮请求数从 3 次降到 2 次（标题请求 1 → 0），标题回退到首句截断。
-
-**token 用量显示**：勾选设置页的「流式响应带 token 用量」（`usageInStreaming`）后，请求会带 `stream_options: {include_usage: true}`，网关在流式末段返回 usage，dsh 的 token 计量/上下文占比才有数（实测 mock 网关：`用量 22 tok`）；默认关闭是因为老网关收到这个字段可能直接 400。
-
-设置页还会在「精简工具集」下方实时显示**固定开销估算**（工具描述 + 系统提示 ≈ 多少 tokens、窗口还剩多少留给对话），勾选/取消精简预设或改窗口时会立刻变化；测试连接/拉取模型失败时除了原始错误，会附一句可操作的中文提示（网关没启动 / 端口被占 / apiKey 错 / 超时 / 404 路径不对 / ERR_UNSAFE_PORT 等）。
-
-**设置页的「高级：超时与重试」**（折叠区）可调四个数：请求超时 `timeoutMs`（默认 600 秒）、流式空闲超时 `streamIdleTimeoutMs`（默认 600 秒）、失败重试次数 `retryMaxRetries`（默认 3）、标题生成上限 `titleMaxOutputTokens`（默认 512）。留空即用默认值，改完保存并重启。
-
-### 9.2 长上下文与低并发调优
-
-本地模型的上下文窗口大、并发低，因此随包取证 preset 把 `compaction-basic` 的 `headroomTokens` 从官方默认 65536 调到 **8192**：
-
-- 触发阈值 = `min(W × thresholdRatio, W − O − headroomTokens)`（W=窗口，O=系统+工具描述开销，实测约 5k）。官方默认 65536 时 128k 窗口只能等到 ~57k 才压缩（一半窗口没用上）；改成 8192 后：**128k → ~102k（`0.8×W` 生效）、256k → `0.8×W`、32k → ~19k**。
-- 压缩本身要重算 prefill，本地模型这一步很慢，**压得越晚越省时**；但余量也不能太小，否则压缩时留给摘要输出的空间不够。
-- 取 8192 的理由：它正好等于随包配置的输出上限（`maxTokens: 8192`），再小就会让长输出触发溢出重试；同时 `W − O − B` 对 32k 窗口仍为正，**32k 的 7B/14B 也能直接跑，不必再手改 preset**。若你把输出上限调到 8192 以上，要同步调大这个余量。
-- 这一行嵌在 preset 内部，**不能用 local-model patch 覆盖**（overlay 只能改顶层行）——所以它是随包固定值，换模型时不需要重打包。
-- `tool-result-pruner` 保持官方 8192/4096/1024：本地模型同样吃 token，工具输出超长时截断比留全量更划算。
-
-**精简工具集（`litePreset`，默认开启）**：工具描述是每次请求的固定开销大头。实测（`npm run test:e2e:tools`，mock 网关记录请求体）：
-
-| 预设 | 工具数 | 工具描述 | 系统提示 | 首个带工具请求 | 估算 tokens |
-| --- | --- | --- | --- | --- | --- |
-| 取证分析（Forensics） | 27 | 26,687 字符 | 6,061 字符 | 45,099 字符 | ≈ 20.5k |
-| 取证分析（本地模型精简） | 12 | 10,229 字符 | 4,379 字符 | 26,946 字符 | ≈ 12.2k |
-
-精简预设（`resources/forensics/cordis.patch.yml` 的 `preset-seeu-lite`）保留取证必需的工具：pwsh、read / read_image、glob / grep、job_output / job_kill / job_list、skill、ask_user_question、todo_write，以及同样的压缩策略；去掉的是编排类工具（workflow / subagent / schedule / goal / present / 团队通信），固定开销省下约 8k tokens，**32k 窗口的本地模型因此还剩一半上下文给对话**。
-
-- 开关在「本地模型设置」页（勾选「精简工具集（推荐…）」），对应 `local-model.json` 的 `litePreset`；
-- 勾选时新会话默认就是精简预设；某个会话需要子代理/工作流时，在该会话的预设选择里切回「取证分析（Forensics）」即可（不会改配置）；
-- `litePreset: false` 时完全回到完整取证预设，行为与旧版本一致。
-
-设置页会用这些实测值给**固定开销估算**（`tools/local-model.mjs` 的 `estimateContextBudget`）：精简预设 ≈14,608 字符 ≈6.6k tokens、完整预设 ≈32,748 字符 ≈14.9k tokens。换算下来 **32k 窗口**用精简预设还剩约 26k tokens 给对话（80%），用完整预设只剩约 18k（55%）——这是默认给本地模型开精简的另一个理由。
-
-### 9.3 验证
-
-纯函数（配置归一化 / patch 生成 / 路径分类 / CSV 与 chat 解析 / typed 表头投影）用 `node --test` 覆盖，不需要 Electron：
-
-```bash
-npm test                                  # 56 个单元测试（本地模型配置、解析层、typed 投影、CSV、实体分页）
-```
-
-端到端脚本各自起 mock OpenAI 网关 + 真 Electron，用 CDP 操作界面，不需要真实网关：
-
-```bash
-node scripts/e2e/local-model-e2e.mjs     # 基础连通：SSE 文本回复
-node scripts/e2e/local-tools-e2e.mjs     # 工具调用：SSE 分片 tool_calls → 工具执行 → 回传 → 最终答复
-node scripts/e2e/local-retry-e2e.mjs     # 低并发重试：前 2 次 429 → 重试后成功
-node scripts/e2e/local-diagnose-check.mjs # 能力自检：支持工具的模型全绿，no-tool 模型工具项标红
-```
-
-- 基础连通：`REPORT {"ok":true,"chatCalls":2,"gotReply":true,...,"errors":[]}`
-- 工具调用：`REPORT {"ok":true,"chatCalls":3,"gotReply":true,"toolResultSeen":true,"toolCardStyleOk":true,"litePresetActive":true,"litePresetTools":12,"firstRequest":{"stream":true,"tools":12,"maxTokensField":"max_tokens",…},"budget":{"toolsCount":12,"toolsChars":10229,"systemChars":4379,"requestChars":26946,"approxTokens":12248},"errors":[]}` —— 默认精简预设下 12 个工具随请求下发，mock 用 OpenAI 流式规范分片返回 `todo_write` 调用，dsh 执行后把 `role:"tool"` 结果回传（第二轮请求 roles 末尾出现 `tool`），页面出现「任务 1 进行中」与最终答复；脚本同时断言 `litePresetActive` 与工具卡片圆角/边框（theme.css 的 `[data-tool]` 规则）。
-- 低并发重试：`REPORT {"ok":true,"chatCalls":3,"failTimes":2,"retried":true,"gotReply":true,"errors":[]}` —— 429 由 `retryPolicy.maxRetries: 3` 吸收，用户只看到一次正常回复。
-- 能力自检：`REPORT {"ok":true,"checks":{"firstOk":true,"toolsRowBad":true,"summaryMentionsChatOnly":true}...}` —— 支持工具的模型三项全绿（模型列表 / 基础对话 / 工具调用），`no-tool-model` 的工具项标红并提示「只能聊天，不能查案件库」。
-
-接真实网关的端到端（默认不跑，需要你提供地址与凭据）：
-
-```bash
-GW_BASE=http://10.10.250.120:8080/v1 GW_KEY=sk-... GW_MODEL=deepseek-flash \
-  npm run test:e2e:real-gateway
-```
-
-它用与外壳完全相同的 overlay（取证 preset + 本地模型 patch）起 headless dsh，先注入案件概览、再问「本机有哪些检材」，然后让模型用 `pwsh` 执行 `node -v`；成功输出形如 `REPORT {"ok":true,"question":{"elapsedMs":24004,"firstTextMs":23803,"firstStepInputTokens":9145,"briefUsed":[…5 个检材名…]},"tool":{"called":true,"resultStatus":"completed","answer":"v24.18.0"}}`。凭据只走环境变量，不写进仓库。
-
-桌面 UI 版（真 Electron 窗口 + 真网关，截图为证）：
-
-```bash
-GW_BASE=http://10.10.250.120:8080/v1 GW_KEY=sk-... GW_MODEL=deepseek-flash \
-  npm run test:e2e:real-gateway-ui
-```
-
-它用 `SEEU_LOCAL_MODEL_JSON` 注入真实配置、把 `index-state.json` 指向真实案件目录（让案件概览注入 AGENTS.md），然后 CDP 点击 composer 输入问题并回车，轮询「思考块出现 / 首段正文 / 5 个检材名齐全」。实测 `REPORT {"ok":true,"thinkingSeen":true,"firstSignalMs":10123,"firstTextMs":12168,"totalMs":13173,"names":[5 个检材名],"namesOk":true}`，截图写 `docs/screenshots/10-real-gateway-chat.png`。凭据只走环境变量。
-
-技能链路（可选第三轮，验证「模型按需加载技能 → 执行本机 CLI」）：
-
-```bash
-GW_BASE=http://10.10.250.120:8080/v1 GW_KEY=sk-... GW_MODEL=deepseek-flash SEEU_REAL_SKILL=1 \\
-  GW_LOVELYMEM_EXE='E:\\CTFTools\\...\\Lovelymem\\lovelymem.v3.exe' \\
-  npm run test:e2e:real-gateway
-```
-
-headless 里技能根是 `<DSH_HOME>/skills`（脚本会把 `resources/forensics/skills` 复制过去），并注入 `SEEU_CLI_NODE` / `SEEU_LOVELY_CLI`，否则技能里写的 `& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI …` 找不到包装器。`GW_LOVELYMEM_EXE` 是兜底：headless 子进程里 PowerShell 的自动发现（注册表/快捷方式）在高负载下偶发 6 s 超时，这时显式给 exe 路径。实测 `REPORT` 的 `skill` 段：`skillLoaded:true`、`wrapperUsed:true`、`elapsedMs:51755`、`toolCalls:[skill lovelymem-cli, pwsh …version]`、`answer:"Lovelymem / 3.1.11 / starmem、vol3"`。
-
-脚本都会用 `taskkill` 清理 Electron，结束后不留进程。
-
-### 9.4 注意
-
-- **不要在同一行上用 settings 页改**：overlay 优先级更高时 dsh 会硬拒（`Configuration for "<id>" is overridden by a home patch or command-line overlay`）；换模型请改 `local-model.json` 后重启。
-- 模型选择器里的「设为默认」在 overlay 场景下会静默失败，默认模型请用 `useAsDefault: true`。
-- 网关必须支持流式 SSE；首 token 很慢的本地模型可把 `timeoutMs` 调到 900000。
-- **启动会先探测一次网关**（4 秒超时，`GET <baseURL>/models`）：结果写进 `logs\shell.log`（`local model probe: … 可用/不可用`），失败只在加载页提示「本地模型网关暂未连通，先用官方模型启动」，不阻塞启动。启动失败的错误页上有两个兜底按钮：【本地模型设置】（改配置后重试）与【禁用本地模型并重启】（把配置里的 `enabled` 置 false、其余字段原样保留，然后自动重启回到官方账号链路）。
-- **面板首次使用引导**：没有任何索引库时显示「三步开始」，空库场景由 `npm run test:e2e:panel-empty` 验证。
-- **加载页会显示本地模型状态行**：探测完成后（约 1 秒）显示「本地模型：qwen2.5-32b-instruct · http://…」或「本地模型网关不可用（仍可用官方模型）：net::ERR_CONNECTION_REFUSED」；`npm run test:e2e:loading` 用一个必然连不上的网关验证这一行。
-- **探测结果在界面上可见**：托盘 tooltip 显示当前模型（`SeeU 取证 · 本地模型 qwen2.5-32b-instruct` / `… · 官方模型`）；菜单 `工具 → 本地模型状态…` 打开对话框（配置路径、探测地址/时间/结果，可点「重新探测」）；设置窗口顶部有「启动探测」行，探测完成会由外壳推送刷新（不需要关窗口重开）；`工具 → 重新探测本地网关` 可手动触发一次。
-
-### 9.5 真机联调记录（`deepseek-flash`，2026-11）
-
-第一次接真实端点，结论按「能不能用、哪里要调」两条列：
-
-| 项目 | 实测 | 结论 |
-| --- | --- | --- |
-| `GET /v1/models` | 200 / 117 ms，`["deepseek-flash","qwen3.8-flash-next"]`，条目只有 `id/object/created/owned_by` | 拉取模型列表可用；**没有上下文窗口字段** → 设置页提示 `noContextWindow`，窗口需按模型文档手填（本机填 131072） |
-| 非流式对话 | 200 / 2.6 s，usage `{37,4,41}` | 协议正常 |
-| 流式对话 | 首字节 **86 ms**、总 1.8~4.3 s、105 分片、约 **17 tok/s**；usage `{47,247,294}` | SSE 正常；`stream_options.include_usage` 有效 → 可勾「流式 token 用量」 |
-| 推理内容 | delta 先给 `reasoning_content`（并镜像 `reasoning`）再给 `content` | dsh 会把它显示成思考块（`thinkingSeen:true`），不是错误；配 `maxTokens` 太小会全被推理吃掉、正文为空 |
-| 工具调用 | 流式 1.75 s / 非流式 6.1 s，`finish:"tool_calls"`、`case_evidences {"eid":3}` | 工具调用支持，且**并行**（一次 2 个 call，1.6 s）——dsh 的多工具调用可正常工作 |
-| 干扰项 | 工作区在仓库内时 `pwsh` 报 `SetNamedSecurityInfoW failed (Win32 5): grantWrite(D:\Coding\...)` | 是沙箱对工作区目录的 ACL 限制，不是网关/产品缺陷；headless 测试用临时目录当 cwd 即可（外壳真实工作区是 `C:\Users\<用户>\Documents\SeeUForensicsWorkspace`，不受影响） |
-
-真机会话（headless，与外壳同一 overlay）：案件概览注入 `<DSH_HOME>/AGENTS.md` 后，模型**直接答出 5 个检材**（CHAN_MH_mobile.zip / IQ_Coin_Type_Transactions.zip / LEUNG_YL_mobile.zip / AP3_LEUNG_YL_USB.E01 / FUNG_CC_mobile.zip），并主动声明「取自概览表格，未推断」；第二轮 `pwsh node -v` → `v24.18.0`。指标：首字 **23.8 s**、首步输入 **9,145 tokens**、单轮总计 9,607 tokens（精简预设 12 工具 + 概览注入）；工具轮 30.8 s。这个首字延迟主要是模型侧推理耗时，不是外壳开销 —— 网络 RTT 与 TTFB 都在 100 ms 级。
-
-桌面 UI 实测（真 Electron + 真网关，`npm run test:e2e:real-gateway-ui`）：思考块 **10.1 s** 出现、首段正文 **12.2 s**、**13.2 s** 收齐 5/5 检材名；界面同时显示「思考」折叠块与「深度求索中，用时 12 秒」，说明推理模型的思考内容在本地链路上能及时给出，用户不会面对纯白屏。截图见 `docs/screenshots/10-real-gateway-chat.png`。踩坑：脚本把 `GW_BASE`（已含 `/v1`）再拼一次 `/v1` → 网关回 `404 page not found`，界面显示「处理失败 · PI_AI_ERROR」；已归一化 baseURL，同时确认错误在界面上是可读的。
-
-联调还发现一处数据口径 bug 并已修：会话概览「规模：记录 22777 条」与检材表各行相加不一致（`evidences()` 原来取火眼 `evidence.record_count`）。现在按索引内 `record` 行数统计（本案 1/1/8,443/1/14,331，合计 22,777），火眼原值保留在 `reportedRecordCount` 字段，概览表格下方也加了口径说明。
-
-技能真机链路（`SEEU_REAL_SKILL=1`）：模型先调 `skill` 工具加载 `lovelymem-cli`，再照技能文档执行 `& $env:SEEU_CLI_NODE $env:SEEU_LOVELY_CLI lovelymem -- version`，**51.8 s** 答出 `Lovelymem / 3.1.11 / starmem、vol3`。第一次跑失败暴露了 headless 与外壳的环境差异：headless 不会执行 `installBundledSkills()`（技能根为空），也不会注入 `SEEU_CLI_NODE`/`SEEU_LOVELY_CLI`，导致模型加载不到技能、包装器也起不来；脚本已补齐这两件事，并支持 `GW_LOVELYMEM_EXE` 兜底自动发现。
-
-## 10. 镜像挂载（取证镜像 → 只读盘符）
-
-取证镜像（`.E01` / `.dd` / `.raw` / `.vmdk` / `.vhdx` / `.qcow2` / `.iso`…）本身不是 Windows 能直接浏览的文件系统。会话里的技能要「按路径看文件」，就得先把镜像挂成一个只读盘符 —— 这正是 LovelyCarve CLI 的 `mounts` 命令组做的事，本项目把它做成了外壳里的一个窗口，而不是让模型自己拼命令。
-
-**前置条件**
-
-1. 安装 [LovelyCarve](https://lovelycarve.example/)（含 `lovelycarve-cli.exe` 与 Dokan 驱动）；
-2. 在「设置 → 本机取证工具路径」里手动选择 `lovelycarve-cli.exe`（**不选 GUI 的 `LovelyCarve.exe`**）；也可以写 `<DSH_HOME>/lovely-cli.json` 的 `lovelycarve` 键，或设置环境变量 `SEEU_LOVELYCARVE_CLI`（调试用）；
-3. 挂载/卸载可能需要以管理员身份启动外壳（Dokan 驱动），普通镜像解析不需要。
+**前置**：安装 LovelyCarve（含 `lovelycarve-cli.exe` 与 Dokan 驱动）；在「设置 → 本机取证工具路径」里指定 `lovelycarve-cli.exe`（不要选 GUI 的 `LovelyCarve.exe`）。
 
 **用法**
 
-1. 菜单「设置 → 镜像挂载…」（`Ctrl+Shift+M`）或欢迎页「镜像挂载」快捷入口打开窗口；
-2. 「选择镜像…」→ 自动解析分区表并列出 `/part:N`、卷标、文件系统、大小；
-3. 选目标分区与盘符（默认 `X:`，会自动跳过已占用盘符），点「挂载为只读盘」；
-4. 窗口下方出现活动挂载卡片：可【打开盘符】直接进资源管理器，或【卸载】释放；
-5. 会话侧：挂载清单在 `<DSH_HOME>/mounts.json`，dsh 子进程通过 `SEEU_MOUNTS_FILE` 拿到同一路径，技能/模型可以直接读，不需要猜盘符。
+1. 菜单「设置 → 镜像挂载…」（`Ctrl+Shift+M`）或欢迎页「镜像挂载」入口；
+2. 【选择镜像…】→ 自动解析分区表（`/part:N`、卷标、文件系统、大小）；
+3. 选分区与盘符（默认 `X:`，自动跳过已占用盘符）→【挂载为只读盘】；
+4. 活动挂载卡片可【打开盘符】或【卸载】；卸载后可【重新挂载最近镜像】；
+5. 会话侧通过 `<DSH_HOME>\mounts.json`（`$SEEU_MOUNTS_FILE`）拿到挂载清单，技能/模型直接读盘符。
 
-**真机验证（2026-11-12）**：LovelyCarve 1.3.0 实测挂载 `W:/AP3_LEUNG_YL_USB.E01`（776 MB EWF）—— 解析 162 ms、挂载 266 ms、卸载 154 ms，`X:` 内可直接浏览 `WEPE`、`Sunny.zip`、`vera_key` 等；完整数字与复现命令见 [docs/benchmarks.md](docs/benchmarks.md)。
+**约束**：挂载点只在 SeeU 运行期间有效，关闭外壳即释放；同一案件不能被 LovelyCarve 桌面端与 CLI 同时打开（遇到「案件锁」先关另一侧）；挂载可能需要管理员权限。
 
-**实现细节（真实 CLI 才暴露）**：`--case` 只能作为 CLI 启动参数（会话里再带会报「`--case` 只能在启动时使用」并让进程退出），所以外壳的流程是「一次性 `cases create` 建案件 → 常驻 `lovelycarve-cli -q --case <dir> shell` → `images open` → `mounts create`」；LovelyCarve 1.3.0 的 `mounts delete --force` 会真的卸载但**不返回 JSON**，外壳因此改成「写命令 + 轮询盘符消失」，必要时停掉常驻进程释放挂载。
+## 7. 会话预设
 
-**约束（务必知道）**
+新建会话时选择预设即可切换「工具面 + 技能组 + 专家提示词」。预设之间互不影响。
 
-- 挂载点由 CLI 常驻进程创建，**只在 SeeU 运行期间有效**；关闭外壳 = 释放所有挂载点（窗口里也写了这句）；
-- 同一取证案件不能被 LovelyCarve 桌面端与 CLI 同时打开（案件锁）；遇到 `alreadyOpen` 类错误先关掉另一侧；
-- 只读挂载：不会改动镜像内容。
+| 预设 | 适用场景 |
+| --- | --- |
+| 取证分析（Forensics） | 火眼案件索引、磁盘/镜像、服务器、证据链报告——默认 |
+| 取证分析（本地模型精简） | 32k 小窗口小模型，工具面最小 |
+| 流量分析（Traffic） | PCAP、会话、协议、文件还原 |
+| 日志分析（Log） | 系统/应用日志、时间线还原 |
+| 内存分析（Memory） | 内存镜像：进程/服务/注册表/凭据（StarMem 优先） |
+| 数据分析与研判 | 资金流水、人物关系、涉赌诈骗、URL/图片研判 |
+| APK 分析 | APK 静态/动态、签名、native、加壳、IOC |
+| 手机取证（Mobile） | iOS/Android 提取包与备份、微信/IM 数据（APK 深挖用 APK 分析） |
+| EXE 逆向分析 | Windows PE 结构、导入导出、查壳、静态行为 |
+| 数据库取证（Database） | SQLite/MySQL 等数据库只读核验、检索与受限恢复 |
+| 物联网分析（IoT） | 路由器/NAS/摄像头固件、配置与日志 |
+| 文件目录分析（Files） | 目录结构、文件类型/哈希、Office/PDF、字符串与时间线 |
 
-**实现位置**：`tools/image-mount.mjs`（CLI 解析、常驻进程、挂载清单）、`src/mounts.ts`（主进程单例）、`renderer/mounts.html`（窗口）、`scripts/e2e/mount-check.mjs`（假 CLI 端到端）。
+- 所有预设按**比武风格**作答：逐题 `Q<n>｜答案｜思路`，事实与推断分开，未检出就写「未检出」，缺检材只写 `⏭️ Q<n>：跳过：缺 XXX`。
+- 命令执行统一优先 `bash`（Git Bash 语法），不可用时才降级 `pwsh`。
+- 星睿连接器按预设挂载（见第 9 节），轻量预设不挂。
 
-## 11. 外部取证软件 MCP（超级取证大师 MYOS）
+## 8. 外部取证软件：MYOS（超级取证大师）
 
-MYOS（美亚超级取证大师）自带一个 stdio MCP 服务：`D:/Programs/MYOS/Client/tools/mcp/myos_mcp_server.exe`（`mcp.json`：`id: myos-forensics-mcp`、`cmdType: stdio`、版本 1.1.4）。本项目把它注册进 dsh 的 overlay，让会话里的模型能直接查案件、提交取证任务、读结果 —— 不用人再点软件。
+安装 MYOS 后，会话里的模型可以直接查案件、提交取证任务、读结果。
 
-**注册位置**：`resources/forensics/cordis.patch.yml` 末尾的 `- insert:` 行 `seeu-mcp-myos`（`@deepseek-ai/dsh-mcp-client`）：
+- **前提**：先启动「超级取证大师」（`ForensicDesktop`）；没启动也可正常使用 SeeU，MCP 会自动等待重连；连上后可用 `health_check_dbus` 确认。
+- **能做什么**：列出/打开案件、列出检材、提交计算机/手机取证任务、读结果库（含加密 `.mfs` 的只读 SQLite 查询）、全局内容检索、解密任务等 49 个工具。
+- **把 MYOS 结果导入 SeeU 索引**（推荐，导入后面板与 AI 查同一个库）：
+  1. 面板工具栏【从 MYOS 导入…】→ 选案件/检材 → 自动列出结果库与表（也可手填路径）；
+  2. 勾选表、可【预估条数】只看非空表，选写入方式【整库重建 / 追加】；
+  3. 导入完成后自动扫描并切到新库；批量导入显示「第 i/N 张表 · 已收集 M 条」。
+- **命令行等价**：`npm run myos:import -- cases | materials --case <id> | tables --db <mfs> | import ...`（详见 `tools/myos-index/README.md`）。
 
-```yaml
-- insert:
-    - id: seeu-mcp-myos
-      name: '@deepseek-ai/dsh-mcp-client'
-      config:
-        transport: stdio
-        serverName: myos-forensics
-        command: D:/Programs/MYOS/Client/tools/mcp/myos_mcp_server.exe
-        args: []
-        toolCallTimeoutMs: 120000
-        failOnStartupError: false
-        reconnect: { enabled: true, initialDelayMs: 3000, maxDelayMs: 60000, maxAttempts: 50 }
-```
+## 9. 星睿取证连接器
 
-**使用前**：先启动「超级取证大师」（`ForensicDesktop` + D-Bus 服务）。MYOS 没启动时外壳照常可用，MCP 会按重连策略等待；连上后先用 `health_check_dbus` 确认（返回 `DBus 服务健康：OK` 且 `forensicDesktopRunning: true`）。若 MCP 进程因 MYOS 退出而断开，重启 MYOS 后会自动重连。
+星睿客户端（WorkBuddy 系）把专家能力做成本机 HTTP MCP 连接器（配置在 `~/.workbuddy/.mcp.json`）。安装并启动星睿后，SeeU 会**按会话预设**自动挂载对应连接器，不需要手动配置：
 
-**可用工具（49 个，按用途分组）**
-
-- 案件：`query_cases`、`query_open_cases`、`open_case`、`close_case`、`create_case_and_open`、`query_case_types`、`query_case_settings`、`query_materials`；
-- 检材/取证：`add_image_material`、`add_disk_material`、`add_file_collection_material`、`submit_computer_forensic_task`、`load_case`、`restart_computer_forensics`、`start_computer_image_emulation_task`、`start_auto_mobile_forensics`、`start_phone_file_forensics_task`、`start_phone_folder_forensics_task`、`start_phone_direct_forensics_task`、`reply_phone_forensics_message`、`reply_phone_detection_message`、`reset_phone_detection`、`query_phone_direct_devices`、`query_phone_forensic_items`；
-- 结果/检索：`query_computer_forensics_results_overview`、`query_phone_forensics_results_overview`、`query_phone_file_forensics_result_summary`、`sqlite_query`（只读 SELECT，含加密 `.mfs` 取证库）、`quick_search_files`、`quick_search_content`、`global_search_content`、`raw_data_content_search`、`create_file_index_task`、`query_device_info`、`query_device_mount_path`、`query_current_node_data`；
-- 任务/解密：`query_task_status`、`wait_task_completion`、`query_case_running_tasks`、`stop_task`、`stop_phone_forensics_task`、`query_encrypt_types`、`decrypt_partition`、`query_decrypt_task_status`；
-- 导出/其它：`export_case`、`export_bcp`、`open_mftool`、`query_local_disks`、`health_check_dbus`。
-
-工具面较长（49 个），dsh 会把过长的公开名截断并加短哈希后缀，例如 `mcp__myos-forensics__myos-forensics_add_disk_materi_12e5a19cef61`；以工具列表里实际显示的名字为准。
-
-**与火眼索引的关系**：两者互补 —— 火眼/`ges` 的结果由 `ges-case-index` 建 `case-index.db`（面板检索，快）；MYOS 则是「活的取证软件」，负责接案件、跑任务、查结果库。统一的「一次入库、AI 快速读取」走同一套索引：用 MYOS MCP 取数据（不要直接读 MYOS 数据目录）→ 归一化写入 `case-index.db` 的 evidence/record/entity 表 → 面板与技能都只查索引。融合细节见 `docs/plan-case-index.md` §20.67。
-
-**把 MYOS 取证结果导入 SeeU 索引（第 13 轮）**：新增 `tools/myos-index/`（MCP 客户端 + 导入器 + 命令行），复用 MYOS 的 `sqlite_query` 只读查询结果库（`.mfs` 是加密/专有格式，**不能用 sqlite 直接打开**），再按 SeeU 的表结构写入 `<案件目录>/.seeu-index/case-index.db`（含 `record_fts` 全文索引与 `entity` 实体抽取，写 `manifest.json`），导入后面板 `/seeu-index`、会话概览与 `ges-case-index` 技能都能直接检索。
-
-```bash
-# 0. 先启动「超级取证大师」——所有 MYOS 工具都要求它在运行
-# 1. 列案件 / 检材
-npm run myos:import -- cases
-npm run myos:import -- materials --case <caseId>
-# 2. 看结果库里有哪些表
-npm run myos:import -- tables --db "D:/Programs/MYOS/Case/<案件>/dev/<检材>/data/MApps.mfs"
-# 3. 选一张表导入（整库重建；--out 指向案件目录即可被面板发现）
-npm run myos:import -- import --case <caseId> \
-  --db "D:/Programs/MYOS/Case/<案件>/dev/<检材>/data/MApps.mfs" \
-  --sql "select * from TBL_APPDATA_MANAGER limit 2000" \
-  --out "D:/cases/<案件目录>" --case-name "<案件名>" --evidence "<检材名>"
-```
-
-导入器会记录来源（`meta.source_db` / `meta.source_sql`、`artifact.virtual_path = myos://<案件>/<表>`），实体按 email/url/ip/phone/wallet 抽取；真机端到端需要用户先启动 MYOS（未启动时工具会返回「请先运行 MYOS 取证软件」）。实现与单测见 `tools/myos-index/**`、`tests/myos-index.test.mjs`（9 例，含假 MCP 服务端 `tests/fixtures/fake-myos-mcp.mjs`）。
-
-- **「测试连接」升级为五项能力自检（第 6 轮）**：设置页能力自检从「模型列表 / 基础对话 / 工具调用」扩展到五项——新增**流式输出**（首字延迟、流式字符数）与**思考流**（是否返回 `reasoning_content`/`reasoning`，按高级区的思考流格式带 `enable_thinking` 或 `reasoning_effort`）；任一项标红时汇总行给出对应排查建议，诊断文本一并带出。
-- **思考流（reasoning）格式可配（第 5 轮）**：本地网关对推理内容的暴露方式不同。设置页「高级：超时与重试」新增「思考流格式」下拉 + `chat_template_kwargs`（JSON）：`deepseek`（流式 `reasoning_content`，dsv4.1-flash）、`qwen-chat-template`（带 `enable_thinking`，qwen3.8-flash-next）、`qwen`/`chat-template`/`string-thinking`，默认 `auto` 交给运行时判断。Spark 单机预设自动填 `qwen-chat-template` + `{"enable_thinking": true}`，双机预设填 `deepseek`；patch 写进 provider `compat.thinkingFormat` 与 `compat.chatTemplateKwargs`，设置页保存/回填、`settings-check` 断言均覆盖。
-
-### 星睿取证连接器（streamable-http MCP，第 49 轮接入）
-
-星睿客户端（WorkBuddy 系）把专家能力做成本机 **streamable-http MCP** 连接器，配置在 `C:/Users/<用户>/.workbuddy/.mcp.json` 的 `mcpServers` 里（每台 300 s 超时）。这些连接器**按会话预设注入**（不是全局注册），避免把 242 个工具塞进每个会话：
-
-| 预设 | 挂载的连接器 | 工具数 |
+| 预设 | 连接器 | 工具数 |
 | --- | --- | --- |
-| 取证分析（Forensics） | `xingrui-server`（30190） | +13 |
-| 手机取证（Mobile） | `xingrui-computer`（30188，计算机+手机） | +108 |
-| APK 分析 | `xingrui-apk`（30195 `/mcp/`） | +33 |
-| 流量分析（Traffic） | `xingrui-traffic`（3008 `/mcp/streamable`） | +39 |
-| 数据分析与研判 | `xingrui-data`（30191） | +7 |
-| 文件目录分析（Files） | `xingrui-files`（30193） | +21 |
-| 物联网分析（IoT） | `xingrui-iot`（30196） | +21 |
-| 本地精简 / 日志 / 内存 / EXE / 数据库 | **不挂载**（保持轻量，走本地 StarMem/IDA/bash） | 0 |
+| 取证分析（Forensics） | `xingrui-server` | +13 |
+| 手机取证（Mobile） | `xingrui-computer` | +108 |
+| APK 分析 | `xingrui-apk` | +33 |
+| 流量分析（Traffic） | `xingrui-traffic` | +39 |
+| 数据分析与研判 | `xingrui-data` | +7 |
+| 文件目录分析（Files） | `xingrui-files` | +21 |
+| 物联网分析（IoT） | `xingrui-iot` | +21 |
+| 本地精简 / 日志 / 内存 / EXE / 数据库 | 不挂载（保持轻量） | 0 |
 
-**注册位置**：`resources/forensics/cordis.patch.yml` 各预设的 `plugins:` 列表里追加 `@deepseek-ai/dsh-mcp-client` 行（`transport: streamable-http`、`toolCallTimeoutMs: 300000`、`failOnStartupError: false` + 自动重连）。星睿没启动时该连接器只告警、不影响会话；启动星睿后按重连策略连上。MYOS MCP（49 工具）仍是全局 stdio 行。
+星睿没启动时连接器只告警、不影响会话；启动后按重连策略连上。星睿的 43 个取证技能已随包内置（见预设的「技能组」），不依赖星睿目录。
 
-**实测**（2026-11-13，headless 抓 tool 列表）：7 个星睿连接器全量注册时共 242 工具、会话合计 317 工具（工具 schema ≈ 360 KB ≈ 9 万 tokens/请求）—— 这正是改成按预设注入的原因。
+## 10. 内置 MCP 工具（让 AI 直接查索引）
 
-**与星睿技能的关系**：星睿的技能放在用户级 `~/.workbuddy/skills/`（实测 28 个，如 `pcap-forensics`、`apk-script-crypto-recovery`、`reverse-shell-analysis`、`static_and_dynamic_reverse_skills`、`forensics-competition-kb`）与项目级 `{workspace}/.workbuddy/skills/`；星睿靠 Skill 工具按需加载。SeeU 不复用它的目录，而是把其中与取证相关的 43 个技能随包放进 `resources/forensics/skill-sets/qiko/`，按预设注入（见第 13 节）。
+SeeU 自带一个只读 MCP 服务（随包启动，无需配置），会话里的模型可以调用：
 
-## 12. 随包 dsh 插件
+| 工具 | 作用 |
+| --- | --- |
+| `index_list` | 列出本机所有案件索引（案件名 / 案号 / 记录数 / 库路径） |
+| `evidence_list` | 列出某案的检材（类型、入库/火眼统计、原始路径、火眼挂载点、备注） |
+| `index_search` | 全文检索（引擎、命中数、摘要、检材/应用/时间） |
+| `index_tables` | 列出某案的结构化表及条数 |
+| `read_record` | 按记录 id 取正文、`Goldeneyes://` 引用与复核命令 |
+| `chain_check` | 一条调用完成「索引 → 检索 → 火眼挂载 → 镜像」链路体检 |
 
-安装包自带 4 个 dsh 插件，启动即生效（无需联网 `pnpm add`）：
+欢迎页芯片「MCP：6 工具」显示就绪状态；「设置 → 本地模型与工具路径…」里的「运行环境体检」也能看到这一项。
 
-| 插件 | 作用 | 版本 |
-| --- | --- | --- |
-| `billion-context` | 长上下文压缩 / `compress`、`decompress`、`search_context`、`acp_status` 等工具 | 0.1.213 |
-| `dsh-context` | 会话「上下文洞察」面板 | 0.83.1 |
-| `dsh-better-sidebar` | 侧栏、任务卡、插件面板等界面增强 | 0.30.1 |
-| `dsh-gitbash-shell` | Windows 上的 `bash` / `gitbash_native` / `gitbash_to_native_path` 工具 | 0.54.0 |
+## 11. 链路体检
 
-- **写入位置**：`<DSH_HOME>/profiles/web/package.json` 的 `dsh.profile.bundles`（默认 `<userData>/dsh-home`）。外壳每次 `startHost()` 前都会补齐缺失项，保留用户自己加的 bundle 与 `dependencies`；清单损坏时只报错、不覆盖。设置 `SEEU_DISABLE_DSH_PLUGINS=1` 可跳过。
-- **插件包复制**：`dsh` 只把 `dsh.profile.bundles` 当作「去哪里找插件 patch」，真正的插件行是**用 profile 目录作 baseUrl 的 ESM 导入**；因此插件包还必须真在 `<profile>/node_modules` 里，否则会 `ERR_MODULE_NOT_FOUND`、整批插件不激活。外壳在 `startHost()` 前调用 `ensurePluginPackages()`，把 4 个插件及其非 `@deepseek-ai/*` 依赖闭包复制到 `<DSH_HOME>/profiles/web/node_modules`（实测 175 个包、约 120MB、耗时数秒），指纹文件 `<profile>/.seeu-dsh-plugins.json` 记录版本与包名：同版本不重复复制、升级自动重抄并清理旧包。复制是逐文件 read/write（打包态源在 `app.asar` 里，`fs.cpSync` 的 `copyFile` 读不了 asar）。
-- **额外解包**：`node_modules/@dsh-ops/fastctx-win32-x64/**` 进 `app.asar.unpacked`，因为 `bin/fastctx.exe` 需要真实文件路径才能 spawn。
-- **验收**：`npm run test:e2e:plugins`（dev 或 `--exe <安装包 exe>` 都可）断言四件事：profile bundles、`<profile>/node_modules` 下四个插件包、页面插件 UI（「上下文洞察」「插件」）、以及 dsh 子进程日志不得出现 `did not activate` / `failed to import` / `ERR_MODULE_NOT_FOUND`。
-
-## 13. 分析预设（取证 / 流量 / 日志 / 内存 / 数据 / APK / 手机 / EXE / 数据库 / 物联网 / 文件目录）
-
-新建会话时选预设即可切换「工具面 + 技能组」；预设互不影响，取证镜像类分析仍留在默认取证预设。
-
-| 预设 | 顺序 | 注入技能（技能根） | 适用 |
-| --- | --- | --- | --- |
-| 取证分析（Forensics） | 1 | 通用技能 + Qiko 比武技能组 | 火眼案件索引、镜像/磁盘、服务器、证据链报告 |
-| 取证分析（本地模型精简） | 2 | 同上（工具面更小，适合小模型） | 本地小模型 |
-| 流量分析（Traffic） | 3 | `lovelyspark-cli` + Qiko 比武技能组 | PCAP、会话、协议、文件提取 |
-| 日志分析（Log） | 4 | `lovelyspark-cli` + Qiko 比武技能组 | 系统/应用日志、时间线还原 |
-| 内存分析（Memory） | 5 | `starmem-cli`（`lovelymem-cli` 兜底）+ Qiko 比武技能组 | 内存镜像、进程/服务/注册表/凭据 |
-| 数据分析与研判 | 6 | Qiko 比武技能组（资金/关系/情报） | 网钜等导出数据清洗、资金链、人物关系、涉赌诈骗与 URL/图片研判 |
-| APK 分析 | 7 | Qiko 比武技能组（APK/逆向/恶意分析） | APK/APKS/XAPK/AAB 静态分析：清单/权限/组件、签名、SDK、native/加壳、IOC 与威胁研判 |
-| 手机取证（Mobile） | 10 | Qiko 比武技能组（iOS/Android/微信） | 手机镜像与提取包、iTunes/厂商备份、微信/IM 聊天记录与应用数据（APK 深挖交给 APK 分析） |
-| EXE 逆向分析 | 8 | Qiko 比武技能组 | Windows PE 结构、导入导出、查壳、静态行为研判 |
-| 数据库取证（Database） | 9 | Qiko 比武技能组 | SQLite/MySQL 等数据库原件、备份与日志的只读核验、结构查看、检索与受限恢复 |
-| 物联网分析（IoT） | 11 | Qiko 比武技能组 | 路由器/NAS/摄像头/智能家居固件与文件系统、配置日志、凭据与通信 |
-| 文件目录分析（Files） | 12 | Qiko 比武技能组 | 目录结构、文件类型/哈希、Office/PDF、日志与二进制字符串、关键词与时间线 |
-
-- **persona（第 46 轮：星睿本地模型提示词最终融合）**：取证/流量/数据/APK/手机/EXE 预设的 persona 改成「星睿专家 SOP + SeeU 运行环境适配 + 既有 SeeU 规则」三段式；新增物联网（IoT，order 11）与文件目录（Files，order 12）两个预设。星睿原文里依赖的 QZOS/星睿服务器/IDA-MCP/文件目录 MCP/ApkCheckPack 等工具，适配段统一改为 SeeU 的 `bash` + 索引 + 火眼挂载 + `$SEEU_TOOL_*`，并注明「上下文 262144，可充分展开、不必过度缩写」。另新增随包技能 `forensics-competition-kb`（检索 `D:/forensics-kb` 的竞赛题解，可用 `$SEEU_KB_DIR` 覆盖）。
-- **persona（更早版本）**：取证/流量/内存/数据/APK/手机/EXE/数据库八个专家预设都带精简版专家 persona（来源见 [CHANGELOG.md](CHANGELOG.md) 的 v0.3.4 / v0.3.5 条目），日志预设沿用原有 persona。
-- **外部工具（开发机实测 2026-11-12）**：`python 3.13.14`（`D:/Programming/Python31314/python.exe`）已装 pandas/openpyxl/pefile/capstone/lief/pyelftools/yara/scapy/dpkt/pyshark；Wireshark 3.4.0 的 `tshark`/`capinfos`/`editcap`/`mergecap` 已装但**不在 PATH**（`E:/CTFTools/Forensics/4-其他工具/【15】网络分析/Wireshark/`）；`7z`、`sqlite3.exe`、`jadx 1.1.0`、`apktool.jar`、`adb` 在 `E:/CTFTools/…` 下；`frida 17.17.0` 在 PATH；IDA Professional 9.4（`idat.exe`）在 `D:/Programs/IDA Professional 9.4/`；`nfdump`/`zeek`/`suricata`/`snort`/`androguard` 未装；Ghidra 12.1.4 已装（默认 `C:/Users/ASUS/.dsh/plugins/dsh-infinite-gen-5/third_party/sources/ghidra-12.1.4`，源码树，批处理入口 `Ghidra/RuntimeScripts/Windows/support/analyzeHeadless.bat`）。**流量/日志分析一律先 lovelyspark-cli**，tshark 等只在技能覆盖不到时用绝对路径补充或做交叉复核。
-- **外部工具路径可改**：设置页新增「外部取证工具路径」区（15 项：Ghidra 目录、IDA、tshark/capinfos/editcap、python、jadx、apktool.jar、adb、7-Zip、sqlite3、StarMem、Volatility 目录、雷电模拟器目录、VMware 目录），默认值就是上面这些本机实测路径；改完写 `<DSH_HOME>/tool-paths.json`，外壳启动 dsh 时以 `SEEU_TOOL_<ID>` 环境变量注入会话（如 `SEEU_TOOL_GHIDRA`、`SEEU_TOOL_TSHARK`、`SEEU_TOOL_PYTHON`），路径不存在的项不注入。**解析顺序：设置里显式指定 → `PATH` 环境变量里能找到的命令（优先）→ 本机默认实测路径**；所以工具装进 PATH 后会优先用 PATH 里的，改机器/改 PATH 不必逐项改设置。
-- **动态分析环境（第 47 轮接入）**：APK 预设接**雷电模拟器**（`D:\Games\leidian\LDPlayer14`，实测 `ldconsole.exe` / `dnplayer.exe` / `adb.exe` 齐全，实例列表 `list2` 返回 1 个实例；PC 侧 `frida` 17.17.0 在 PATH；**未发现 frida-server 二进制**，要动态 hook 需按版本 push 到模拟器 `/data/local/tmp`）；EXE 预设接 **VMware Workstation 26.0.0**（`D:\Programs\VMwaremrun.exe`，实测 `list` 显示运行中 `E:/Win10Reverse/Win10CNBase.vmx`）。两者都以 `$SEEU_TOOL_LDPLAYER` / `$SEEU_TOOL_VMWARE` 注入会话，persona 里写明启动/装样本/日志/截图/frida 或快照回滚步骤；星睿原文里的 `apk_unpack_all_in_one_v3` 一键脱壳 MCP 本机未安装，persona 明确「不要承诺一键 dump dex」。
-- **命令执行工具**：全部预设统一优先用随包 `dsh-gitbash-shell` 提供的 `bash` 工具（Git Bash / POSIX 语法，环境变量写 `$SEEU_CLI_NODE`、`$SEEU_LOVELY_CLI`）；只有 `bash` 不可用（插件禁用或执行报错）时才降级 `pwsh`，并切换成 PowerShell 语法（`$env:…`、反斜杠路径）。persona 与技能文档都已按这条写。
-- **Qiko 比武技能组**：从 QikoAgent 技能库精选 43 个取证技能（`resources/forensics/skill-sets/qiko/`，约 1.2 MB：iOS/Android 取证、微信/资金/人物关系、流量/PCAP、内存、服务器/入侵、SQLite 恢复、逆向、图片鉴伪/隐写、URL 溯源等），每个 `SKILL.md` 末尾追加「SeeU 环境适配」段（`ssh-mcp`→`bash`、`ida-mcp`/`jadx-mcp`→`$SEEU_TOOL_IDA`/`$SEEU_TOOL_JADX`、Python→`$SEEU_TOOL_PYTHON`、检材定位四步、比武输出极简）。除「本地模型精简」外的预设都通过 `customSkillDirs` 注入该组（`SEEU_SKILL_SET_QIKO`），流量/日志/内存预设为「专用组 + Qiko 组」并集。
-- **比武比赛风格**：所有专家 persona 默认按比赛作答——逐题 `Q<n>｜答案｜思路`、思路只列关键命令/字段/路径/行号、不写长报告；缺检材/权限/工具或工具连续报错两次就只输出 `⏭️ Q<n>：跳过：缺 XXX`；检材 `JC-`、样本 `YB-` 前缀；数量/比例/金额一律脚本计算；未检出写「未检出」，事实与推断分开。
-- **技能目录布局**：通用技能在 `resources/forensics/skills/`；分组技能在 `resources/forensics/skill-sets/<traffic|log|memory>/`。外壳启动时把分组复制到 `<DSH_HOME>/skill-sets/<id>`，并把旧的 `lovelymem-cli` / `lovelyspark-cli` 从 `<DSH_HOME>/skills` 移走（升级迁移，不会重复出现）。
-- **按预设隔离**：三个分析预设各有一个 `skill-filesystem` 实例（`includeDefaultRoots: false`），`customSkillDirs` 指向 `SEEU_SKILL_SET_TRAFFIC` / `SEEU_SKILL_SET_LOG` / `SEEU_SKILL_SET_MEMORY`，所以流量/日志预设看不到 `lovelymem-cli`，内存预设也看不到 `lovelyspark-cli`。
-- **使用**：预设里已写明调用方式（`"$SEEU_CLI_NODE" "$SEEU_LOVELY_CLI" lovelyspark -- <子命令>`，统一在 `bash` 工具里执行；bash 不可用时才降级 `pwsh`），模型会先 `skill` 加载技能再执行；CLI 路径仍在「设置 → 本地模型与工具路径」里手动指定。
-- **校验**：`npm run check:overlay`（逐预设检查名称/技能根/`customSkillDirs`/`tool-fs` 只读）、`npm run test:e2e:skills`（安装与迁移）、`npm test`（含 `tests/presets-config.test.mjs`）。
-
-## 14. 链路体检（索引 / 检索 / 挂载 / 镜像）
-
-一条命令确认「索引 → 检索 → 火眼挂载 → LovelyCarve」是否都可用（本工具不挂载镜像，只做 inspect，秒级完成）：
+一条命令确认「索引 → 检索 → 火眼挂载 → LovelyCarve」是否都可用（只解析镜像、不挂载，秒级完成）：
 
 ```bash
 npm run chain:check -- --caseNumber 2919d298
-# 或显式指定索引
 npm run chain:check -- --db "E:/forensics/案件/.seeu-index/case-index.db"
-# 换检索关键词 / 输出 JSON / 只体检不解析镜像
 npm run chain:check -- --caseNumber 2919d298 --probe Investors --json --no-images
 ```
 
-输出包含：索引规模、检材覆盖（有内容 / 仅元数据）、检索命中、火眼挂载目录可读性（含样本条目）、镜像分区表与解析耗时；末尾给出「✅ 链路打通 / ❌ 存在失败环节」结论。
+输出：索引规模、检材覆盖（有内容 / 仅元数据）、检索命中、火眼挂载目录可读性、镜像分区表与耗时，末尾结论「✅ 链路打通 / ❌ 存在失败环节」（退出码非 0 表示有失败环节）。
 
-索引根目录来源与插件一致：`SEEU_INDEX_SEARCH_DIRS`（`;` 分隔）、`<DSH_HOME>/index-extra-dirs.json`、`<DSH_HOME>/index-state.json`。
+面板里也有同样的【体检】按钮，结果按「索引 / 检索 / 火眼挂载 / 镜像解析」逐行显示 ✓/×。
 
-## 15. iOS 取证速查（`ios:quick`）
+## 12. iOS 取证速查命令
 
-把美亚杯类题目最常问的事实一键取出（只读、不改检材）：
+美亚杯一类题目最常问的事实，可以一条命令取出（只读，不改检材）：
 
 ```bash
-node scripts/ios-quick.mjs device  <iDevice_info.txt>          # BuildVersion/IMEI/ICCID/SIM
-node scripts/ios-quick.mjs accounts <Accounts3.sqlite>         # iCloud 等账号
-node scripts/ios-quick.mjs photos  <Photos.sqlite> --name IMG_0027   # GPS/导入来源/原名/Z_PK
-node scripts/ios-quick.mjs order   <Photos.sqlite> IMG_0014.MOV IMG_0016.MOV  # 是否相邻/缺失
-node scripts/ios-quick.mjs safari  <History.db>                # 历史条目/访问次数
+node scripts/ios-quick.mjs device  <iDevice_info.txt>                 # 系统版本/IMEI/ICCID/SIM
+node scripts/ios-quick.mjs accounts <Accounts3.sqlite>                # iCloud 等账号
+node scripts/ios-quick.mjs photos  <Photos.sqlite> --name IMG_0027    # GPS/导入来源/原名/顺序
+node scripts/ios-quick.mjs order   <Photos.sqlite> IMG_0014.MOV IMG_0016.MOV
+node scripts/ios-quick.mjs safari  <History.db>                       # 浏览历史
 node scripts/ios-quick.mjs wa-sessions <ChatStorage.sqlite> [--archived]
 node scripts/ios-quick.mjs wa-members  <ChatStorage.sqlite> <jid> [--admins]
-node scripts/ios-quick.mjs wa-calls    <CallHistory.storedata>  # WhatsApp 通话条数
-node scripts/ios-quick.mjs wa-locations <ChatStorage.sqlite>    # 位置消息 WGS84
-node scripts/ios-quick.mjs wechat  <Documents/<hash>>           # 视频号关注数/wxid
+node scripts/ios-quick.mjs wa-calls    <CallHistory.storedata>
+node scripts/ios-quick.mjs wa-locations <ChatStorage.sqlite>
+node scripts/ios-quick.mjs wechat  <Documents/<hash>>                 # 视频号关注数/wxid
 ```
 
-实现：`tools/ios-quick.mjs`（纯函数）+ `scripts/ios-quick.mjs`（CLI）；单测 `tests/ios-quick.test.mjs` 6 例（临时 SQLite 夹具）。
+也可以直接让模型做（内存/手机预设里的技能已覆盖这些查法）。
 
-## 16. 题目实测答案（2025 美亚杯）
+## 13. 常见问题
 
-- 答案汇总：`docs/answers-2025美亚杯.md`（Q1–98 中已给 52 题答案 + 置信度 + 证据；11 题因 `Sunny.zip` AES 密码阻塞）。
-- 逐题证据与命令：`docs/chain-check-2025美亚杯.md`。
-- 复现：`npm run chain:check -- --caseNumber 2919d298`；随后可用内置 MCP 工具 `index_list` / `evidence_list` / `index_search` 直接取数。
+**Q：模型说查不到索引 / 索引库不存在？**
+用面板里的案号（`caseNumber`）而不是含中文的路径去查；中文路径经控制台/HTTP 转码后可能对不上。面板或内置 MCP 都支持案号前缀。
 
-## 17. 许可与来源
+**Q：AI 一上来就全盘搜索 `E:\`？**
+旧版本提示词问题，v0.3.3 起已改为「先索引 → 火眼已挂载目录 → 镜像挂载 → 原始文件按需只读」，并禁止全盘递归。仍出现时检查是否在旧版本实例里。
+
+**Q：装了新版但界面没变化 / 插件没加载？**
+旧实例还活着：从托盘退出所有 SeeU 进程后再启动；插件在首次启动时自动补齐（约几秒），`设置 → 运行环境体检`里应显示「插件」正常。
+
+**Q：首页白屏，日志里有 431？**
+旧版本历史 cookie 撑爆请求头；v0.3.7 起启动时自动清理，升级即可。
+
+**Q：本地模型能聊天但不会查案件 / 不能用技能？**
+网关/模型不支持工具调用。到设置页跑一次【测试连接与能力自检】，五项里「工具调用」必须为绿；红项说明该模型只能聊天。
+
+**Q：镜像挂载失败？**
+按提示处理：Dokan 未装/无权限 → 以管理员身份运行；「already contains a case / case lock」→ 关掉 LovelyCarve 桌面端；盘符被占用 → 换一个盘符；镜像路径不存在 → 重新选择。
+
+**Q：工具缺失（Ghidra/IDA/tshark/jadx…）？**
+到「设置 → 本地模型与工具路径…」的「外部取证工具路径」区指定路径；解析顺序是 设置里显式指定 → PATH → 本机默认路径。
+
+**Q：打包版首次启动特别慢？**
+首次要解包 + 杀毒扫描（20–40 秒），之后稳定在 5–8 秒（便携版每次解包约 40–60 秒，属正常）。
+
+## 14. 文件与配置位置
+
+| 内容 | 路径 |
+| --- | --- |
+| 用户数据 / dsh 数据目录 | `%APPDATA%\SeeUForensicsAgentPlus\dsh-home` |
+| 取证工作区（会话默认 cwd） | `%USERPROFILE%\Documents\SeeUForensicsWorkspace` |
+| 本地模型配置 | `%APPDATA%\SeeUForensicsAgentPlus\local-model.json` |
+| 外部工具路径 | `<dsh-home>\tool-paths.json` |
+| 镜像挂载清单 | `<dsh-home>\mounts.json` |
+| 日志 | `%APPDATA%\SeeUForensicsAgentPlus\logs\shell.log`、`dsh-host-<日期>.log` |
+| 案件索引 | `<火眼案件目录>\.seeu-index\case-index.db` |
+
+这些位置在「设置 → 打开配置文件目录 / 打开日志目录」里可直接打开。排障时把 `logs` 下的两个日志一起提供最有用。
+
+## 15. 许可与来源
 
 - 外壳代码：MIT。
-- `dsh` 运行时：来自 npm `@deepseek-ai/dsh`（DeepSeek AI 开源，MIT）；本仓库不修改其源码，仅通过官方 profile/patch 机制扩展。
+- dsh 运行时：npm `@deepseek-ai/dsh`（DeepSeek AI 开源，MIT），本仓库不修改其源码，仅通过官方 profile/patch 机制扩展。
 - Electron / Electron Builder：MIT。
