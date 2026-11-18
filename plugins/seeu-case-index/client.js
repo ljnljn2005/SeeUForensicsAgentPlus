@@ -306,6 +306,7 @@ window.__ModuleLoader__.load({
         onClick,
         disabled: !!o.disabled,
         title: o.title,
+        ...(o.attrs ?? {}),
       }, label);
     }
 
@@ -1498,12 +1499,12 @@ window.__ModuleLoader__.load({
       });
       const runChain = async (ix, images = 0) => {
         if (!ix) return;
-        setChain({ dbPath: ix.dbPath, running: true, result: null, error: '' });
+        setChain({ dbPath: ix.dbPath, caseNumber: ix.caseNumber || undefined, running: true, result: null, error: '' });
         try {
           const res = await api('/chain-check', { images: images ? 1 : 0, caseNumber: ix.caseNumber || undefined, db: ix.dbPath });
-          setChain({ dbPath: ix.dbPath, running: false, result: res, error: '' });
+          setChain({ dbPath: ix.dbPath, caseNumber: ix.caseNumber || undefined, running: false, result: res, error: '' });
         } catch (err) {
-          setChain({ dbPath: ix.dbPath, running: false, result: null, error: String((err && err.message) || err) });
+          setChain({ dbPath: ix.dbPath, caseNumber: ix.caseNumber || undefined, running: false, result: null, error: String((err && err.message) || err) });
         }
       };
       const [recordSeed, setRecordSeed] = useState(null);
@@ -2201,7 +2202,7 @@ window.__ModuleLoader__.load({
                               await window.seeu.writeClipboard(String((chain.result && chain.result.text) || ''));
                             } catch (err) { setError(String((err && err.message) || err)); }
                           }),
-                          actionButton('含镜像解析', () => { void runChain({ caseNumber: ix.caseNumber, dbPath: ix.dbPath }, 1); }, { disabled: chain.running || !!(chain.result && chain.result.report && chain.result.report.images && chain.result.report.images.length), title: '额外调用 LovelyCarve 解析镜像分区（约 200ms/个）' }),
+                          actionButton('含镜像解析', () => { void runChain({ caseNumber: chain.caseNumber, dbPath: chain.dbPath }, 1); }, { attrs: { 'data-chain-deep': '1' }, disabled: chain.running || !!(chain.result && chain.result.report && chain.result.report.images && chain.result.report.images.length), title: '额外调用 LovelyCarve 解析镜像分区（约 200ms/个）' }),
                           actionButton('关闭', () => setChain(null))))
                     : null,
                 ];
