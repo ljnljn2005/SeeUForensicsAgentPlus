@@ -1491,6 +1491,12 @@ window.__ModuleLoader__.load({
         return [3, 6, 8].includes(raw) ? raw : 3
       });
       const [indexes, setIndexes] = useState([]);
+      const buildingCase = useMemo(() => {
+        const norm = (value) => { let t = String(value ?? '').split(String.fromCharCode(92)).join('/'); while (t.endsWith('/')) t = t.slice(0, -1); return t.toLowerCase() }
+        const target = norm(dir)
+        if (!target) return null
+        return (indexes ?? []).find((ix) => ix.building && norm(ix.caseDir) === target) ?? null
+      }, [indexes, dir])
       const [srcFilter, setSrcFilter] = useState('all');
       const [chain, setChain] = useState(null);
       const [db, setDb] = useState(null);
@@ -1708,14 +1714,14 @@ window.__ModuleLoader__.load({
         loadNode(index.dbPath, 'root');
       }, [loadNode]);
 
-      const startBuild = useCallback(async () => {
+      const startBuild = useCallback(async (resume = false) => {
         const target = dir.trim();
         if (!target) { setError('先填案件目录（ 例如：E:\\forensics\\案件目录）'); return; }
         setError('');
         setBusy('build');
         setProgress({ phase: 'probe', percent: 0, message: '提交建库任务…' });
         try {
-          const { jobId } = await post('/build', { dir: target, concurrency: buildConc });
+          const { jobId } = await post('/build', { dir: target, concurrency: buildConc, rebuild: !resume });
           const poll = async () => {
             const job = await api('/build', { job: jobId });
             setProgress(job);
@@ -1733,7 +1739,7 @@ window.__ModuleLoader__.load({
           setProgress(null);
           setError(String(e.message ?? e));
         }
-      }, [dir, scan, loadNode]);
+      }, [dir, buildConc, scan, loadNode]);
 
       const doSearch = useCallback(async (nextOffset) => {
         if (!db || !query.trim()) return;
@@ -2060,6 +2066,13 @@ window.__ModuleLoader__.load({
               style: { ...S.input, width: 96, flex: 'none' },
             }, h('option', { value: '3' }, '并发 3'), h('option', { value: '6' }, '并发 6'), h('option', { value: '8' }, '并发 8')),
             actionButton(busy === 'build' ? '建库中…' : '建库 / 更新', startBuild, { primary: true, disabled: busy === 'build' }),
+            buildingCase
+              ? actionButton('继续上次建库', () => startBuild(true), {
+                disabled: busy === 'build',
+                title: `上次建库中断（半成品 ${Math.round((buildingCase.sizeBytes ?? 0) / 1048576)} MB），从已完成处继续、不重跑`,
+                attrs: { 'data-build-resume': String(Math.round((buildingCase.sizeBytes ?? 0) / 1048576)) },
+              })
+              : null,
             actionButton('从 MYOS 导入…', () => setMyosOpen(true), { disabled: busy === 'build', title: '从超级取证大师（MYOS）的结果库导入为 SeeU 索引' })),
           progress ? (() => {
             const bp = progress.progress ?? null;

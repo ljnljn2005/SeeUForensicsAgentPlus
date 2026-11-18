@@ -4,6 +4,8 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 
 ## 未发布（文档整理）
 
+- 面板支持「继续上次建库」：当所选目录存在中断的半成品（`.seeu-index/case-index.db.building`）时，「建库 / 更新」旁出现【继续上次建库】（`data-build-resume`，显示半成品 MB），请求带 `rebuild:false` 从断点续跑、不重跑已完成叶子；普通建库仍默认 `rebuild:true`。m2 e2e 增加 `buildResumeHiddenOk` 断言（无半成品时不出现）。
+
 - 建库中途火眼案件服务断开（用户关闭火眼/服务崩溃）时不再把剩余叶子全记成失败：连续 3 次连接类错误（`ConnectionError`/`case_backend_unreachable`/`WinError 10061`）立即 `E_BACKEND_LOST` 终止，保留已完成叶子在 building 库，重新打开案件后 `--resume` 继续。新增 `isBackendLostError()` 纯函数与 4 例单测。
 
 - 面板「建库 / 更新」增加并发选择（3 / 6 / 8，默认 3，存 `localStorage.seeu.buildConcurrency`）：大案件（上千叶子）可用并发 6 提速；m2 e2e 增加 `buildConcurrencyOk` 断言。
