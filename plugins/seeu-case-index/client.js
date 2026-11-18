@@ -2096,17 +2096,17 @@ window.__ModuleLoader__.load({
                   visible.length
                     ? h('div', { className: 'seeu-rows seeu-scroll', style: { display: 'flex', flexDirection: 'column', maxHeight: 180, overflow: 'auto' } },
                       visible.map((ix) => {
-                        const on = ix.dbPath === db;
+                        const on = !!ix.dbPath && ix.dbPath === db;
                         const meta = ix.meta ?? null;
                         return h('div', {
-                          key: ix.dbPath,
+                          key: ix.dbPath ?? ix.caseDir,
                           className: 'seeu-row is-clickable' + (on ? ' is-active' : ''),
                           style: {
                             display: 'flex', flexDirection: 'column', gap: 2, minHeight: 34, padding: '5px 8px',
                             borderBottom: '1px solid ' + C_L1, borderLeft: '2px solid ' + (on ? C_ACC : 'transparent'),
                             background: on ? C_ACTIVE : 'transparent', cursor: 'pointer', fontSize: 12.5,
                           },
-                          onClick: () => openIndex(ix),
+                          onClick: () => (ix.dbPath ? openIndex(ix) : setDir(ix.caseDir ?? '')),
                         },
                           h('div', { style: { display: 'flex', alignItems: 'baseline', gap: 8 } },
                             h('span', { style: { color: C_FG, fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, ix.caseName ?? ix.caseNumber ?? basename(ix.caseDir)),
@@ -2120,16 +2120,21 @@ window.__ModuleLoader__.load({
                               title: ix.tool ? '索引由 ' + ix.tool + ' 生成' : '',
                             }, ix.sourceLabel) : null,
                             h('span', { style: { flex: 'none', color: C_FG3, fontSize: 11 } }, fmtBytes(ix.sizeBytes ?? 0)),
-                            h('span', {
-                              role: 'button',
-                              'data-chain-check': ix.dbPath,
-                              title: '检查索引 / 检索 / 火眼挂载 / 镜像解析',
-                              style: { flex: 'none', color: C_ACC, fontSize: 11, cursor: 'pointer', padding: '0 4px' },
-                              onClick: async (e) => {
-                                if (e && e.stopPropagation) e.stopPropagation();
-                                await runChain(ix);
-                              },
-                            }, chain && chain.dbPath === ix.dbPath && chain.running ? '体检中…' : '体检'),
+                            ix.building
+                              ? h('span', {
+                                  title: '上次建库中断，只剩 case-index.db.building；点「建库 / 更新」会重新建（已默认 rebuild）',
+                                  style: { flex: 'none', color: '#F5A524', fontSize: 11, padding: '0 4px' },
+                                }, '⚠ 上次建库未完成')
+                              : h('span', {
+                                  role: 'button',
+                                  'data-chain-check': ix.dbPath,
+                                  title: '检查索引 / 检索 / 火眼挂载 / 镜像解析',
+                                  style: { flex: 'none', color: C_ACC, fontSize: 11, cursor: 'pointer', padding: '0 4px' },
+                                  onClick: async (e) => {
+                                    if (e && e.stopPropagation) e.stopPropagation();
+                                    await runChain(ix);
+                                  },
+                                }, chain && chain.dbPath === ix.dbPath && chain.running ? '体检中…' : '体检'),
                             ix.extra ? h('span', {
                               role: 'button',
                               title: '从面板的额外目录列表移除（不删除索引文件）',
@@ -2143,6 +2148,9 @@ window.__ModuleLoader__.load({
                               },
                             }, '移除') : null,
                             h('span', { style: { marginLeft: 'auto', ...S.rowTime } }, ix.builtAt ? fmtTime(ix.builtAt) : '')),
+                          ix.building
+                            ? h('div', { style: { color: '#F5A524', fontSize: 11 } }, '半成品 ' + fmtBytes(ix.sizeBytes ?? 0) + ' · 重新建库会丢弃它')
+                            : null,
                           meta?.text ? h('div', { style: { color: C_FG3, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: meta.text }, meta.text) : null,
                           meta?.warn ? h('div', { style: { color: '#F5A524', fontSize: 11 } }, '⚠ ' + meta.warn) : null);
                       }))

@@ -237,7 +237,7 @@ async function handle(req, res) {
         indexes: indexes.map((ix) => {
           const extra = extraSet.has(ix.caseDir ? resolve(ix.caseDir).toLowerCase() : '');
           const source = ix.tool === 'seeu-myso-import' ? 'myos' : extra ? 'external' : 'ges';
-          return { ...ix, meta: indexSummary(ix), extra, source, sourceLabel: SOURCE_LABELS[source] };
+          return { ...ix, meta: ix.dbPath ? indexSummary(ix) : null, extra, source, sourceLabel: SOURCE_LABELS[source] };
         }),
       });
     }

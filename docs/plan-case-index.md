@@ -2859,3 +2859,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 后端无需改动：`runChainCheck({ images: true })` 已有实现与单测（`tests/chain-check-run.test.mjs` 注入 `inspectImage` 断言 `report.images`）。
 - e2e：`m2-ui-check` 在体检后点【含镜像解析】并轮询 `data-chain-step >= 4`，断言文本含「镜像解析」；无索引时（`[data-chain-check]` 不存在）标记 `idxChainSkipped` 并跳过，不再硬失败。
 - 坑：`m2-ui-check` 的 `CASE_DIR` 之前写死 `E:orensics\W盘_2919d298-…`，该目录已被改名/清理（现为乱码目录且只有 `.building`），已改为可用 `SEEU_CASE_DIR` 覆盖；完整面板回归需要一台有真实索引的机器。
+
+### 20.149 建库中断（只剩 .building）在面板可见并可一键重建
+
+- 背景：用户机器上 `2026美亚团队_…` 案件的 `.seeu-index` 只有 2.5 GB `case-index.db.building`，`findIndexes()` 只认正式库 → 面板显示「没有索引」，用户不知道发生了什么。
+- `tools/ges-index/query.mjs` 的 `findIndexes()`：对每个候选目录先查正式库；不存在但存在 `case-index.db.building` 时，返回 `{ caseDir, dbPath: null, building: true, sizeBytes }`（同目录只报一次，不重复）。
+- 插件 `/list`：`meta` 只对 `ix.dbPath` 存在的条目计算（半成品不做规模摘要）。
+- 面板：半成品行显示「⚠ 上次建库未完成 · 半成品 X MB · 重新建库会丢弃它」，点击行只把目录填入输入框（不打开库），且不提供「体检」；「建库 / 更新」默认 `rebuild: true`，会删掉 `.building` 重来。
+- 测试：`tests/stale-building.test.mjs` 2 例（只有 building → 列出且 `dbPath:null`；同时有正式库 → 只列正式库）；`npm test` 216/216。
+- 本地实测：`.dev/stale-case/案件丙/.seeu-index/case-index.db.building`（3 MB）→ `findIndexes` 返回 `building:true, sizeBytes:3145728`。
