@@ -2851,3 +2851,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 版本 0.3.23：欢迎页新增 `[data-seeu-mcp]`「MCP：6 工具」chip（IPC `seeu:mcp:info` → `mcpFacts()`）。
 - 产物：NSIS 320,029,815 B（blockmap 332,612）、portable 270,587,054、`app.asar` 566,492,194（32,966 entries）、目录版 1,262,683,204；asar-0323 143 项全 true、`missing:[]`。
 - 回归：目录版 20,756 ms（首启杀毒扫描）、portable 42,463 ms；打包态 hero（`mcpOk:true`）/m2（`idxChainSteps:3`）通过；`npm test` 214/214。
+
+### 20.148 链路体检支持「含镜像解析」
+
+- 面板 `plugins/seeu-case-index/client.js`：`runChain(ix, images)` 支持传入 images；结果卡片新增【含镜像解析】按钮（已含镜像时禁用、体检中禁用），点击后以 `images=1` 重新请求 `/chain-check`，卡片多出「镜像解析 N/N 可解析」行。
+- 默认仍 `images=0`：镜像解析会调用 LovelyCarve inspect（约 200 ms/个），不影响面板秒开。
+- 后端无需改动：`runChainCheck({ images: true })` 已有实现与单测（`tests/chain-check-run.test.mjs` 注入 `inspectImage` 断言 `report.images`）。
+- e2e：`m2-ui-check` 在体检后点【含镜像解析】并轮询 `data-chain-step >= 4`，断言文本含「镜像解析」；无索引时（`[data-chain-check]` 不存在）标记 `idxChainSkipped` 并跳过，不再硬失败。
+- 坑：`m2-ui-check` 的 `CASE_DIR` 之前写死 `E:orensics\W盘_2919d298-…`，该目录已被改名/清理（现为乱码目录且只有 `.building`），已改为可用 `SEEU_CASE_DIR` 覆盖；完整面板回归需要一台有真实索引的机器。
