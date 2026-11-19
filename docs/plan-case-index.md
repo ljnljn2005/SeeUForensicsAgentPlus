@@ -2920,3 +2920,13 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 坑：插件新增的 `tools/index-scan-budget.mjs` 未进 `electron-builder.yml` 的 `files` → 打包后插件 ESM 解析失败；asar 自检（新增 `scanBudgetModule`/`scanBudgetRoute`/`scanBudgetPicker`/`scanBudgetMcp`）第一时间暴露，补白名单后重打两次（`--dir` 先验证 566,532,233 B 含该文件，再全量）。
 - 验证：目录版 54,761 ms、portable 92,140 ms；打包态 2.6 GB 案件 m2 `m2ok:true`、settings `ok:true`。
 - 教训：任何被插件 `import` 的新 `tools/*.mjs` 都必须同时进 `files` 白名单并在 asar 自检里加一条断言。
+
+### 20.152 短词扫描「继续扫描」追加预算
+
+- 检索视图：`doSearch(nextOffset, budgetOverride)` 支持显式 `scanBudgetMs`；`searchBudget` 状态记录追加后的预算，连续点击逐次 +2500 ms（上限 30000）；结果卡在 `result.partialScan` 时显示 `noticeWarn` 提示条 +【继续扫描 +2.5 秒】（`data-continue-scan="search"`）。
+- 记录视图：`scanMore` 状态并入 `recParams()`（`scanBudgetMs`），`totalApprox || partialScan` 时显示提示条 +【继续扫描 +2.5 秒】（`data-continue-scan="records"`）。
+- 新增 `tests/search-scan-budget.test.mjs` 2 例：取满 limit 时 `totalApprox/partialScan=true` 且 `scanned<总行数`、hint 含「已扫描」；命中很少时扫完整库 → 精确 total、不置 `partialScan`。
+- `scripts/e2e/m2-ui-check.mjs` 新增 `continueScan/continueScanText/continueScanOk`（有按钮则点一次并等结果刷新，无按钮视为通过），2.6 GB 案件实测通过。
+- 顺带修两个真问题：① **并发检索应答乱序**——「继续扫描」的慢请求（2 字词、几秒）可能晚于后续新关键词请求返回并覆盖结果；`SearchView` 增加 `searchSeq` 应答序号，只有最新请求能 `setResult`（记录视图的 `useLoad` 本就有同类保护）；② e2e 输入关键词合成事件在同一 tick 里「写值 + 回车」，React 状态未提交时 `doSearch` 会用旧关键词，改为「写值 → 等 400 ms → 单独回车」两步；③ 索引来源 chips 断言由写死「火眼建库 1」改为 `火眼建库 \d+`（同一搜索目录下可能有多案）。
+
+- `npm test` 237/237、`check:overlay` OK。

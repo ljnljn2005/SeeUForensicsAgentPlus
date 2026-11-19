@@ -425,7 +425,15 @@ window.__ModuleLoader__.load({
         return hit && hit.name ? hit.name : '检材 ' + eid;
       };
       useEffect(() => { setDraft(base); setApplied(base); setOffset(0); }, [base]);
-      const { data, error, loading } = useLoad(() => api('/records', { db, ...applied, limit: PAGE, offset }), [db, applied, offset]);
+      // 短词（<3 字）逐行扫描受时间预算限制；结果可能不全时允许「继续扫描」追加预算。
+      const [scanMore, setScanMore] = useState(0);
+      const recParams = () => ({ db, ...applied, limit: PAGE, offset, ...(scanMore > 0 ? { scanBudgetMs: scanMore } : {}) });
+      const { data, error, loading } = useLoad(() => api('/records', recParams()), [db, applied, offset, scanMore]);
+      const scanMoreRecords = async () => {
+        let base = 2500;
+        try { base = Number((await api('/scan-budget'))?.scanBudgetMs) || 2500; } catch { /* 用默认预算 */ }
+        setScanMore(Math.min(30000, Math.max(base, scanMore) + 2500));
+      };
       const apply = () => { setOffset(0); setApplied({ ...draft }); };
       const clear = () => {
         const next = { eid: '', app: '', category: '', q: '', from: '', to: '' };
@@ -552,6 +560,11 @@ window.__ModuleLoader__.load({
             h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `记录 ${data.totalApprox ? '≥ ' : ''}${total} 条`),
             h('span', { style: S.muted }, `当前 ${data.offset + 1}-${data.offset + data.returned}`),
             data.hint ? h('span', { style: { ...S.muted, maxWidth: 460 } }, data.hint) : null,
+            data.totalApprox || data.partialScan
+              ? h('span', { style: { ...S.noticeWarn, padding: '2px 8px', maxWidth: 780 } },
+                '结果可能不全（预算内没扫完）',
+                actionButton('继续扫描 +2.5 秒', scanMoreRecords, { disabled: loading || scanMore >= 30000, title: '追加扫描预算后重跑本次关键词', attrs: { 'data-continue-scan': 'records' } }))
+              : null,
             loading ? h('span', { style: S.muted }, '更新中…') : null,
             h('span', { style: { marginLeft: 'auto' } },
               actionButton(copying ? '复制中…' : '复制本页引用清单', copyPage, { disabled: copying }),
@@ -1762,7 +1775,11 @@ window.__ModuleLoader__.load({
         }
       }, [dir, buildConc, scan, loadNode]);
 
-      const doSearch = useCallback(async (nextOffset) => {
+      // 短词逐行扫描的追加预算（0 = 用设置里的默认预算）
+      const [searchBudget, setSearchBudget] = useState(0);
+      // 并发检索的应答序号：慢的旧请求（例如大库 2 字扫描 + 继续扫描）不能覆盖后来的结果。
+      const searchSeq = useRef(0);
+      const doSearch = useCallback(async (nextOffset, budgetOverride) => {
         if (!db || !query.trim()) return;
         // 事件对象也会传进来（onClick），Number.isFinite 过滤后按第 0 页处理
         const wantOffset = Number.isFinite(Number(nextOffset)) && Number(nextOffset) > 0 ? Math.floor(Number(nextOffset)) : 0;
@@ -1776,14 +1793,20 @@ window.__ModuleLoader__.load({
         if (String(filters.app ?? '').trim()) extra.app = String(filters.app).trim();
         if (String(filters.from ?? '').trim()) extra.from = String(filters.from).trim();
         if (String(filters.to ?? '').trim()) extra.to = String(filters.to).trim();
+        const mine = ++searchSeq.current;
         try {
           const params = { db, q: query.trim(), limit: 20, ...extra };
+          const budget = Number(budgetOverride) > 0 ? Number(budgetOverride) : searchBudget;
+          if (budget > 0) params.scanBudgetMs = Math.min(30000, budget);
           if (wantOffset > 0) params.offset = wantOffset;
-          setResult(await api('/search', params));
+          const data = await api('/search', params);
+          if (mine === searchSeq.current) setResult(data);
         }
-        catch (e) { setError(String(e.message ?? e)); }
+        catch (e) {
+          if (mine === searchSeq.current) setError(String(e.message ?? e));
+        }
         finally { setBusy(''); }
-      }, [db, query, filters]);
+      }, [db, query, filters, searchBudget]);
 
       const resetFilters = useCallback(() => {
         setFilters({ eid: '', app: '', from: '', to: '' });
@@ -2495,6 +2518,15 @@ window.__ModuleLoader__.load({
               h('div', { style: S.row },
                 h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `引擎 ${result.engine} · ${result.totalApprox ? '≥ ' : ''}${result.returned} 命中`),
                 result.hint ? h('span', { style: { ...S.muted, maxWidth: 420 } }, result.hint) : null,
+                result.partialScan
+                  ? actionButton('继续扫描 +2.5 秒', async () => {
+                    let base = 2500;
+                    try { base = Number((await api('/scan-budget'))?.scanBudgetMs) || 2500; } catch { /* 默认预算 */ }
+                    const next = Math.min(30000, Math.max(base, searchBudget) + 2500);
+                    setSearchBudget(next);
+                    doSearch(0, next);
+                  }, { disabled: busy === 'search' || searchBudget >= 30000, title: '追加扫描预算后重跑这次关键词（最多 30 秒）', attrs: { 'data-continue-scan': 'search' } })
+                  : null,
                 (result.total ?? result.returned) > result.returned
                   ? h('span', { style: S.muted }, `共 ${result.total} 条 · 第 ${(result.offset ?? 0) + 1}–${(result.offset ?? 0) + result.returned} 条`)
                   : null,
