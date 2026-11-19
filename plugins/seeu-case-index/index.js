@@ -14,6 +14,7 @@ import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, m
 import { forgetExtraDir, readExtraDirs, rememberExtraDir } from '../../tools/ges-index/extra-dirs.mjs';
 import { activityFile, clearActivity, formatActivitySummary, readActivity, recordActivity, removeActivity, summarizeActivity } from '../../tools/ges-index/activity.mjs';
 import { runChainCheck } from '../../tools/chain-check-run.mjs';
+import { saveScanBudget, scanBudgetMs, scanBudgetView } from '../../tools/index-scan-budget.mjs';
 
 function pathBase(value) {
   const text = String(value ?? '').replace(/[\/]+$/, '');
@@ -241,6 +242,15 @@ async function handle(req, res) {
         }),
       });
     }
+    // ---------- 短词扫描预算（设置页可调，影响 /search 与 /records 的逐行扫描时长） ----------
+    if (path === '/scan-budget') {
+      if (req.method === 'POST') {
+        const body = await readBody(req).catch(() => ({}));
+        const result = saveScanBudget(body?.scanBudgetMs);
+        return send(res, result.ok ? 200 : 400, result.ok ? { ...result, ...scanBudgetView() } : result);
+      }
+      return send(res, 200, scanBudgetView());
+    }
     // ---------- 会话上下文里的案件概览（AGENTS.md 注入状态） ----------
     if (path === '/brief') {
       if (req.method === 'POST') {
@@ -442,7 +452,7 @@ async function handle(req, res) {
     try {
       if (path === '/tree') return send(res, 200, tree(db, url.searchParams.get('node') || 'root'));
       if (path === '/search') {
-        const opts = { q: url.searchParams.get('q'), limit: url.searchParams.get('limit'), offset: url.searchParams.get('offset') };
+        const opts = { q: url.searchParams.get('q'), limit: url.searchParams.get('limit'), offset: url.searchParams.get('offset'), scanBudgetMs: scanBudgetMs() };
         for (const k of ['eid', 'app', 'account', 'category', 'from', 'to']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
         return send(res, 200, search(db, opts));
       }
@@ -476,8 +486,8 @@ async function handle(req, res) {
         return send(res, 200, timeline(db, opts));
       }
       if (path === '/records') {
-        const opts = { limit: url.searchParams.get('limit') ?? 20, offset: url.searchParams.get('offset') ?? 0 };
-        for (const k of ['eid', 'app', 'account', 'category', 'artifact', 'from', 'to']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
+        const opts = { limit: url.searchParams.get('limit') ?? 20, offset: url.searchParams.get('offset') ?? 0, scanBudgetMs: scanBudgetMs() };
+        for (const k of ['eid', 'app', 'account', 'category', 'artifact', 'q', 'from', 'to']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
         return send(res, 200, records(db, opts));
       }
       if (path === '/cite') {
@@ -523,6 +533,9 @@ async function handle(req, res) {
         for (const k of ['eid', 'app', 'account', 'category', 'artifact', 'from', 'to', 'q']) {
           if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
         }
+        // 导出整批：短词逐页扫描会重复扫，预算按页给足（每页最多 2.5 s × 页数会太慢），
+        // 有短词时跳过 totalApprox 的近似页，只导出扫描到的命中。
+        opts.scanBudgetMs = Math.min(30_000, Math.max(2500, Number(url.searchParams.get('scanBudgetMs')) || 8000));
         const max = Math.min(20000, Math.max(1, Number(url.searchParams.get('max')) || 20000));
         const pageSize = 100;
         const rows = [];

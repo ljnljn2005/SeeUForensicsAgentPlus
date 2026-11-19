@@ -2906,3 +2906,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 现在：短词（<3 字）走与 `search()` 相同的「按 id 分块顺序读 + `scanBudgetMs`（默认 2500 ms）」策略，命中窗口再按时间排序；关键词请求不再跑全表 count（`totalApprox:true`，`next` 按是否有多余命中判断）；长词仍走 FTS5（`totalApprox:false`）。
 - 面板记录视图显示「记录 ≥ N 条」+ 已扫描行数提示；`evidence` 表缺失时用 `evidenceNameMap()` 容错。
 - 实测（842k 记录）：无关键词 90 ms、2 字词 2,566 ms、长词 FTS 930 ms。
+
+### 20.150 短词扫描预算可配置（面板下拉 + /scan-budget）
+
+- 新增 `tools/index-scan-budget.mjs`：`scanBudgetFile()`（`<DSH_HOME>/index-scan-budget.json`，`SEEU_SCAN_BUDGET_FILE` 可覆盖）、`clampScanBudget()`（300–30000 ms）、`scanBudgetMs()`（环境变量 `SEEU_INDEX_SCAN_BUDGET` → 配置文件 → 默认 2500）、`saveScanBudget()`、`scanBudgetView()`。
+- 插件新增 `GET/POST /seeu-index/scan-budget`；`/search`、`/records` 自动带 `scanBudgetMs`；记录 CSV 导出单独给 8000 ms 预算（整批导出不重复按 2.5 s 卡）。
+- 面板建库行新增下拉「短词 1.5/2.5/5/10 秒」（`data-scan-budget`），保存即生效；MCP `index_search` 显示「已扫描 N/M 行」。
+- 测试 `tests/index-scan-budget.test.mjs` 4 例（默认值/保存读回/非法值不覆盖/环境变量优先/坏 JSON 回退）；`m2-ui-check` 新增 `scanBudgetPick/scanBudgetView/scanBudgetOk/Restore`，2.6 GB 案件实测 `scanBudgetView:5000`、`m2ok:true`；`npm test` 235/235。

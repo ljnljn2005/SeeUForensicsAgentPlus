@@ -1491,6 +1491,26 @@ window.__ModuleLoader__.load({
         const raw = Number(localStorage.getItem('seeu.buildConcurrency'))
         return [3, 6, 8].includes(raw) ? raw : 3
       });
+      // 短词（<3 字）检索的逐行扫描预算：大库上越大越完整、越慢。
+      const [scanBudget, setScanBudget] = useState(null);
+      const [scanNote, setScanNote] = useState('');
+      useEffect(() => {
+        let alive = true;
+        api('/scan-budget').then((data) => { if (alive && data) setScanBudget(Number(data.scanBudgetMs) || 2500) }).catch(() => {});
+        return () => { alive = false };
+      }, []);
+      const saveScanBudget = async (ms) => {
+        setScanBudget(ms);
+        setScanNote('保存中…');
+        try {
+          const data = await post('/scan-budget', { scanBudgetMs: ms });
+          setScanBudget(Number(data?.scanBudgetMs) || ms);
+          setScanNote(`已保存：${Number(data?.scanBudgetMs) || ms} ms`);
+          setTimeout(() => setScanNote(''), 2500);
+        } catch (e) {
+          setScanNote(`保存失败：${String(e.message ?? e)}`);
+        }
+      };
       const [indexes, setIndexes] = useState([]);
       const buildingCase = useMemo(() => {
         const norm = (value) => { let t = String(value ?? '').split(String.fromCharCode(92)).join('/'); while (t.endsWith('/')) t = t.slice(0, -1); return t.toLowerCase() }
@@ -2074,6 +2094,14 @@ window.__ModuleLoader__.load({
                 attrs: { 'data-build-resume': String(Math.round((buildingCase.sizeBytes ?? 0) / 1048576)) },
               })
               : null,
+            h('select', {
+              value: String(scanBudget ?? 2500),
+              'data-scan-budget': String(scanBudget ?? 2500),
+              title: '短词扫描预算：2 字关键词只能逐行扫描，扫到预算上限就先返回已找到的结果（越大越完整、越慢）',
+              onChange: (e) => saveScanBudget(Number(e.target.value)),
+              style: { ...S.input, width: 132, flex: 'none' },
+            }, h('option', { value: '1500' }, '短词 1.5 秒'), h('option', { value: '2500' }, '短词 2.5 秒'), h('option', { value: '5000' }, '短词 5 秒'), h('option', { value: '10000' }, '短词 10 秒')),
+            scanNote ? h('span', { style: S.muted }, scanNote) : null,
             actionButton('从 MYOS 导入…', () => setMyosOpen(true), { disabled: busy === 'build', title: '从超级取证大师（MYOS）的结果库导入为 SeeU 索引' })),
           progress ? (() => {
             const bp = progress.progress ?? null;
