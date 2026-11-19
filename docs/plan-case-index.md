@@ -2899,3 +2899,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 新增 `scripts/perf-index.mjs`（`npm run perf:index`）逐项计时：statsOf 444 ms、tree(root) 758 ms、evidences 4 ms、facets 6 ms、records 77 ms、entity 135 ms、timeline 5 ms、typedTables 36 ms、search 长词 198 ms。
 - 复核（2026-11-19 清进程后重跑）：2.6 GB 案件 `m2ok:true`（recordsBefore 842,198 → 筛选 234,374、应用筛选 132,607、实体聚合 30,737、时间线下拉 ev 6/app 52、含镜像解析 4 步）；45k 案件 `m2ok:true`。
 - 坑：`m2-ui-check` 在大库上需要「千分位解析 + 轮询等渲染 + 独立 `--user-data-dir`」；残留 `electron.exe --remote-debugging-port=9345` 会导致「没有拿到 Web UI 页面」，跑前必须清进程。
+
+### 20.149 records() 短词分块扫描（记录视图 2 字词 50 s → 2.5 s）
+
+- `records()` 原来对带关键词的请求固定 `select count(*)`（842k 记录 ≈ 9 s）并按 `order by ts desc` 取页，短词还要叠加全表 LIKE → 实测 50.5 s。
+- 现在：短词（<3 字）走与 `search()` 相同的「按 id 分块顺序读 + `scanBudgetMs`（默认 2500 ms）」策略，命中窗口再按时间排序；关键词请求不再跑全表 count（`totalApprox:true`，`next` 按是否有多余命中判断）；长词仍走 FTS5（`totalApprox:false`）。
+- 面板记录视图显示「记录 ≥ N 条」+ 已扫描行数提示；`evidence` 表缺失时用 `evidenceNameMap()` 容错。
+- 实测（842k 记录）：无关键词 90 ms、2 字词 2,566 ms、长词 FTS 930 ms。
