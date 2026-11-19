@@ -2,6 +2,18 @@
 
 SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的产物大小、验证结果与已知限制另见 `docs/packaging.md` 与对应的 GitHub Release。
 
+## v0.3.28
+
+- **记录视图短关键词检索提速**：842,198 条记录案件上，2 字关键词从 50 秒降到约 2.5 秒。记录视图以前固定先跑全表 `count(*)`（约 9 秒）并按时间倒序取页，短词还要叠加全表逐行匹配；现在改为按 id 分块顺序读 + 时间预算（默认 2500 ms），命中窗口再按时间排序，关键词请求不再跑全表计数。
+- 面板记录条数显示为「记录 **≥ N** 条」，并注明「已扫描 N 行，结果可能不全；用 ≥3 个字或加检材/应用/时间筛选更快」。
+
+### 验证
+
+- `npm test` 232/232、`check:overlay` OK。
+- asar 自检：32,966 个条目、`missing: []`、0 个 false（新增 `recordsShortScan`、`recordsApproxLabel`）。
+- 启动：目录版 `ok:true, elapsedMs:42642`；portable `ok:true, elapsedMs:69958`。
+- 打包态：2.6 GB 案件 `m2-ui-check` → `m2ok:true`（842,198 记录、筛选 234,374）；`settings-check` → `ok:true`。
+
 ## v0.3.27
 
 - **短关键词（<3 字）检索提速**：842,198 条记录案件上，2 字词检索从 45 秒降到约 3 秒。做法是按 rowid 分块顺序读 + 时间预算（默认 2500 ms，可用 `scanBudgetMs` 调整），到点即返回已找到的结果，并在面板/MCP 里注明「已扫描 N/M 行，结果可能不全；用 ≥3 字或加筛选更快」。

@@ -1185,3 +1185,10 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版 `verify-launch --port 5402` → `ok:true, elapsedMs:10263`；portable `--port 5403` → `ok:true, elapsedMs:63178`。
 - 打包态：2.6 GB `2026美亚团队` 案件 `m2-ui-check` → `m2ok:true`（842,198 记录、短词 2 字检索走分块预算扫描）；`settings-check --exe` → `ok:true`（体检 8 项含内置 MCP）。
 - 注意：跑打包态 e2e 前必须清掉残留 `SeeUForensicsAgentPlus.exe` / `electron.exe --remote-debugging-port=9345`，并隔离 `SEEU_DSH_HOME`/`SEEU_USER_DATA`。
+
+### v0.3.28 回归验证（第 79 轮：记录视图短词提速）
+
+- 产物：NSIS 320,035,211 B（blockmap 332,534 B）、portable 270,626,587 B、`app.asar` 566,526,445 B（32,966 entries）。
+- asar 自检 `.probe/asar-0328-check.mjs`：`missing: []`、0 false（新增 `recordsShortScan`、`recordsApproxLabel`）。
+- 启动：目录版 `verify-launch --port 5404` → `ok:true, elapsedMs:42642`；portable `--port 5405` → `ok:true, elapsedMs:69958`。
+- 打包态：2.6 GB `2026美亚团队` 案件 `m2-ui-check` → `m2ok:true`；`settings-check --exe` → `ok:true`。
