@@ -2,6 +2,18 @@
 
 SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的产物大小、验证结果与已知限制另见 `docs/packaging.md` 与对应的 GitHub Release。
 
+## v0.3.27
+
+- **短关键词（<3 字）检索提速**：842,198 条记录案件上，2 字词检索从 45 秒降到约 3 秒。做法是按 rowid 分块顺序读 + 时间预算（默认 2500 ms，可用 `scanBudgetMs` 调整），到点即返回已找到的结果，并在面板/MCP 里注明「已扫描 N/M 行，结果可能不全；用 ≥3 字或加筛选更快」。
+- **新增索引性能自检**：`npm run perf:index -- --case <案件目录>`（或 `--db <case-index.db>`）会逐项打印 `statsOf/tree/evidences/facets/records/entity/timeline/typedTables/search` 的耗时与索引规模，方便判断面板慢在哪一环。
+- **大库自动化回归更稳**：`m2-ui-check` 支持千分位数字、慢渲染轮询与独立 `--user-data-dir`，2.6 GB 案件（842,198 记录 / 416,963 实体）与 45k 案件均 `m2ok:true`。
+
+### 验证
+
+- `npm test` 231/231、`check:overlay` OK。
+- asar 自检：32,966 个条目、`missing: []`、0 个 false；启动验证目录版 10,263 ms、portable 63,178 ms。
+- 打包态：2.6 GB 案件 `m2-ui-check` → `m2ok:true`；`settings-check` → `ok:true`（环境体检 8 项含内置 MCP）。
+
 ## v0.3.26（2026-11-18）
 
 - 大库（2.6 GB / 842,198 记录）性能与稳定性收口：建库预聚合与快照、短词检索早退、挂载探测快失败、`m2-ui-check` 案件无关化；打包态用该案件回归 `m2ok:true`。

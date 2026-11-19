@@ -1177,3 +1177,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - `m2-ui-check` → `m2ok:true, errors:[]`（`recordsBeforeCount:842198`、短词检索 `≥ 20 命中`、长词 FTS、来源筛选、链路体检含镜像解析、活动卡片；
   - `settings-check` → `ok:true`、`envItemCount:8`（含内置 MCP）、`toolPathsRows:15`、`aboutOk:true`、`toolPathsStarmem` 正确；仅 `probeNoContextWindow:false` 属预期（本机网关可能带 context_window）。
 - 已知限制：`activityEmptyHint` 在预置活动数据的隔离 home 下为 false（预置了两条历史，本就不是空态），属 e2e 数据设计，不影响功能。
+
+### v0.3.27 回归验证（第 77 轮：短词检索提速）
+
+- 产物：NSIS 320,034,751 B（blockmap 332,658 B）、portable 270,542,942 B、`app.asar` 566,522,825 B（32,966 entries）。
+- asar 自检 `.probe/asar-0327-check.mjs`：`missing: []`、0 false（新增 `shortScanChunked`、`perfScript`）。
+- 启动：目录版 `verify-launch --port 5402` → `ok:true, elapsedMs:10263`；portable `--port 5403` → `ok:true, elapsedMs:63178`。
+- 打包态：2.6 GB `2026美亚团队` 案件 `m2-ui-check` → `m2ok:true`（842,198 记录、短词 2 字检索走分块预算扫描）；`settings-check --exe` → `ok:true`（体检 8 项含内置 MCP）。
+- 注意：跑打包态 e2e 前必须清掉残留 `SeeUForensicsAgentPlus.exe` / `electron.exe --remote-debugging-port=9345`，并隔离 `SEEU_DSH_HOME`/`SEEU_USER_DATA`。
