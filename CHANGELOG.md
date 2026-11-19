@@ -2,6 +2,19 @@
 
 SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的产物大小、验证结果与已知限制另见 `docs/packaging.md` 与对应的 GitHub Release。
 
+## v0.3.29
+
+- **短词扫描预算可在面板调整**：面板建库行新增「短词 1.5 / 2.5 / 5 / 10 秒」下拉，保存到 `<DSH_HOME>/index-scan-budget.json`（环境变量 `SEEU_INDEX_SCAN_BUDGET` 可覆盖），同时作用于检索和记录视图；短词检索结果里会注明「已扫描 N/M 行」，便于判断结果完整度。
+- 记录 CSV 导出单独使用 8 秒预算，整批导出不会被单次 2.5 秒的预算截断。
+- 内置 MCP 的 `index_search` 输出补充「已扫描 N/M 行」。
+
+### 验证
+
+- `npm test` 235/235、`check:overlay` OK。
+- asar 自检：32,967 个条目、`missing: []`、0 个 false（新增 `scanBudgetModule`、`scanBudgetRoute`、`scanBudgetPicker`、`scanBudgetMcp`）。
+- 启动：目录版 `ok:true, elapsedMs:54761`；portable `ok:true, elapsedMs:92140`（首启受杀毒扫描影响）。
+- 打包态：2.6 GB 案件 `m2-ui-check` → `m2ok:true`（842,198 记录、筛选 234,374、`scanBudgetOk:true`）；`settings-check` → `ok:true`（环境体检 8 项、工具路径 15 行、关于页 0.3.29）。
+
 ## v0.3.28
 
 - **记录视图短关键词检索提速**：842,198 条记录案件上，2 字关键词从 50 秒降到约 2.5 秒。记录视图以前固定先跑全表 `count(*)`（约 9 秒）并按时间倒序取页，短词还要叠加全表逐行匹配；现在改为按 id 分块顺序读 + 时间预算（默认 2500 ms），命中窗口再按时间排序，关键词请求不再跑全表计数。

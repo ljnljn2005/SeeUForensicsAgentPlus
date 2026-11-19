@@ -2913,3 +2913,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 插件新增 `GET/POST /seeu-index/scan-budget`；`/search`、`/records` 自动带 `scanBudgetMs`；记录 CSV 导出单独给 8000 ms 预算（整批导出不重复按 2.5 s 卡）。
 - 面板建库行新增下拉「短词 1.5/2.5/5/10 秒」（`data-scan-budget`），保存即生效；MCP `index_search` 显示「已扫描 N/M 行」。
 - 测试 `tests/index-scan-budget.test.mjs` 4 例（默认值/保存读回/非法值不覆盖/环境变量优先/坏 JSON 回退）；`m2-ui-check` 新增 `scanBudgetPick/scanBudgetView/scanBudgetOk/Restore`，2.6 GB 案件实测 `scanBudgetView:5000`、`m2ok:true`；`npm test` 235/235。
+
+### 20.151 v0.3.29 打包（扫描预算可配置）
+
+- 产物：NSIS 320,042,827 B / blockmap 332,427 / portable 270,605,129 / asar 566,532,233（32,967 entries）。
+- 坑：插件新增的 `tools/index-scan-budget.mjs` 未进 `electron-builder.yml` 的 `files` → 打包后插件 ESM 解析失败；asar 自检（新增 `scanBudgetModule`/`scanBudgetRoute`/`scanBudgetPicker`/`scanBudgetMcp`）第一时间暴露，补白名单后重打两次（`--dir` 先验证 566,532,233 B 含该文件，再全量）。
+- 验证：目录版 54,761 ms、portable 92,140 ms；打包态 2.6 GB 案件 m2 `m2ok:true`、settings `ok:true`。
+- 教训：任何被插件 `import` 的新 `tools/*.mjs` 都必须同时进 `files` 白名单并在 asar 自检里加一条断言。

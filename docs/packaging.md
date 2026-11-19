@@ -1192,3 +1192,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - asar 自检 `.probe/asar-0328-check.mjs`：`missing: []`、0 false（新增 `recordsShortScan`、`recordsApproxLabel`）。
 - 启动：目录版 `verify-launch --port 5404` → `ok:true, elapsedMs:42642`；portable `--port 5405` → `ok:true, elapsedMs:69958`。
 - 打包态：2.6 GB `2026美亚团队` 案件 `m2-ui-check` → `m2ok:true`；`settings-check --exe` → `ok:true`。
+
+### v0.3.29 回归验证（第 81 轮：扫描预算可配置）
+
+- 产物：NSIS 320,042,827 B（blockmap 332,427 B）、portable 270,605,129 B、`app.asar` 566,532,233 B（32,967 entries）。
+- **打包白名单坑**：`tools/index-scan-budget.mjs` 被插件以相对路径 import，第一次打包漏了它 → asar 自检报「was not found in this archive」，补进 `electron-builder.yml` 的 `files` 后重新打包才通过（`asarUnpack` 不需要，纯 JS）。
+- asar 自检 `.probe/asar-0329-check.mjs`：`missing: []`、0 false。
+- 启动：目录版 `--port 5406` → `ok:true, elapsedMs:54761`；portable `--port 5407` → `ok:true, elapsedMs:92140`。
+- 打包态：2.6 GB 案件 `m2-ui-check` → `m2ok:true`；`settings-check --exe` → `ok:true`。首次跑打包态 e2e 时曾出现「面板没渲染出来」与 `Get-Clipboard` 失败，均为本机瞬时问题（`profiles/web/package.json.lock` 争用、剪贴板被占用），清理进程后重跑即通过。
