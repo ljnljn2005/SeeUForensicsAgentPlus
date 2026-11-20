@@ -2930,3 +2930,21 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 顺带修两个真问题：① **并发检索应答乱序**——「继续扫描」的慢请求（2 字词、几秒）可能晚于后续新关键词请求返回并覆盖结果；`SearchView` 增加 `searchSeq` 应答序号，只有最新请求能 `setResult`（记录视图的 `useLoad` 本就有同类保护）；② e2e 输入关键词合成事件在同一 tick 里「写值 + 回车」，React 状态未提交时 `doSearch` 会用旧关键词，改为「写值 → 等 400 ms → 单独回车」两步；③ 索引来源 chips 断言由写死「火眼建库 1」改为 `火眼建库 \d+`（同一搜索目录下可能有多案）。
 
 - `npm test` 237/237、`check:overlay` OK。
+
+### 20.153 短词检索「续扫」：从上次停下处继续，不重复扫描
+
+- 需求：v0.3.30 的【继续扫描】只是把预算加大重跑，每次都从 `id=0` 扫起，大库上白扫已扫区间（842k 记录时 2.5 s 约扫 2 万行，点三次就白扫 6 万行）。
+- 实现 `tools/ges-index/query.mjs` 的 `search()` 短词分支：
+  - 入参 `scanFromId`（>0 时作为首块 `r.id > ?` 起点），出参 `scanFromId`/`scanNextId`（`scanNextId` 仅在「没扫完」时给，等于最后扫过的 id）；
+  - `hint` 区分「已扫描 N/M 行」与「从第 N 行续扫，本轮扫 X/M 行」，仍提示用 ≥3 字或加筛选；
+  - 坑：`exhausted`/`lastId` 原先是 `if` 分支内的局部变量，返回到外层对象会 `ReferenceError`，改为分支作用域的 `scanExhaustedAll`/`scanLastId`（`node --check` 发现不了，单测才暴露）。
+- 插件 `plugins/seeu-case-index/index.js`：`/search` 转发 `scanFromId`。
+- 面板 `plugins/seeu-case-index/client.js`：`scanCursor`/`scanSeen` 两个 ref；新条件（关键词/筛选）变化时用 `useEffect` 重置；点按钮时 `doSearch(0, next, scanCursor.current)`，结果里回填 `scanNextId`，提示条追加「（累计已扫 N 行）」；游标为 0 时按钮禁用（已扫到库尾）。
+- e2e `scripts/e2e/m2-ui-check.mjs`：点【继续扫描】后不再只等「命中」，而是等文本出现「续扫|累计已扫」且 `text !== beforeText`，避免读到点击前的旧文案；新增 `continueScanResumeHint` 并纳入 `m2ok`。
+- 测试 `tests/search-scan-budget.test.mjs` 第 3 例：第一轮小预算拿 `scanNextId`，第二轮带 `scanFromId` 断言 `scanFromId` 回显、`scanNextId` 只前进、`scanned>0`、`hint` 含「续扫」。
+- 验证：`npm test` 238/238；2.6 GB 案件 dev e2e `m2ok:true`（`continueScanResumeHint:true`）。
+
+### 20.154 打包态回归脚本对环境问题的两处容错
+
+- 剪贴板：`scripts/e2e/settings-check.mjs` 新增 `readClipboard(times=3)`（`Get-Clipboard -Raw`，失败重试 3 次），仍失败则返回 null，`envCopyOk`/`aboutCopyOk` 降级为「页面出现『已复制』提示」（记录 `envCopyFallback`/`aboutCopyFallback`）。原因：本机剪贴板被其他进程占用时 PowerShell 抛 `ExternalException`，属环境噪声。
+- 残留 Electron：打包态 e2e 前先清 `electron.exe` / `SeeUForensicsAgentPlus.exe`，否则 CDP 连到旧实例的 9345 端口，报「没有拿到 Web UI 页面」。

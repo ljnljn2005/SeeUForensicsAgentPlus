@@ -1208,3 +1208,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版 `verify-launch --port 5408` → `ok:true, elapsedMs:33150`；便携版 `--port 5409` → `ok:true, elapsedMs:48797`。
 - 打包态：2.6 GB 案件 `m2-ui-check` → `m2ok:true`（`continueScan:"clicked"`；`idxChainDeepSteps:3` —— 本机当前没有可解析镜像，深检按环境跳过）；`settings-check --exe` → `ok:true`。
 - 坑：`m2-ui-check` 的深检若返回「本案件没有可解析的镜像文件」（火眼未开、`C:\hlnet` 未挂载、W: 未挂载时），属环境状态，e2e 现在会带 `idxChainDeepNote` 通过而不是判失败。
+
+### v0.3.31 回归验证（第 86 轮：短词检索续扫）
+
+- 产物：NSIS 320,043,603 B、portable 270,607,335 B、`app.asar` 566,536,241 B（32,967 entries）。
+- asar 自检 `.probe/asar-0331-check.mjs`：`missing: []`、0 false（新增 `scanResume`：queryJs 含 `scanFromId`/`scanNextId`、clientJs 含 `scanCursor`）。
+- 启动：目录版 `verify-launch --port 5410` → `ok:true, elapsedMs:38309`；便携版 `--port 5411` → `ok:true, elapsedMs:49457`。
+- 打包态：2.6 GB 案件 `m2-ui-check` → `m2ok:true`（`continueScan:"clicked"`、`continueScanResumeHint:true`）；`settings-check --exe` → `ok:true`（`envItemCount:8`、`toolPathsRows:15`、`aboutVersion:0.3.31`）。
+- 坑：本机剪贴板被占用时 `Get-Clipboard` 抛 `ExternalException`（请求的文件操作失败），`settings-check` 的两个「复制」断言会失败；已给脚本加 `readClipboard()` 重试 3 次 + 失败时降级为「UI 出现已复制提示」（`envCopyFallback/aboutCopyFallback:true`）。另一个 m2 首跑因残留 `electron.exe` 需先清进程。

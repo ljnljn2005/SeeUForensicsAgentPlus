@@ -453,7 +453,7 @@ async function handle(req, res) {
       if (path === '/tree') return send(res, 200, tree(db, url.searchParams.get('node') || 'root'));
       if (path === '/search') {
         const opts = { q: url.searchParams.get('q'), limit: url.searchParams.get('limit'), offset: url.searchParams.get('offset'), scanBudgetMs: scanBudgetMs() };
-        for (const k of ['eid', 'app', 'account', 'category', 'from', 'to']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
+        for (const k of ['eid', 'app', 'account', 'category', 'from', 'to', 'scanFromId']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
         return send(res, 200, search(db, opts));
       }
       if (path === '/cite') return send(res, 200, cite(db, url.searchParams.get('id')));

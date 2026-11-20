@@ -1779,7 +1779,10 @@ window.__ModuleLoader__.load({
       const [searchBudget, setSearchBudget] = useState(0);
       // 并发检索的应答序号：慢的旧请求（例如大库 2 字扫描 + 继续扫描）不能覆盖后来的结果。
       const searchSeq = useRef(0);
-      const doSearch = useCallback(async (nextOffset, budgetOverride) => {
+      // 续扫游标：上次扫描停下的 record.id；点「继续扫描」从这里接着扫，不重复扫已扫区间。
+      const scanCursor = useRef(0);
+      const scanSeen = useRef(0);
+      const doSearch = useCallback(async (nextOffset, budgetOverride, resumeFrom = 0) => {
         if (!db || !query.trim()) return;
         // 事件对象也会传进来（onClick），Number.isFinite 过滤后按第 0 页处理
         const wantOffset = Number.isFinite(Number(nextOffset)) && Number(nextOffset) > 0 ? Math.floor(Number(nextOffset)) : 0;
@@ -1799,14 +1802,26 @@ window.__ModuleLoader__.load({
           const budget = Number(budgetOverride) > 0 ? Number(budgetOverride) : searchBudget;
           if (budget > 0) params.scanBudgetMs = Math.min(30000, budget);
           if (wantOffset > 0) params.offset = wantOffset;
+          if (Number(resumeFrom) > 0) params.scanFromId = Math.floor(Number(resumeFrom));
           const data = await api('/search', params);
-          if (mine === searchSeq.current) setResult(data);
+          if (mine === searchSeq.current) {
+            if (Number(resumeFrom) > 0) scanSeen.current += Number(data.scanned) || 0;
+            else scanSeen.current = Number(data.scanned) || 0;
+            scanCursor.current = Number(data.scanNextId) || 0;
+            setResult(data);
+          }
         }
         catch (e) {
           if (mine === searchSeq.current) setError(String(e.message ?? e));
         }
         finally { setBusy(''); }
       }, [db, query, filters, searchBudget]);
+
+      // 新条件（关键词/筛选）开始检索时，重置续扫进度。
+      useEffect(() => {
+        scanCursor.current = 0;
+        scanSeen.current = 0;
+      }, [db, query, filters.eid, filters.app, filters.from, filters.to]);
 
       const resetFilters = useCallback(() => {
         setFilters({ eid: '', app: '', from: '', to: '' });
@@ -2517,15 +2532,16 @@ window.__ModuleLoader__.load({
             result ? h('div', { style: S.card },
               h('div', { style: S.row },
                 h('span', { style: { color: C_FG, fontSize: 12, fontWeight: 600 } }, `引擎 ${result.engine} · ${result.totalApprox ? '≥ ' : ''}${result.returned} 命中`),
-                result.hint ? h('span', { style: { ...S.muted, maxWidth: 420 } }, result.hint) : null,
+                result.hint ? h('span', { style: { ...S.muted, maxWidth: 460 } }, scanSeen.current > (Number(result.scanned) || 0) ? `${result.hint}（累计已扫 ${scanSeen.current} 行）` : result.hint) : null,
                 result.partialScan
                   ? actionButton('继续扫描 +2.5 秒', async () => {
                     let base = 2500;
                     try { base = Number((await api('/scan-budget'))?.scanBudgetMs) || 2500; } catch { /* 默认预算 */ }
                     const next = Math.min(30000, Math.max(base, searchBudget) + 2500);
                     setSearchBudget(next);
-                    doSearch(0, next);
-                  }, { disabled: busy === 'search' || searchBudget >= 30000, title: '追加扫描预算后重跑这次关键词（最多 30 秒）', attrs: { 'data-continue-scan': 'search' } })
+                    const from = scanCursor.current;
+                    doSearch(0, next, from);
+                  }, { disabled: busy === 'search' || searchBudget >= 30000 || !scanCursor.current, title: scanCursor.current ? `从第 ${scanCursor.current + 1} 行继续扫（不重复已扫区间，最多 30 秒）` : '已扫到库尾，无需继续', attrs: { 'data-continue-scan': 'search' } })
                   : null,
                 (result.total ?? result.returned) > result.returned
                   ? h('span', { style: S.muted }, `共 ${result.total} 条 · 第 ${(result.offset ?? 0) + 1}–${(result.offset ?? 0) + result.returned} 条`)
