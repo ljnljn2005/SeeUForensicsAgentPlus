@@ -1200,3 +1200,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - asar 自检 `.probe/asar-0329-check.mjs`：`missing: []`、0 false。
 - 启动：目录版 `--port 5406` → `ok:true, elapsedMs:54761`；portable `--port 5407` → `ok:true, elapsedMs:92140`。
 - 打包态：2.6 GB 案件 `m2-ui-check` → `m2ok:true`；`settings-check --exe` → `ok:true`。首次跑打包态 e2e 时曾出现「面板没渲染出来」与 `Get-Clipboard` 失败，均为本机瞬时问题（`profiles/web/package.json.lock` 争用、剪贴板被占用），清理进程后重跑即通过。
+
+### v0.3.30 回归验证（第 84 轮：继续扫描 + 检索乱序修复）
+
+- 产物：NSIS 320,043,066 B（blockmap 332,533 B）、portable 270,570,199 B、`app.asar` 566,534,527 B（32,967 entries）。
+- asar 自检 `.probe/asar-0330-check.mjs`：`missing: []`、0 false（新增 `continueScanUi`：clientJs 含 `data-continue-scan`/`继续扫描`/`searchSeq`）。
+- 启动：目录版 `verify-launch --port 5408` → `ok:true, elapsedMs:33150`；便携版 `--port 5409` → `ok:true, elapsedMs:48797`。
+- 打包态：2.6 GB 案件 `m2-ui-check` → `m2ok:true`（`continueScan:"clicked"`；`idxChainDeepSteps:3` —— 本机当前没有可解析镜像，深检按环境跳过）；`settings-check --exe` → `ok:true`。
+- 坑：`m2-ui-check` 的深检若返回「本案件没有可解析的镜像文件」（火眼未开、`C:\hlnet` 未挂载、W: 未挂载时），属环境状态，e2e 现在会带 `idxChainDeepNote` 通过而不是判失败。

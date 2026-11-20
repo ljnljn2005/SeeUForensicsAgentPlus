@@ -2,6 +2,18 @@
 
 SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的产物大小、验证结果与已知限制另见 `docs/packaging.md` 与对应的 GitHub Release。
 
+## v0.3.30
+
+- **结果可能不全时可直接「继续扫描」**：检索与记录视图在短词（<3 字）扫描预算用尽、结果不完整时，显示黄色提示条与【继续扫描 +2.5 秒】按钮，点一次追加预算重跑（最多 30 秒），不需要回设置页改配置。
+- **修复并发检索结果乱序**：慢的旧检索请求（大库上 2 字扫描要几秒，叠加「继续扫描」更久）不会再晚到并覆盖新关键词的结果。
+
+### 验证
+
+- `npm test` 237/237、`check:overlay` OK。
+- asar 自检：32,967 个条目、`missing: []`、0 个 false（新增 `continueScanUi`）。
+- 启动：目录版 `ok:true, elapsedMs:33150`；便携版 `ok:true, elapsedMs:48797`。
+- 打包态：2.6 GB 案件 `m2-ui-check` → `m2ok:true`（含「继续扫描」点击）；`settings-check` → `ok:true`。
+
 ## v0.3.29
 
 - **短词扫描预算可在面板调整**：面板建库行新增「短词 1.5 / 2.5 / 5 / 10 秒」下拉，保存到 `<DSH_HOME>/index-scan-budget.json`（环境变量 `SEEU_INDEX_SCAN_BUDGET` 可覆盖），同时作用于检索和记录视图；短词检索结果里会注明「已扫描 N/M 行」，便于判断结果完整度。
