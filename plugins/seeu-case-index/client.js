@@ -1530,10 +1530,13 @@ window.__ModuleLoader__.load({
       });
       // 短词（<3 字）检索的逐行扫描预算：大库上越大越完整、越慢。
       const [scanBudget, setScanBudget] = useState(null);
+      const [exportsInfo, setExportsInfo] = useState(null);
+      const [exportsNote, setExportsNote] = useState('');
       const [scanNote, setScanNote] = useState('');
       useEffect(() => {
         let alive = true;
         api('/scan-budget').then((data) => { if (alive && data) setScanBudget(Number(data.scanBudgetMs) || 2500) }).catch(() => {});
+        api('/exports?limit=8').then((data) => { if (alive && data) setExportsInfo(data) }).catch(() => {});
         return () => { alive = false };
       }, []);
       const saveScanBudget = async (ms) => {
@@ -1672,6 +1675,16 @@ window.__ModuleLoader__.load({
         })();
         return () => { alive = false; };
       }, [db]);
+
+      const refreshExports = async () => {
+        try {
+          const data = await api('/exports?limit=8');
+          setExportsInfo(data ?? null);
+          setExportsNote('');
+        } catch (error) {
+          setExportsNote(`读取导出目录失败：${String(error?.message ?? error)}`);
+        }
+      };
 
       const refreshBrief = async () => {
         setBriefNote('刷新中…');
@@ -2114,6 +2127,26 @@ window.__ModuleLoader__.load({
             actionButton('刷新会话概览', refreshBrief, {}),
             briefNote ? h('span', { style: { color: C_ACC } }, briefNote) : null)
           : null,
+
+        h('div', { style: { ...S.card, gap: 6 } },
+          h('div', { style: S.row },
+            h('span', { style: { ...S.tag, color: C_ACC } }, '最近导出'),
+            h('span', { style: { ...S.muted, fontSize: 11 } }, exportsInfo?.dir ?? '（导出目录读取中）'),
+            actionButton('刷新', () => { refreshExports() }, {}),
+            window.seeu && window.seeu.exportsDir
+              ? actionButton('打开导出目录', async () => {
+                const result = await window.seeu.exportsDir.open();
+                setExportsNote(result?.ok ? '已打开导出目录' : `打开失败：${result?.error ?? '未知错误'}`);
+              }, {})
+              : null,
+            exportsNote ? h('span', { style: { color: C_ACC, fontSize: 11.5 } }, exportsNote) : null),
+          exportsInfo && exportsInfo.count
+            ? h('div', { style: { display: 'grid', gap: 2, fontSize: 11.5 } },
+              exportsInfo.files.map((file) => h('div', { style: { display: 'flex', gap: 10 }, key: file.path },
+                h('span', { style: { color: C_FG3, fontFamily: 'ui-monospace,Consolas,monospace' } }, file.name),
+                h('span', { style: S.muted }, `${(file.sizeBytes / 1024).toFixed(0)} KB`),
+                h('span', { style: S.muted }, new Date(file.mtime).toLocaleString()))))
+            : h('div', { style: S.muted }, '还没有导出文件：面板导出 CSV 或让模型用 MCP 导出后，这里会列出最近 8 个。')),
         view && view.needsRebuild
           ? h('div', { style: S.noticeWarn }, `索引库 schema v${view.schemaVersion ?? '?'} 与当前工具 v${view.currentSchemaVersion ?? '?'} 不一致：建议点「建库 / 更新」重建，旧库可能缺字段或查不到新类别。`)
           : null,

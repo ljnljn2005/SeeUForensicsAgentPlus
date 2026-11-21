@@ -3049,3 +3049,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 版本 0.3.39；asar 32,967 entries / 0 false（新增 `exportTimelineTool`）。
 - 打包版 MCP 实测 10 工具、时间线导出 40 行 / 10,156 条；启动 41.1 s / 便携 61.3 s；打包态 m2 与 settings 全绿。
 
+### 20.170 面板「最近导出」卡片（导出目录统一）
+
+- 动机：面板 CSV 与 MCP 导出的文件都落在同一目录，但用户看不到「刚才导到哪了」，每次都要去资源管理器翻。
+- 新增 `tools/export-dir.mjs`：`exportDirectory(env)`（`SEEU_EXPORT_DIR` → `<dshHome>/exports`）、`listExports(env,{dir,limit})`（只列 csv/json/md/txt，按 mtime 倒序，最多 50，返回 `{dir,exists,count,files[]}`）。
+- 插件新增 `GET /seeu-index/exports?limit=8`（不依赖 db）；面板新增「最近导出」卡片（文件名/大小/时间 + 刷新 + 打开导出目录，`window.seeu.exportsDir.open()`）。
+- 外壳 `src/main.ts` 新增 `appExportDir()`（`SEEU_EXPORT_DIR` 或 `<下载>/seeu-exports`），启动时作为 `SEEU_EXPORT_DIR` 下发给 dsh host → 插件与内置 MCP 的 `exportDir()` 统一到同一目录；新增 IPC `seeu:exports:dir` / `seeu:exports:open`（`shell.openPath`），`src/preload.ts` 暴露 `window.seeu.exportsDir`。
+- 测试：`tests/export-dir.test.mjs` 3 例（目录解析、目录缺失、排序/过滤/limit）→ `npm test` **246/246**；`m2-ui-check` 新增 `exportsCard`/`exportsApi` 并纳入 `m2ok`，实测 `exportsApi:{dir:…,.dev/m2-exp,count:0,files:0}`、`m2ok:true`。
+- 坑：`/exports` 路由最初引用了不存在的 `q`（该区块的搜索参数变量名是 `url.searchParams`），tsc 不报但运行时 `ReferenceError`；e2e 的 `page.evaluate` 把异常吞成 `{files:0}`，改为断言 `dir` 是字符串后立刻暴露。
+

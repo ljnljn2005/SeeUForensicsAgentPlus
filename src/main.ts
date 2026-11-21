@@ -89,6 +89,12 @@ let lastStatus: StatusPayload = { phase: 'starting', message: '正在启动取�
 
 // ── 外壳日志 ────────────────────────────────────────────────────────────────
 
+function appExportDir(): string {
+  const custom = process.env.SEEU_EXPORT_DIR
+  if (custom && custom.trim()) return custom.trim()
+  return join(app.getPath('downloads'), 'seeu-exports')
+}
+
 function logShell(message: string): void {
   try {
     mkdirSync(logDir(), { recursive: true })
@@ -357,7 +363,7 @@ async function startHost(): Promise<void> {
     SEEU_MCP_SERVER: join(seeuMcpDir, 'server.mjs'),
   }
   logShell(`seeu mcp: ${seeuMcpEnv.SEEU_MCP_SERVER}`)
-  const next = new DshHost({ env: { ...mountHostEnv(), ...extraToolEnv, ...seeuMcpEnv } })
+  const next = new DshHost({ env: { ...mountHostEnv(), ...extraToolEnv, ...seeuMcpEnv, SEEU_EXPORT_DIR: appExportDir() } })
   host = next
   next.on('state', (state: HostState) => {
     if (state.phase === 'ready') {
@@ -839,6 +845,19 @@ function registerIpc(): void {
     return true
   })
   // 面板导出的落盘（CSV 等）：默认存到 <下载>/seeu-exports，SEEU_EXPORT_DIR 可覆盖（e2e 用）。
+  ipcMain.handle('seeu:exports:dir', () => ({ dir: appExportDir() }))
+
+  ipcMain.handle('seeu:exports:open', async () => {
+    const dir = appExportDir()
+    try {
+      mkdirSync(dir, { recursive: true })
+      const error = await shell.openPath(dir)
+      return error ? { ok: false, path: dir, error } : { ok: true, path: dir }
+    } catch (error) {
+      return { ok: false, path: dir, error: errorDetail(error) }
+    }
+  })
+
   ipcMain.handle('seeu:file:save-export', (_event, input: unknown) => {
     const payload = input as { name?: unknown; text?: unknown } | null
     const text = typeof payload?.text === 'string' ? payload.text : ''

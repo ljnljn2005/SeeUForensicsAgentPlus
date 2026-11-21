@@ -15,6 +15,7 @@ import { forgetExtraDir, readExtraDirs, rememberExtraDir } from '../../tools/ges
 import { activityFile, clearActivity, formatActivitySummary, readActivity, recordActivity, removeActivity, summarizeActivity } from '../../tools/ges-index/activity.mjs';
 import { runChainCheck } from '../../tools/chain-check-run.mjs';
 import { saveScanBudget, scanBudgetMs, scanBudgetView } from '../../tools/index-scan-budget.mjs';
+import { listExports } from '../../tools/export-dir.mjs';
 
 function pathBase(value) {
   const text = String(value ?? '').replace(/[\/]+$/, '');
@@ -243,6 +244,12 @@ async function handle(req, res) {
       });
     }
     // ---------- 短词扫描预算（设置页可调，影响 /search 与 /records 的逐行扫描时长） ----------
+    if (path === '/exports') {
+      const limit = Math.max(1, Math.min(20, Number(url.searchParams.get('limit')) || 8));
+      send(res, 200, listExports(process.env, { limit }));
+      return true;
+    }
+
     if (path === '/scan-budget') {
       if (req.method === 'POST') {
         const body = await readBody(req).catch(() => ({}));
