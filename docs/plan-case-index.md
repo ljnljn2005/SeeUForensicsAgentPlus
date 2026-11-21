@@ -2948,3 +2948,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 
 - 剪贴板：`scripts/e2e/settings-check.mjs` 新增 `readClipboard(times=3)`（`Get-Clipboard -Raw`，失败重试 3 次），仍失败则返回 null，`envCopyOk`/`aboutCopyOk` 降级为「页面出现『已复制』提示」（记录 `envCopyFallback`/`aboutCopyFallback`）。原因：本机剪贴板被其他进程占用时 PowerShell 抛 `ExternalException`，属环境噪声。
 - 残留 Electron：打包态 e2e 前先清 `electron.exe` / `SeeUForensicsAgentPlus.exe`，否则 CDP 连到旧实例的 9345 端口，报「没有拿到 Web UI 页面」。
+
+### 20.155 内置 MCP 第 7 个工具：read_table（结构化表明细）
+
+- 动机：模型能 `index_tables` 看到「通话/短信/Exif/应用列表」这些表，但没法读表内明细，只能靠 `index_search` 关键词撞；补一个只读的 `read_table` 把面板「表视图」的能力交给 Agent。
+- `tools/seeu-mcp/server.mjs`：新增工具定义（`table` 必填；`caseNumber`/`db`/`eid`/`app`/`from`/`to`/`limit≤100`/`offset`）与处理分支：转发 `/table?name=…`，把行按 `key=value` 平铺成一行，前缀 `[id N]` 便于续接 `read_record`；末尾带「共 N 条」「还有更多（可加 offset/筛选）」。
+- 单测 `tests/mcp-server-tools.test.mjs` 2 例：静态解析 `TOOLS` 名字与顺序（7 个）、`read_table` 必填 `table` 且转发 `/table`、结果含 `[id `、`tools/env-report.mjs` 文案含 `read_table`。
+- 文档：`README.md` MCP 工具表加 `read_table` 行；`docs/architecture.md` 6→7 个工具；技能 `seeu-chain-check/SKILL.md` 补用法；`.probe/seeu-mcp-headless.mjs` 期望清单加第七个。
+- 实测：真实 headless 会话工具总数 **82**，`mcp__seeu__read_table` 在列；直接管道探测 `read_table { table:'exif', limit:2 }` → 「表 exif（图片 Exif，共 20537 条，还有更多…）」+ `[id 1] record_id=7143 · eid=1 · app=图片Exif信息 · name=s_unlink.png`。
+- 踩坑：`/table` 的 `db` 参数传中文路径会因 shell→HTTP 编码差异报「索引库不存在」，用 `caseNumber` 传即可（`resolveDbParam` 已支持案件名/编号/前缀）。

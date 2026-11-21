@@ -1216,3 +1216,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版 `verify-launch --port 5410` → `ok:true, elapsedMs:38309`；便携版 `--port 5411` → `ok:true, elapsedMs:49457`。
 - 打包态：2.6 GB 案件 `m2-ui-check` → `m2ok:true`（`continueScan:"clicked"`、`continueScanResumeHint:true`）；`settings-check --exe` → `ok:true`（`envItemCount:8`、`toolPathsRows:15`、`aboutVersion:0.3.31`）。
 - 坑：本机剪贴板被占用时 `Get-Clipboard` 抛 `ExternalException`（请求的文件操作失败），`settings-check` 的两个「复制」断言会失败；已给脚本加 `readClipboard()` 重试 3 次 + 失败时降级为「UI 出现已复制提示」（`envCopyFallback/aboutCopyFallback:true`）。另一个 m2 首跑因残留 `electron.exe` 需先清进程。
+
+### v0.3.32 回归验证（第 87 轮：MCP read_table）
+
+- 产物：NSIS 320,044,373 B、portable 270,561,059 B、`app.asar` 566,536,451 B（32,967 entries）。
+- asar 自检 `.probe/asar-0332-check.mjs`：`missing: []`、0 false（新增 `readTableTool`：`app.asar.unpacked/tools/seeu-mcp/server.mjs` 含 `name: 'read_table'` 与 `/table?`）。
+- 启动：目录版 `verify-launch --port 5412` → `ok:true, elapsedMs:33815`；便携版 `--port 5413` → `ok:true, elapsedMs:52450`。
+- 打包态：作业案件 `m2-ui-check` → `m2ok:true`（`continueScan:"none"`，45k 记录 2 字词一轮扫完，属预期）；`settings-check --exe` → `ok:true`（`envItemCount:8`、`aboutVersion:0.3.32`）。
+- 环境变化：原 2026 美亚团队（842k 记录 / 2.65 GB）案件目录已被清理，回归改用 `E:/forensics/honglian/作业_20261118081854I`；`SEEU_CASE_DIR` 与环境变量 `SEEU_SEARCH_WAIT_MS` 可调。

@@ -2,6 +2,19 @@
 
 SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的产物大小、验证结果与已知限制另见 `docs/packaging.md` 与对应的 GitHub Release。
 
+## v0.3.32
+
+- **内置 MCP 新增第 7 个工具 `read_table`**：读取一张结构化表的明细行（通话、短信、联系人、浏览/搜索记录、Exif、应用列表等），支持按检材（`eid`）、应用、时间范围过滤与 `limit/offset` 分页；每条结果带 `[id …]`，可直接再调 `read_record` 取正文与 `Goldeneyes://` 引用。
+- 运行环境体检与文档同步为「7 个只读工具」；技能 `seeu-chain-check` 的用法补一条：先 `index_tables` 看表，再 `read_table` 取明细，单条原文用 `read_record`。
+
+### 验证
+
+- `npm test` 240/240（新增 `tests/mcp-server-tools.test.mjs`：7 个工具清单、`read_table` 必填 `table`、转发 `/table` 且结果带 id）。
+- 真实 headless 会话实测：会话内共 82 个工具，`mcp__seeu__*` 七个齐全（含 `mcp__seeu__read_table`）。
+- asar 自检：32,967 个条目、无缺失、0 项失败（新增 `readTableTool`）。
+- 启动验证：目录版 33.8 秒、便携版 52.5 秒。
+- 打包态：作业案件（45,237 记录）`m2-ui-check` → `m2ok:true`；`settings-check` → `ok:true`（环境体检 8 项）。
+
 ## v0.3.31
 
 - **「继续扫描」改为从上次停下处续扫**：点【继续扫描 +2.5 秒】时会带上上次扫描停下的 `record.id`（`scanFromId`），只扫未扫过的区间，不再从库头重扫一遍；提示条显示「从第 N 行续扫，本轮扫 X 行」并累计「累计已扫 M 行」。扫到库尾后按钮自动禁用并提示「已扫到库尾」。
