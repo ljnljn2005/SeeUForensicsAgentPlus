@@ -1244,3 +1244,10 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
   - `settings-check` → `ok:true`（`aboutVersion:0.3.34`、`envItemCount:8`、`errors:[]`）。
 - 新增验证点：检索结果导出走 `/seeu-index/export/search.csv`，短词时 `x-seeu-partial:1` 且提示「未扫完可先继续扫描」。
 
+### v0.3.35 回归验证（第 91 轮：检索导出超时保护）
+
+- 产物：NSIS `320,045,019 B`（blockmap 332,581 B）、portable `270,629,817 B`、`app.asar` `566,542,664 B`（32,967 entries）。
+- asar 自检 `.probe/asar-0335-check.mjs`：`missing: []`、0 false（新增 `searchExportTimeout`）。
+- 启动：目录版 `39,343 ms`、便携版 `55,580 ms`。
+- 超时保护实测（dev 路由 curl，作业案件 `q=20`）：`maxMs=3000` → 6,600 行 / 3.07 s / `timed-out=1`；`maxMs=20000` → 14,971 行 / 11.06 s / 完整。
+- 打包态三探针：`m2-ui-check` `m2ok:true`（45,237 条）、`search-filter-check` `ok:true`（1,057 命中、导出 6 行）、`settings-check` `ok:true`（0.3.35、体检 8 项）。

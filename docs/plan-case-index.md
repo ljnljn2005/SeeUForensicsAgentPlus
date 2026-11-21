@@ -2995,3 +2995,8 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 实现：`GET /seeu-index/export/search.csv` 增加 `maxMs`（默认 20000，`SEEU_EXPORT_MAX_MS` 可覆盖，钳制 2000–120000）；循环内每页检查 `Date.now()-startedAt > maxMs` → 停止、置 `timedOut/truncated/partial`，响应头 `x-seeu-timed-out`、`x-seeu-max-ms`；面板按 `timed-out` 显示专门的提示文案。
 - 验证（curl，作业案件）：`maxMs=3000` → 6,600 行、3.07 s、timed-out=1；`maxMs=20000` → 14,971 行、11.06 s、完整。
 - 坑：e2e 里「设了 `SEEU_EXPORT_MAX_MS` 就必须看到超时提示」的断言不可靠（≥3 字关键词走 FTS 很快就导完、不会超时），改成只记录 `csvTimedOut` 字段，超时路径用 curl 直接验证。
+
+### 20.161 v0.3.35 打包（检索导出超时保护）
+
+- 版本 0.3.35；asar 32,967 entries / 0 false；启动 39.3 s、便携 55.6 s。
+- 打包态 m2 / 检索导出 e2e / settings 全绿；超时保护用 curl 单测（3000 ms → 6,600 行、20 s → 14,971 行完整）。
