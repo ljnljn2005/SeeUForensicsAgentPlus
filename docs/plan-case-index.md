@@ -3012,3 +3012,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 
 - 版本 0.3.36；asar 32,967 entries / 0 false（新增 `exportRecordsTool` 检查 asarUnpacked 内的 server.mjs 含 `export_records` + `/export/search.csv` + `writeFileSync`）。
 - 打包版 MCP 服务端独立启动验证：8 工具、exit 0；启动 41.9 s / 便携 59.8 s；打包态 m2 与 settings 全绿。
+
+### 20.164 MCP export_records 支持按表导出
+
+- 动机：模型常需要整张表的数据（web_visit 的 URL 清单、exif 坐标等），按关键词检索覆盖不到。
+- 实现：`export_records` 新增可选 `table`；有 table 走 `/export/table.csv?name=…`，无 table 走 `/export/search.csv`；文件名区分 `seeu-mcp-table-<表>-<戳>.csv` 与 `seeu-mcp-<戳>.csv`；返回文案区分「表 X（N 条）」与「命中（近似）：N」。
+- 坑：表导出接口的截断/超时响应头是 `true/false` 字符串，检索接口是 `1/0`，统一用 `[,	rue].includes(...)`。
+- 实测（dev stdio 探针）：`{table:'web_visit',max:100}` → 44 行 / 5,607 B；`{q:'apple',max:50}` → 50 行（命中 4,489，结果被截断）。
