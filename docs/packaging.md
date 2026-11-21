@@ -1232,3 +1232,15 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版 `verify-launch --port 5414` → `ok:true, elapsedMs:45907`；便携版 `--port 5415` → `ok:true, elapsedMs:59748`。
 - 打包态（作业案件）：`m2-ui-check` → `m2ok:true`；`export-check` → `ok:true`——实体 CSV **4,597 行**、表视图自动选中「图片 Exif（20537）」且表 CSV 20,000 行、记录 CSV 20,000 行，`errors:[]`；`settings-check` → `ok:true`（`envItemCount:8`、`aboutVersion:0.3.33`）。
 - 环境：`SEEU_DSH_HOME/index-state.json` 指 `E:/forensics/honglian` 才能扫到作业案件；export-check 的表视图步骤现在按「（N）」自动挑有数据的表，无 typed 表时跳过。
+
+### v0.3.34 回归验证（第 90 轮：检索导出服务端一次取全）
+
+- 产物：NSIS `320,044,841 B`（blockmap 332,503 B）、portable `270,613,750 B`、`app.asar` `566,541,916 B`（32,967 entries）。
+- asar 自检 `.probe/asar-0334-check.mjs`：`missing: []`、0 false（新增 `searchCsvRoute` / `searchCsvClient`）。
+- 启动：目录版 `115,512 ms`、便携版 `134,027 ms`（首启杀软扫描新 asar，二次启动通常 30 秒内）。
+- 打包态（作业案件 `E:/forensics/honglian/作业_20261118081854I`，隔离 `SEEU_DSH_HOME`/`SEEU_USER_DATA`）：
+  - `m2-ui-check` → `m2ok:true`（45,237 条记录，`errors:[]`）；
+  - `search-filter-check`（自动关键词 `2022`）→ `ok:true`（命中 1,057 条、导出 CSV 6 行）；
+  - `settings-check` → `ok:true`（`aboutVersion:0.3.34`、`envItemCount:8`、`errors:[]`）。
+- 新增验证点：检索结果导出走 `/seeu-index/export/search.csv`，短词时 `x-seeu-partial:1` 且提示「未扫完可先继续扫描」。
+

@@ -7,7 +7,7 @@ import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
 import { describeBuildProgress, findRunningBuild } from '../../tools/ges-index/progress.mjs';
 import { indexSummary } from '../../tools/ges-index/index-meta.mjs';
 import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records, evidences, facets } from '../../tools/ges-index/query.mjs';
-import { entitiesCsv, genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
+import { entitiesCsv, genericCsv, recordsCsv, searchCsv } from '../../tools/ges-index/csv.mjs';
 import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.mjs';
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
 import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTableCounts, myosTables } from './myos.mjs';
@@ -455,6 +455,38 @@ async function handle(req, res) {
         const opts = { q: url.searchParams.get('q'), limit: url.searchParams.get('limit'), offset: url.searchParams.get('offset'), scanBudgetMs: scanBudgetMs() };
         for (const k of ['eid', 'app', 'account', 'category', 'from', 'to', 'scanFromId']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
         return send(res, 200, search(db, opts));
+      }
+      if (path === '/export/search.csv') {
+        const max = Math.min(50000, Math.max(1, Number(url.searchParams.get('max')) || 20000));
+        const budget = Math.min(30000, Math.max(300, Number(url.searchParams.get('scanBudgetMs')) || scanBudgetMs()));
+        const base = { q: url.searchParams.get('q') ?? '', scanBudgetMs: budget };
+        for (const k of ['eid', 'app', 'account', 'category', 'from', 'to']) if (url.searchParams.get(k)) base[k] = url.searchParams.get(k);
+        const names = new Map(evidences(db).map((e) => [Number(e.eid), e.name]));
+        const out = [];
+        let offset = 0;
+        let total = null;
+        let partial = false;
+        let truncated = false;
+        for (;;) {
+          const page = search(db, { ...base, limit: 100, offset });
+          if (Number.isFinite(page.total)) total = page.total;
+          if (page.totalApprox || page.partialScan) partial = true;
+          const rows = page.rows ?? [];
+          for (const row of rows) {
+            if (out.length >= max) { truncated = true; break; }
+            out.push({ ...row, ev: names.get(Number(row.eid)) ?? '' });
+          }
+          offset += rows.length;
+          if (truncated || !rows.length || page.next == null) break;
+        }
+        return sendText(res, 200, searchCsv(out), {
+          'content-type': 'text/csv; charset=utf-8',
+          'content-disposition': `attachment; filename="search-export-${Date.now()}.csv"`,
+          'x-seeu-rows': String(out.length),
+          'x-seeu-total': String(total ?? out.length),
+          'x-seeu-truncated': truncated ? '1' : '0',
+          'x-seeu-partial': partial ? '1' : '0',
+        });
       }
       if (path === '/cite') return send(res, 200, cite(db, url.searchParams.get('id')));
       if (path === '/stats') return send(res, 200, statsOf(db));

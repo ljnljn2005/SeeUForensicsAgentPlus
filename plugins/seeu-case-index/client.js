@@ -1853,46 +1853,31 @@ window.__ModuleLoader__.load({
 
       /** 把当前检索结果（含筛选）整批导出 CSV，Excel 可直接打开。 */
       const exportSearchCsv = async () => {
-        const current = result?.rows ?? [];
-        if (!db || !current.length) return;
+        const q = String(result?.query ?? query ?? '');
+        if (!db || !q.trim()) return;
         setBusy('csv');
         setError('');
         setCopyNote('');
-        const q = result?.query ?? query;
-        const extra = {};
-        if (String(filters.eid ?? '').trim()) extra.eid = Number(filters.eid);
-        if (String(filters.app ?? '').trim()) extra.app = String(filters.app).trim();
-        if (String(filters.from ?? '').trim()) extra.from = String(filters.from).trim();
-        if (String(filters.to ?? '').trim()) extra.to = String(filters.to).trim();
-        const total = Number(result?.total ?? current.length);
-        const cap = Math.min(total, 20000);
+        const qs = new URLSearchParams({ db, q, max: '20000' });
+        if (String(filters.eid ?? '').trim()) qs.set('eid', String(filters.eid).trim());
+        if (String(filters.app ?? '').trim()) qs.set('app', String(filters.app).trim());
+        if (String(filters.from ?? '').trim()) qs.set('from', String(filters.from).trim());
+        if (String(filters.to ?? '').trim()) qs.set('to', String(filters.to).trim());
         try {
-          const rows = [...current];
-          let offset = rows.length;
-          while (rows.length < cap) {
-            const page = await api('/search', { db, q, limit: 200, offset, ...extra });
-            if (!page?.rows?.length) break;
-            rows.push(...page.rows);
-            offset += page.rows.length;
-          }
-          const use = rows.slice(0, cap);
-          const cell = (v) => {
-            const s = v === undefined || v === null ? '' : String(v);
-            return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-          };
-          const lines = [['检材号', '检材名称', '应用', '账号', '类别', '时间', '行号', '记录ID', '摘要'].map(cell).join(',')];
-          for (const r of use) {
-            lines.push([
-              r.eid, evLabel(r.eid), r.app, r.account, r.cat, r.ts, r.line, r.id,
-              String(r.snip ?? '').replace(/\s+/g, ' ').trim(),
-            ].map(cell).join(','));
-          }
-          const text = '\uFEFF' + lines.join('\r\n') + '\r\n';
+          const res = await fetch('/seeu-index/export/search.csv?' + qs.toString());
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const raw = await res.text();
+          // fetch 的 text() 会吃掉 BOM，补回来（Excel 需要）
+          const text = raw.startsWith('\uFEFF') ? raw : '\uFEFF' + raw;
+          const rowsOut = Number(res.headers.get('x-seeu-rows') ?? 0);
+          const totalOut = Number(res.headers.get('x-seeu-total') ?? rowsOut);
+          const partial = res.headers.get('x-seeu-partial') === '1';
           const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
           const saved = await saveCsvText('检索导出-' + stamp + '.csv', text);
           if (saved && saved.ok === false) throw new Error(saved.error || '保存失败');
-          const trunc = total > use.length ? `（共 ${total} 条，单次最多 20000 行）` : '';
-          setCopyNote(`已导出 ${use.length} 行${trunc}` + (saved?.path ? '：' + saved.path : '') + '（UTF-8 BOM，Excel 可直接打开）');
+          const trunc = totalOut > rowsOut ? '（共 ' + totalOut + ' 条，单次最多 20000 行）' : '';
+          const tail = partial ? '，短词未扫完可先继续扫描再导出' : '';
+          setCopyNote('已导出 ' + rowsOut + ' 行' + trunc + tail + (saved?.path ? '：' + saved.path : '') + '（UTF-8 BOM，Excel 可直接打开）');
         } catch (e) {
           setError('导出 CSV 失败：' + String(e.message ?? e));
         } finally {

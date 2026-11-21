@@ -2973,3 +2973,18 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - e2e：`scripts/e2e/export-check.mjs` 加 2b 段（点击导出 → 读回最新 `实体导出-*.csv` 断言 BOM/表头/行数）；同时把表视图的 `pickTable('联系人')` 换成 `pickTableWithRows([...])`（按选项里的（N）自动挑有数据的表），无 typed 表时 `tableSkipped=true` 跳过而不是判失败。
 - 坑：e2e 里把正则拼进 `evaluate("…")` 字符串时，`d` 在字符串字面量层被吃掉变成 `d`，导致永远匹配不到「（20537）」；必须在源码写 `\d`（或改用 split/Number 解析）。
 - 验证：`npm test` 241/241；`export-check` → `ok:true`（实体 CSV 4,597 行 / 表 CSV 20,000 行 / 记录 CSV 20,000 行，`errors:[]`）。
+
+### 20.158 检索结果导出改服务端一次取全
+
+- 旧实现：前端 `exportSearchCsv()` 按 `/search?limit=200&offset=…` 循环拉页，最多 2 万行；2 字关键词每页都要重跑分块扫描，慢且受页面状态影响。
+- 新实现：`GET /seeu-index/export/search.csv`——`max` 默认 20000/上限 50000，服务端以 100 条/页翻页（`search()` 上限就是 100），用 `evidences(db)` 补检材名，返回 CSV + `x-seeu-rows/total/truncated/partial`；短词未扫完时 `partial=1`。
+- 面板：`exportSearchCsv` 改成单次 `fetch`，保存前补 BOM（`Response.text()` 会吃掉 BOM），提示区分截断与「未扫完可继续扫描」。
+- e2e 去案件化：自动挑关键词（`/records` 前 40 条切词 → `/search` 验证命中）、检索结果轮询等待、导出全部按 min(total,200) 断言、CSV 行数断言改成 `csvRows >= 当前页行数` 且文件行数 === `csvRows`。
+- 坑：bash heredoc 与 JS 字符串模板连续两层都会吃反斜杠，`\s`/`\d` 写进源码变成 `s`/`d`；此类补丁统一改用 `String.fromCharCode(92)` 拼正则，或直接用 write 工具整文件写。
+- 验证：`npm test` 243/243；`search-filter-check` 3 字（`2022`）→ `ok:true`（1,057 命中、导出 6 行）；2 字（`20`）→ `ok:true`（导出 10,966 行、partial=1、等待 7.2 s）。
+
+### 20.159 v0.3.34 打包（检索导出服务端化）
+
+- 版本 0.3.34；`release-0334` 打包 ~12 分钟；asar 32,967 entries、0 false。
+- 打包态三探针全绿（m2 / 检索导出 e2e / settings）。
+- 注意：`search-filter-check` 在 2 字关键词下导出 1 万多行、等待约 7 秒属预期（每页 100 条、每页最多 2.5 秒扫描预算）；若要更快可先用 ≥3 字关键词或加检材/时间筛选。
