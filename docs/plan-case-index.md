@@ -3000,3 +3000,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 
 - 版本 0.3.35；asar 32,967 entries / 0 false；启动 39.3 s、便携 55.6 s。
 - 打包态 m2 / 检索导出 e2e / settings 全绿；超时保护用 curl 单测（3000 ms → 6,600 行、20 s → 14,971 行完整）。
+### 20.162 内置 MCP 第 8 个工具 export_records（检索结果落盘）
+
+- 动机：模型能查但不能交付——把检索命中整理成 CSV 文件，用户可直接打开/转 Excel，也方便后续接 office 工具。
+- 实现（`tools/seeu-mcp/server.mjs`）：新增 `httpTextWithHeaders()`（要读 `x-seeu-rows/total/truncated/timed-out` 头）、`exportDir()`（`SEEU_EXPORT_DIR` 或 `<tmp>/seeu-exports`）；`export_records` 调 `/export/search.csv`，写 `seeu-mcp-<YYYYMMDDHHmmss>.csv`（补 BOM），返回「已导出 N 行到 …」+「命中（近似）M · 结果被截断/导出超时」提示。
+- 顺带修真 bug：EOF 后 `process.exit(0)` 会让 Windows 上的 Node 在 stdout 关闭时报 `uv assertion`（实测 exit=127）；改为 `process.exitCode = 0` 自然退出，实测 exit=0、stderr 空。
+- 同步更新：`tests/mcp-server-tools.test.mjs`（8 工具顺序 + export_records 必填 q/转发/落盘/不强杀进程）、`tools/env-report.mjs` 工具名列 8 个、`.probe/seeu-mcp-headless.mjs` 期望 8 个、README MCP 表、`docs/architecture.md`、技能 `seeu-chain-check/SKILL.md`。
+- 实测：stdio 探针 `tools/list` 返回 8 个；`export_records {q:2022, max:500}` → 500 行 / 50,813 B 落盘、BOM 正确、表头 `检材号,检材名称,应用,账号,类别,时间,行号,记录ID,摘要`。

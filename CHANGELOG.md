@@ -104,6 +104,11 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 
 ## 未发布
 
+- **内置 MCP 新增第 8 个工具 `export_records`**：把检索结果直接导出成 CSV（UTF-8 BOM、列与面板导出一致），返回文件路径与行数，方便模型把「命中清单」作为交付物给用户，或再用表格工具继续处理。
+  - 参数：`q`（必填）、`caseNumber|db`、`eid`、`app`、`from`、`to`、`max`（默认 2 万、上限 5 万）。
+  - 实测：作业案件 `q=2022`、`max=500` → 500 行 / 50,813 B，返回「已导出 500 行到 …seeu-exportsseeu-mcp-<时间戳>.csv / 命中（近似）1057 · 结果被截断」。
+- 修 MCP 服务端退出时的 libuv 断言：EOF 后不再 `process.exit(0)` 强杀，改为设置 `process.exitCode` 让事件循环自然结束（Windows 上强杀会在 stdout 关闭期间 `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`）。
+
 - **检索导出加「超时保护」**：`/seeu-index/export/search.csv` 新增 `maxMs`（默认 20000，可用 `SEEU_EXPORT_MAX_MS` 调，2–120 秒），超过预算就停并把已扫到的行返回，响应头 `x-seeu-timed-out:1`；面板提示「超时保护：还有更多，建议加检材/时间筛选或改用 ≥3 字关键词」。
   - 实测（作业案件、842k 同一批数据规模的 `20` 关键词）：`maxMs=3000` → 6,600 行 / 3.07 s / `timed-out=1`；`maxMs=20000` → 14,971 行 / 11.06 s / 完整（`truncated=0`）。
 （文档整理）
