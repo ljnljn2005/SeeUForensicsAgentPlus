@@ -2957,3 +2957,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 文档：`README.md` MCP 工具表加 `read_table` 行；`docs/architecture.md` 6→7 个工具；技能 `seeu-chain-check/SKILL.md` 补用法；`.probe/seeu-mcp-headless.mjs` 期望清单加第七个。
 - 实测：真实 headless 会话工具总数 **82**，`mcp__seeu__read_table` 在列；直接管道探测 `read_table { table:'exif', limit:2 }` → 「表 exif（图片 Exif，共 20537 条，还有更多…）」+ `[id 1] record_id=7143 · eid=1 · app=图片Exif信息 · name=s_unlink.png`。
 - 踩坑：`/table` 的 `db` 参数传中文路径会因 shell→HTTP 编码差异报「索引库不存在」，用 `caseNumber` 传即可（`resolveDbParam` 已支持案件名/编号/前缀）。
+
+### 20.156 内置 MCP 端到端 e2e：两轮工具串联（evidence_list → read_table）
+
+- 动机：原 e2e 只验证「模型能调一次 `evidence_list`」，`read_table` 是新增工具，需要端到端证明「模型能按需连续调两个 SeeU 工具」。
+- `scripts/e2e/seeu-mcp-live-check.mjs`：mock 网关按会话里 `role:'tool'` 消息数决定下一轮工具——0 给 `evidence_list {caseNumber}`、1 给 `read_table {caseNumber, table:'exif', limit:2}`、≥2 回最终文本；`CASE = process.env.SEEU_MCP_E2E_CASE || '20261118081854I'`；断言 `toolResultLooksReal = /检材（\d+ 个）/ && /eid\s*1/ && /表 exif/` 且 `seeuToolCount === 7`。
+- 实跑结果：`ok:true`、`chatCalls:4`、`seeuToolCount:7`、`toolResultLooksReal:true`、`errors:[]`；工具结果样本包含「检材（2 个）：eid 1 · Centos.E01 …」与「表 exif（图片 Exif，共 20537 条…）[id 1] record_id=7143 …」。
+- 坑：mock 网关必须等 `role:'tool'` 消息出现再进入下一轮（用消息计数而不是轮次计数），否则第二轮会错过工具结果。
