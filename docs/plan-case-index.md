@@ -3044,3 +3044,8 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 同步：`tests/mcp-server-tools.test.mjs` 期望 10 个工具、`tools/env-report.mjs` 工具名列、`.probe/seeu-mcp-headless.mjs` 期望、README MCP 表、`docs/architecture.md`、技能 `seeu-chain-check/SKILL.md`。
 - 实测（dev stdio 探针）：`tools/list` 10 个；`export_timeline {bucket:'month'}` → 40 行、`2000-11 ~ 2022-05`、10,156 条记录，exit 0。
 
+### 20.169 v0.3.39 打包（MCP export_timeline）
+
+- 版本 0.3.39；asar 32,967 entries / 0 false（新增 `exportTimelineTool`）。
+- 打包版 MCP 实测 10 工具、时间线导出 40 行 / 10,156 条；启动 41.1 s / 便携 61.3 s；打包态 m2 与 settings 全绿。
+

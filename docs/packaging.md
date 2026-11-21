@@ -1276,3 +1276,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版 `49,225 ms`、便携版 `66,220 ms`。
 - 打包态：`m2-ui-check` `m2ok:true`（45,237 条）、`settings-check` `ok:true`（0.3.38 / 体检 8 项）。
 
+### v0.3.39 回归验证（第 95 轮：MCP export_timeline）
+
+- 产物：NSIS `320,047,024 B`（blockmap 332,479）、portable `270,608,581 B`、`app.asar` `566,543,329 B`（32,967 entries）。
+- asar 自检 `.probe/asar-0339-check.mjs`：`missing: []`、0 false（新增 `exportTimelineTool`）。
+- 打包版 MCP 服务端：`tools/list` 10 个工具；`export_timeline {bucket:'month'}` → 40 行 / `2000-11 ~ 2022-05` / 10,156 条记录，exit 0。
+- 启动：目录版 `41,081 ms`、便携版 `61,271 ms`。
+- 打包态：`m2-ui-check` `m2ok:true`（45,237 条）、`settings-check` `ok:true`（0.3.39 / 体检 8 项）。
+
