@@ -3007,3 +3007,8 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 顺带修真 bug：EOF 后 `process.exit(0)` 会让 Windows 上的 Node 在 stdout 关闭时报 `uv assertion`（实测 exit=127）；改为 `process.exitCode = 0` 自然退出，实测 exit=0、stderr 空。
 - 同步更新：`tests/mcp-server-tools.test.mjs`（8 工具顺序 + export_records 必填 q/转发/落盘/不强杀进程）、`tools/env-report.mjs` 工具名列 8 个、`.probe/seeu-mcp-headless.mjs` 期望 8 个、README MCP 表、`docs/architecture.md`、技能 `seeu-chain-check/SKILL.md`。
 - 实测：stdio 探针 `tools/list` 返回 8 个；`export_records {q:2022, max:500}` → 500 行 / 50,813 B 落盘、BOM 正确、表头 `检材号,检材名称,应用,账号,类别,时间,行号,记录ID,摘要`。
+
+### 20.163 v0.3.36 打包（MCP export_records）
+
+- 版本 0.3.36；asar 32,967 entries / 0 false（新增 `exportRecordsTool` 检查 asarUnpacked 内的 server.mjs 含 `export_records` + `/export/search.csv` + `writeFileSync`）。
+- 打包版 MCP 服务端独立启动验证：8 工具、exit 0；启动 41.9 s / 便携 59.8 s；打包态 m2 与 settings 全绿。

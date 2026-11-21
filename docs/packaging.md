@@ -1251,3 +1251,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版 `39,343 ms`、便携版 `55,580 ms`。
 - 超时保护实测（dev 路由 curl，作业案件 `q=20`）：`maxMs=3000` → 6,600 行 / 3.07 s / `timed-out=1`；`maxMs=20000` → 14,971 行 / 11.06 s / 完整。
 - 打包态三探针：`m2-ui-check` `m2ok:true`（45,237 条）、`search-filter-check` `ok:true`（1,057 命中、导出 6 行）、`settings-check` `ok:true`（0.3.35、体检 8 项）。
+
+### v0.3.36 回归验证（第 92 轮：MCP export_records）
+
+- 产物：NSIS `320,046,047 B`、portable `270,608,448 B`、`app.asar` `566,542,877 B`（32,967 entries）。
+- asar 自检 `.probe/asar-0336-check.mjs`：`missing: []`、0 false（新增 `exportRecordsTool`）。
+- 打包版 MCP 服务端（`ELECTRON_RUN_AS_NODE` 跑 `app.asar.unpacked/tools/seeu-mcp/server.mjs`）：`tools/list` 返回 **8 个**工具（含 `export_records`），退出码 0、stderr 空。
+- 启动：目录版 `41,951 ms`、便携版 `59,815 ms`。
+- 打包态：`m2-ui-check` `m2ok:true`（45,237 条）、`settings-check` `ok:true`（0.3.36、体检 8 项）。
