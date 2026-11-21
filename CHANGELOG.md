@@ -107,6 +107,8 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 - **内置 MCP 新增第 8 个工具 `export_records`**：把检索结果直接导出成 CSV（UTF-8 BOM、列与面板导出一致），返回文件路径与行数，方便模型把「命中清单」作为交付物给用户，或再用表格工具继续处理。
   - 参数：`q`（必填）、`caseNumber|db`、`eid`、`app`、`from`、`to`、`max`（默认 2 万、上限 5 万）。
   - 实测：作业案件 `q=2022`、`max=500` → 500 行 / 50,813 B，返回「已导出 500 行到 …seeu-exportsseeu-mcp-<时间戳>.csv / 命中（近似）1057 · 结果被截断」。
+- **MCP 新增第 10 个工具 `export_timeline`**：把案件时间线按小时/天/月聚合导出成 CSV（日期、记录数、检材数、应用数），返回保存路径、行数与日期范围，适合交付「活动时间线」或看时间段分布。
+  - 实测（作业案件，`bucket:'month'`）：40 行、范围 `2000-11 ~ 2022-05`、共 10,156 条记录。
 - **MCP 新增第 9 个工具 `export_entities`**：把实体清单导出成 CSV（类别/值/出现次数/涉及检材数/检材号），返回保存路径与行数；支持 `kind`、`q`、`eid`、`max`（默认 2 万 / 上限 5 万），文件名 `seeu-mcp-entities-<时间戳>.csv`。
   - 实测（作业案件）：`{max:20}` → 20 行、实体总数 4,597（结果被截断）。
 - **MCP `export_records` 支持按表导出**：新增可选参数 `table`（表名见 `index_tables`），导出该结构化表的明细 CSV（列随表，如 `web_visit` 的 url/search_term/ts），文件名 `seeu-mcp-table-<表名>-<时间戳>.csv`；不传 `table` 仍是检索结果导出。

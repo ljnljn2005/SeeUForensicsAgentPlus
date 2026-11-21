@@ -3037,3 +3037,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 版本 0.3.38；asar 32,967 entries / 0 false（新增 `exportEntitiesTool`）。
 - 打包版 MCP 实测 9 工具、实体导出 20 行；启动 49.2 s / 便携 66.2 s；打包态 m2 与 settings 全绿。
 
+### 20.168 MCP 第 10 个工具 export_timeline（时间线汇总落盘）
+
+- 动机：实体/检索/表都能导出后，缺「时间线」交付物；模型做活动时序分析时常要一份按天/月汇总的 CSV。
+- 实现：`tools/seeu-mcp/server.mjs` 新增 `export_timeline`：转发 `/timeline?bucket=&limit=400`（支持 eid/app/from/to），把 `rows[{bucket,n,eids,apps}]` 汇总为 CSV（UTF-8 BOM + CRLF），落盘 `seeu-mcp-timeline-<bucket>-<戳>.csv`，返回行数、日期范围与总记录数；CSV 转义用手写判断（不用正则，避免 heredoc 吃反斜杠）。
+- 同步：`tests/mcp-server-tools.test.mjs` 期望 10 个工具、`tools/env-report.mjs` 工具名列、`.probe/seeu-mcp-headless.mjs` 期望、README MCP 表、`docs/architecture.md`、技能 `seeu-chain-check/SKILL.md`。
+- 实测（dev stdio 探针）：`tools/list` 10 个；`export_timeline {bucket:'month'}` → 40 行、`2000-11 ~ 2022-05`、10,156 条记录，exit 0。
+
