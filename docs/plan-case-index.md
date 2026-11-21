@@ -2988,3 +2988,10 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 版本 0.3.34；`release-0334` 打包 ~12 分钟；asar 32,967 entries、0 false。
 - 打包态三探针全绿（m2 / 检索导出 e2e / settings）。
 - 注意：`search-filter-check` 在 2 字关键词下导出 1 万多行、等待约 7 秒属预期（每页 100 条、每页最多 2.5 秒扫描预算）；若要更快可先用 ≥3 字关键词或加检材/时间筛选。
+
+### 20.160 检索导出超时保护（maxMs）
+
+- 动机：2 字关键词在大库上导出可能扫十几秒甚至更久（每页都要重跑分块扫描），用户只看到「导出中…」，容易以为卡死。
+- 实现：`GET /seeu-index/export/search.csv` 增加 `maxMs`（默认 20000，`SEEU_EXPORT_MAX_MS` 可覆盖，钳制 2000–120000）；循环内每页检查 `Date.now()-startedAt > maxMs` → 停止、置 `timedOut/truncated/partial`，响应头 `x-seeu-timed-out`、`x-seeu-max-ms`；面板按 `timed-out` 显示专门的提示文案。
+- 验证（curl，作业案件）：`maxMs=3000` → 6,600 行、3.07 s、timed-out=1；`maxMs=20000` → 14,971 行、11.06 s、完整。
+- 坑：e2e 里「设了 `SEEU_EXPORT_MAX_MS` 就必须看到超时提示」的断言不可靠（≥3 字关键词走 FTS 很快就导完、不会超时），改成只记录 `csvTimedOut` 字段，超时路径用 curl 直接验证。

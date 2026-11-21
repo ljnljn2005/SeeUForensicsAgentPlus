@@ -459,6 +459,9 @@ async function handle(req, res) {
       if (path === '/export/search.csv') {
         const max = Math.min(50000, Math.max(1, Number(url.searchParams.get('max')) || 20000));
         const budget = Math.min(30000, Math.max(300, Number(url.searchParams.get('scanBudgetMs')) || scanBudgetMs()));
+        // 导出总时长保护：避免 2 字关键词在大库上扫太久（默认 20 秒，可用 SEEU_EXPORT_MAX_MS 调）
+        const maxMs = Math.min(120000, Math.max(2000, Number(url.searchParams.get('maxMs')) || Number(process.env.SEEU_EXPORT_MAX_MS) || 20000));
+        const startedAt = Date.now();
         const base = { q: url.searchParams.get('q') ?? '', scanBudgetMs: budget };
         for (const k of ['eid', 'app', 'account', 'category', 'from', 'to']) if (url.searchParams.get(k)) base[k] = url.searchParams.get(k);
         const names = new Map(evidences(db).map((e) => [Number(e.eid), e.name]));
@@ -467,6 +470,7 @@ async function handle(req, res) {
         let total = null;
         let partial = false;
         let truncated = false;
+        let timedOut = false;
         for (;;) {
           const page = search(db, { ...base, limit: 100, offset });
           if (Number.isFinite(page.total)) total = page.total;
@@ -477,6 +481,7 @@ async function handle(req, res) {
             out.push({ ...row, ev: names.get(Number(row.eid)) ?? '' });
           }
           offset += rows.length;
+          if (Date.now() - startedAt > maxMs) { timedOut = true; truncated = true; partial = true; break; }
           if (truncated || !rows.length || page.next == null) break;
         }
         return sendText(res, 200, searchCsv(out), {
@@ -486,6 +491,8 @@ async function handle(req, res) {
           'x-seeu-total': String(total ?? out.length),
           'x-seeu-truncated': truncated ? '1' : '0',
           'x-seeu-partial': partial ? '1' : '0',
+          'x-seeu-timed-out': timedOut ? '1' : '0',
+          'x-seeu-max-ms': String(maxMs),
         });
       }
       if (path === '/cite') return send(res, 200, cite(db, url.searchParams.get('id')));

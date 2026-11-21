@@ -1872,11 +1872,14 @@ window.__ModuleLoader__.load({
           const rowsOut = Number(res.headers.get('x-seeu-rows') ?? 0);
           const totalOut = Number(res.headers.get('x-seeu-total') ?? rowsOut);
           const partial = res.headers.get('x-seeu-partial') === '1';
+          const timedOut = res.headers.get('x-seeu-timed-out') === '1';
           const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
           const saved = await saveCsvText('检索导出-' + stamp + '.csv', text);
           if (saved && saved.ok === false) throw new Error(saved.error || '保存失败');
           const trunc = totalOut > rowsOut ? '（共 ' + totalOut + ' 条，单次最多 20000 行）' : '';
-          const tail = partial ? '，短词未扫完可先继续扫描再导出' : '';
+          const tail = timedOut
+            ? '（超时保护：还有更多，建议加检材/时间筛选或改用 ≥3 字关键词）'
+            : partial ? '，短词未扫完可先继续扫描再导出' : '';
           setCopyNote('已导出 ' + rowsOut + ' 行' + trunc + tail + (saved?.path ? '：' + saved.path : '') + '（UTF-8 BOM，Excel 可直接打开）');
         } catch (e) {
           setError('导出 CSV 失败：' + String(e.message ?? e));
