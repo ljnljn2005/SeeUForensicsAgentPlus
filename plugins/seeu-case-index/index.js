@@ -7,7 +7,7 @@ import { buildIndex, IndexBuildError } from '../../tools/ges-index/build.mjs';
 import { describeBuildProgress, findRunningBuild } from '../../tools/ges-index/progress.mjs';
 import { indexSummary } from '../../tools/ges-index/index-meta.mjs';
 import { openIndex, findIndexes, tree, search, cite, statsOf, verify, typedTables, table, entity, timeline, records, evidences, facets } from '../../tools/ges-index/query.mjs';
-import { genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
+import { entitiesCsv, genericCsv, recordsCsv } from '../../tools/ges-index/csv.mjs';
 import { attachMounts, loadEvidenceMounts } from '../../tools/ges-index/mounts.mjs';
 import { crossDbPath, findEntity, findImage, listCases, openCross, crossStats, syncAll, syncCase, topShared } from '../../tools/ges-index/cross.mjs';
 import { myosCases, myosImport, myosImportBatch, myosMaterials, myosResultDbs, myosTableCounts, myosTables } from './myos.mjs';
@@ -474,6 +474,46 @@ async function handle(req, res) {
         const opts = { limit: url.searchParams.get('limit') ?? 20, offset: url.searchParams.get('offset') ?? 0 };
         for (const k of ['eid', 'app', 'account', 'subcat', 'q', 'from', 'to']) if (url.searchParams.get(k)) opts[k] = url.searchParams.get(k);
         return send(res, 200, table(db, name, opts));
+      }
+
+      if (path === '/export/entities.csv') {
+        const max = Math.min(50000, Math.max(1, Number(url.searchParams.get('max')) || 20000));
+        const filters = {};
+        for (const k of ['kind', 'q', 'value', 'eid']) if (url.searchParams.get(k)) filters[k] = url.searchParams.get(k);
+        const out = [];
+        let offset = 0;
+        let total = null;
+        let truncated = false;
+        for (;;) {
+          const page = entity(db, { ...filters, limit: 200, offset });
+          if (page.matched === 'mention') {
+            out.push({ kind: page.kind, value: page.value, count: page.mentions.length, evidences: page.evidences, eids: page.eids ?? [] });
+            total = 1;
+            break;
+          }
+          const rows = page.rows ?? [];
+          total = page.total ?? rows.length;
+          for (const row of rows) {
+            if (out.length >= max) { truncated = true; break; }
+            out.push(row);
+          }
+          offset += rows.length;
+          if (truncated || !rows.length || page.next == null) break;
+        }
+        const qs = new URLSearchParams();
+        for (const [key, value] of Object.entries(filters)) qs.set(key, value);
+        const body = entitiesCsv(out);
+        res.writeHead(200, {
+          'content-type': 'text/csv; charset=utf-8',
+          'content-disposition': `attachment; filename="entity-export-${Date.now()}.csv"`,
+          'cache-control': 'no-store',
+          'access-control-allow-origin': '*',
+          'x-seeu-rows': String(out.length),
+          'x-seeu-total': String(total ?? out.length),
+          'x-seeu-truncated': truncated ? '1' : '0',
+        });
+        res.end(body);
+        return true;
       }
       if (path === '/entity') {
         const opts = { limit: url.searchParams.get('limit') ?? 20 };

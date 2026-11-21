@@ -597,6 +597,7 @@ window.__ModuleLoader__.load({
       const [applied, setApplied] = useState(draft);
       const [offset, setOffset] = useState(0);
       const [copying, setCopying] = useState(false);
+      const [exporting, setExporting] = useState(false);
       const [note, setNote] = useState('');
       const [evList, setEvList] = useState([]);
       useEffect(() => {
@@ -657,6 +658,28 @@ window.__ModuleLoader__.load({
           setCopying(false);
         }
       };
+      const exportCsv = async () => {
+        if (exporting || !db) return;
+        setExporting(true);
+        setNote('');
+        try {
+          const qs = new URLSearchParams({ db, max: '20000' });
+          for (const key of ['kind', 'q', 'eid']) if (applied[key]) qs.set(key, applied[key]);
+          const resp = await fetch('/seeu-index/export/entities.csv?' + qs.toString());
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const text = await resp.text();
+          const rows = Number(resp.headers.get('x-seeu-rows') ?? 0);
+          const total = Number(resp.headers.get('x-seeu-total') ?? rows);
+          const truncated = resp.headers.get('x-seeu-truncated') === '1';
+          const name = '实体导出-' + new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14) + '.csv';
+          await saveCsvText(name, '﻿' + text);
+          setNote(`已导出 ${rows} 条实体${truncated ? `（共 ${total} 条，单次最多 20000 条）` : ''}（UTF-8 BOM，Excel 可直接打开）`);
+        } catch (e) {
+          setNote(`导出失败：${String(e.message ?? e)}`);
+        } finally {
+          setExporting(false);
+        }
+      };
       return h('div', { style: S.card },
         h('div', { style: { ...S.row, gap: 6 } },
           narrowInput(draft.kind, (v) => setDraft((d) => ({ ...d, kind: v })), '实体类型 kind', { width: 110, onEnter: apply }),
@@ -674,7 +697,8 @@ window.__ModuleLoader__.load({
           actionButton('查询', apply, { primary: true }),
           hasFilter ? actionButton('清空', clear) : null,
           h('span', { style: { marginLeft: 'auto' } },
-            actionButton(copying ? '复制中…' : '复制实体清单', copyEntities, { disabled: copying || !rows.length }))),
+            actionButton(copying ? '复制中…' : '复制实体清单', copyEntities, { disabled: copying || !rows.length }),
+            actionButton(exporting ? '导出中…' : '导出 CSV', exportCsv, { disabled: exporting || !db }))),
         note ? h('div', { style: S.noticeInfo }, note) : null,
         data && data.total != null
           ? h('div', { style: { ...S.row, gap: 6 } },

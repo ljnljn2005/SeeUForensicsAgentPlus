@@ -2964,3 +2964,12 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - `scripts/e2e/seeu-mcp-live-check.mjs`：mock 网关按会话里 `role:'tool'` 消息数决定下一轮工具——0 给 `evidence_list {caseNumber}`、1 给 `read_table {caseNumber, table:'exif', limit:2}`、≥2 回最终文本；`CASE = process.env.SEEU_MCP_E2E_CASE || '20261118081854I'`；断言 `toolResultLooksReal = /检材（\d+ 个）/ && /eid\s*1/ && /表 exif/` 且 `seeuToolCount === 7`。
 - 实跑结果：`ok:true`、`chatCalls:4`、`seeuToolCount:7`、`toolResultLooksReal:true`、`errors:[]`；工具结果样本包含「检材（2 个）：eid 1 · Centos.E01 …」与「表 exif（图片 Exif，共 20537 条…）[id 1] record_id=7143 …」。
 - 坑：mock 网关必须等 `role:'tool'` 消息出现再进入下一轮（用消息计数而不是轮次计数），否则第二轮会错过工具结果。
+
+### 20.157 实体视图导出 CSV（export/entities.csv）
+
+- 缺口：记录、表、检索都能导 CSV，实体视图只有「复制实体清单」（Markdown），做报告/表格统计时不便。
+- 后端：`tools/ges-index/csv.mjs` 新增 `entitiesCsv(rows)`（列：类别/值/出现次数/涉及检材数/检材号，`eids` 用空格连接）；插件新增 `GET /seeu-index/export/entities.csv`（`kind/q/value/eid` 过滤、`max` 默认 20000 上限 50000，按 200 条/页翻页拼装，唯一值下钻时导一条汇总行），响应头 `x-seeu-rows/x-seeu-total/x-seeu-truncated`。
+- 面板：`EntityView` 工具栏在【复制实体清单】旁加【导出 CSV】（`saveCsvText`，文件名 `实体导出-<时间戳>.csv`），提示「已导出 N 条实体（…）」。
+- e2e：`scripts/e2e/export-check.mjs` 加 2b 段（点击导出 → 读回最新 `实体导出-*.csv` 断言 BOM/表头/行数）；同时把表视图的 `pickTable('联系人')` 换成 `pickTableWithRows([...])`（按选项里的（N）自动挑有数据的表），无 typed 表时 `tableSkipped=true` 跳过而不是判失败。
+- 坑：e2e 里把正则拼进 `evaluate("…")` 字符串时，`d` 在字符串字面量层被吃掉变成 `d`，导致永远匹配不到「（20537）」；必须在源码写 `\d`（或改用 split/Number 解析）。
+- 验证：`npm test` 241/241；`export-check` → `ok:true`（实体 CSV 4,597 行 / 表 CSV 20,000 行 / 记录 CSV 20,000 行，`errors:[]`）。
