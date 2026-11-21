@@ -3032,3 +3032,8 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 同步：`tests/mcp-server-tools.test.mjs` 期望 9 个工具、`tools/env-report.mjs` 工具名列、`.probe/seeu-mcp-headless.mjs` 期望、README MCP 表、`docs/architecture.md`、技能 `seeu-chain-check/SKILL.md`。
 - 实测（dev stdio 探针）：`tools/list` 9 个；`export_entities {max:20}` → 20 行 / 实体总数 4,597（截断），exit 0。
 
+### 20.167 v0.3.38 打包（MCP export_entities）
+
+- 版本 0.3.38；asar 32,967 entries / 0 false（新增 `exportEntitiesTool`）。
+- 打包版 MCP 实测 9 工具、实体导出 20 行；启动 49.2 s / 便携 66.2 s；打包态 m2 与 settings 全绿。
+
