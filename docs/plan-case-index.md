@@ -3024,3 +3024,11 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 
 - 版本 0.3.37；asar 32,967 entries / 0 false（新增 `exportTableTool`：asarUnpacked 的 server.mjs 含 `/export/table.csv`、`seeu-mcp-table-`、`table: {`）。
 - 打包版 MCP 服务端实测按表导出 44 行；启动 43.6 s / 便携 60.7 s；打包态 m2 与 settings 全绿。
+
+### 20.166 MCP 第 9 个工具 export_entities（实体清单落盘）
+
+- 动机：检索/表导出补上后，缺「实体汇总」交付物（手机号/邮箱/URL/账号清单），这也是取证报告最常见的附表。
+- 实现：`tools/seeu-mcp/server.mjs` 新增 `export_entities`：转发 `/export/entities.csv`（`kind`/`q`/`eid`/`max`），落盘 `seeu-mcp-entities-<戳>.csv`（补 BOM），返回「已导出 N 行到 …」+「实体总数 M（结果被截断）」。
+- 同步：`tests/mcp-server-tools.test.mjs` 期望 9 个工具、`tools/env-report.mjs` 工具名列、`.probe/seeu-mcp-headless.mjs` 期望、README MCP 表、`docs/architecture.md`、技能 `seeu-chain-check/SKILL.md`。
+- 实测（dev stdio 探针）：`tools/list` 9 个；`export_entities {max:20}` → 20 行 / 实体总数 4,597（截断），exit 0。
+
