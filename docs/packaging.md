@@ -1259,3 +1259,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 打包版 MCP 服务端（`ELECTRON_RUN_AS_NODE` 跑 `app.asar.unpacked/tools/seeu-mcp/server.mjs`）：`tools/list` 返回 **8 个**工具（含 `export_records`），退出码 0、stderr 空。
 - 启动：目录版 `41,951 ms`、便携版 `59,815 ms`。
 - 打包态：`m2-ui-check` `m2ok:true`（45,237 条）、`settings-check` `ok:true`（0.3.36、体检 8 项）。
+
+### v0.3.37 回归验证（第 93 轮：MCP export_records 按表导出）
+
+- 产物：NSIS `320,046,262 B`（blockmap 332,523）、portable `270,629,047 B`、`app.asar` 见 `release/win-unpacked/resources/app.asar`。
+- asar 自检 `.probe/asar-0337-check.mjs`：32,967 entries、`missing: []`、0 false（新增 `exportTableTool`）。
+- 打包版 MCP 服务端独立验证：`export_records {table:'web_visit',max:100}` → 44 行 / 5,607 B 落盘，退出码 0。
+- 启动：目录版 `43,613 ms`、便携版 `60,654 ms`。
+- 打包态：`m2-ui-check` `m2ok:true`（45,237 条）、`settings-check` `ok:true`（0.3.37、体检 8 项）。
