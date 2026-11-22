@@ -3058,3 +3058,9 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 测试：`tests/export-dir.test.mjs` 3 例（目录解析、目录缺失、排序/过滤/limit）→ `npm test` **246/246**；`m2-ui-check` 新增 `exportsCard`/`exportsApi` 并纳入 `m2ok`，实测 `exportsApi:{dir:…,.dev/m2-exp,count:0,files:0}`、`m2ok:true`。
 - 坑：`/exports` 路由最初引用了不存在的 `q`（该区块的搜索参数变量名是 `url.searchParams`），tsc 不报但运行时 `ReferenceError`；e2e 的 `page.evaluate` 把异常吞成 `{files:0}`，改为断言 `dir` 是字符串后立刻暴露。
 
+### 20.171 v0.3.40 打包（面板最近导出卡片）
+
+- 版本 0.3.40；asar 32,968 entries / 0 false（新增 `exportsDirModule`/`exportsRoute`/`exportsCard`/`exportsIpc`）。
+- 启动 35.7 s / 便携 60.7 s；打包态 m2（作业案件）重跑后 `m2ok:true`（`exportsCard:true`、`exportsApi:{dir:.dev/pk-exp340,count:0}`），settings `ok:true`（0.3.40、体检 8 项）。
+- 两个环境坑：① 新增被插件 import 的 `tools/*.mjs` 必须同时进 `electron-builder.yml` 的 `files`（这次是 `tools/export-dir.mjs`）；② D: 盘满（剩 432 MB）会让 portable 压缩 `7za.exe` 失败，需清理 `release-0*`。
+

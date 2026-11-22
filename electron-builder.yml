@@ -28,6 +28,7 @@ files:
   - tools/seeu-mcp/**
   - tools/ios-quick.mjs
   - tools/index-scan-budget.mjs
+  - tools/export-dir.mjs
   - scripts/chain-check.mjs
   - scripts/ios-quick.mjs
   - tools/seeu-mcp/**

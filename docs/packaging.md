@@ -1284,3 +1284,12 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 启动：目录版 `41,081 ms`、便携版 `61,271 ms`。
 - 打包态：`m2-ui-check` `m2ok:true`（45,237 条）、`settings-check` `ok:true`（0.3.39 / 体检 8 项）。
 
+### v0.3.40 回归验证（第 96 轮：面板「最近导出」卡片）
+
+- 产物：NSIS `320,036,804 B`（blockmap 332,465）、portable `270,629,485 B`、`app.asar` 见 `release/win-unpacked/resources/app.asar`（32,968 entries）。
+- asar 自检 `.probe/asar-0340-check.mjs`：`missing: []`、0 false（新增 `exportsDirModule` / `exportsRoute` / `exportsCard` / `exportsIpc`）。
+- 启动：目录版 `35,729 ms`、便携版 `60,712 ms`。
+- 打包态：`m2-ui-check` 第一次（全新 home，冷启动）出现 `treeRoot/treeFilter*` 间歇失败，重跑即 `m2ok:true`（`exportsCard:true`、`exportsApi.dir` 指向 `.dev/pk-exp340`）；`settings-check` `ok:true`（0.3.40 / 体检 8 项）。
+- 打包白名单坑（再次踩到）：`tools/export-dir.mjs` 被插件 import，必须同步加进 `electron-builder.yml` 的 `files`，否则打包版 `/exports` 路由 404。
+- 磁盘坑：D: 盘只剩 432 MB 时 portable 压缩失败（`7za.exe process failed 2`），清掉 `release-0*` 旧目录后正常。
+
