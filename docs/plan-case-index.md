@@ -3064,3 +3064,18 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 启动 35.7 s / 便携 60.7 s；打包态 m2（作业案件）重跑后 `m2ok:true`（`exportsCard:true`、`exportsApi:{dir:.dev/pk-exp340,count:0}`），settings `ok:true`（0.3.40、体检 8 项）。
 - 两个环境坑：① 新增被插件 import 的 `tools/*.mjs` 必须同时进 `electron-builder.yml` 的 `files`（这次是 `tools/export-dir.mjs`）；② D: 盘满（剩 432 MB）会让 portable 压缩 `7za.exe` 失败，需清理 `release-0*`。
 
+
+### 20.172 最近导出支持打开与删除（v0.3.41）
+
+- 需求：导出目录里 CSV 越积越多，用户只能打开目录手动找/删。
+- 实现：`tools/export-dir.mjs` 新增 `resolveExportFile(env, name, {dir})`（只接受单层文件名、白名单扩展名 `.csv/.json/.md/.txt`、存在且是文件）与 `removeExport()`；插件 `POST /seeu-index/exports/remove`；主进程 IPC `seeu:exports:open-file`（`shell.openPath`）与 `seeu:exports:remove`（复用同一套校验，`SEEU_EXPORT_DIR` 强制为 `appExportDir()`）；preload 暴露 `window.seeu.exportsDir.openFile/remove`；面板行内点文件名打开、点「×」删除并刷新列表。
+- 坑：① `src/main.ts` 并没有 `export-dir.mjs` 的 import，第一次跑 e2e 直接 `ReferenceError: removeExport is not defined`（错误通过 IPC 传回页面，`errors` 数组里可见）；② 手写 JSX 补丁时括号数容易错（`h(...)` + `.map(...)` 需要 4 个右括号），用 `esbuild.transformSync` 校验；③ heredoc 里 `
+` 会被 Python 当换行写进 JS 字符串，须用 `String.fromCharCode(10)`。
+- 验证：`npm test` 248/248、`check:overlay` OK；dev `m2-ui-check` → `m2ok:true`、`exportsRemoveOk:true`、`errors:[]`。
+
+### 20.173 v0.3.41 打包（最近导出打开/删除）
+
+- NSIS 320,038,109 B（blockmap 332,072）、portable 270,575,774 B、asar 566,555,540 B（32,968）；asar 自检 0 false（`exportsOpenRemove`）。
+- 启动 7,225 ms / 便携 66,114 ms；打包态 m2 `m2ok:true`（`exportsRemoveOk:true`）、settings `ok:true`（0.3.41 / 8 项）。
+- 记忆点：Electron IPC 里 import 缺失会以 `Error invoking remote method` 形式冒到渲染层，e2e 的 `errors` 数组能第一时间抓到。
+

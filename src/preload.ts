@@ -276,6 +276,10 @@ const api = {
     get: (): Promise<{ dir: string }> => ipcRenderer.invoke('seeu:exports:dir') as Promise<{ dir: string }>,
     open: (): Promise<{ ok: boolean; path?: string; error?: string }> =>
       ipcRenderer.invoke('seeu:exports:open') as Promise<{ ok: boolean; path?: string; error?: string }>,
+    openFile: (name: string): Promise<{ ok: boolean; path?: string; error?: string }> =>
+      ipcRenderer.invoke('seeu:exports:open-file', name) as Promise<{ ok: boolean; path?: string; error?: string }>,
+    remove: (name: string): Promise<{ ok: boolean; removed?: string; error?: string }> =>
+      ipcRenderer.invoke('seeu:exports:remove', name) as Promise<{ ok: boolean; removed?: string; error?: string }>,
   },
   localModel: {
     get: (): Promise<LocalModelView> => ipcRenderer.invoke('seeu:local-model:get') as Promise<LocalModelView>,

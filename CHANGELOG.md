@@ -104,6 +104,14 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 
 ## 未发布
 
+### 最近导出支持打开与删除（v0.3.41 待打包）
+
+- 面板「最近导出」每一行现在可点击：点文件名用系统默认程序打开（CSV 直接进 Excel），行尾「×」直接删掉这个导出文件（不再永久堆积）。
+- 删除只允许导出目录内的单层文件、且扩展名限 CSV/JSON/MD/TXT（拒绝 `..` 路径与绝对路径），网页预览里不执行文件操作、只显示提示。
+- 新增 IPC `seeu:exports:open-file` / `seeu:exports:remove` 与插件路由 `POST /seeu-index/exports/remove`；`tools/export-dir.mjs` 增加 `resolveExportFile()` / `removeExport()`。
+- 测试：`tests/export-dir.test.mjs` 增 2 例（路径穿越/扩展名/不存在拒绝；删除成功与幂等失败）→ `npm test` 248/248；e2e `m2-ui-check` 增 `exportsRemoveOk`（预置探针文件 → 点 × → 磁盘上确认已删）。
+
+
 - **内置 MCP 新增第 8 个工具 `export_records`**：把检索结果直接导出成 CSV（UTF-8 BOM、列与面板导出一致），返回文件路径与行数，方便模型把「命中清单」作为交付物给用户，或再用表格工具继续处理。
   - 参数：`q`（必填）、`caseNumber|db`、`eid`、`app`、`from`、`to`、`max`（默认 2 万、上限 5 万）。
   - 实测：作业案件 `q=2022`、`max=500` → 500 行 / 50,813 B，返回「已导出 500 行到 …seeu-exportsseeu-mcp-<时间戳>.csv / 命中（近似）1057 · 结果被截断」。

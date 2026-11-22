@@ -15,7 +15,7 @@ import { forgetExtraDir, readExtraDirs, rememberExtraDir } from '../../tools/ges
 import { activityFile, clearActivity, formatActivitySummary, readActivity, recordActivity, removeActivity, summarizeActivity } from '../../tools/ges-index/activity.mjs';
 import { runChainCheck } from '../../tools/chain-check-run.mjs';
 import { saveScanBudget, scanBudgetMs, scanBudgetView } from '../../tools/index-scan-budget.mjs';
-import { listExports } from '../../tools/export-dir.mjs';
+import { listExports, removeExport } from '../../tools/export-dir.mjs';
 
 function pathBase(value) {
   const text = String(value ?? '').replace(/[\/]+$/, '');
@@ -248,6 +248,13 @@ async function handle(req, res) {
       const limit = Math.max(1, Math.min(20, Number(url.searchParams.get('limit')) || 8));
       send(res, 200, listExports(process.env, { limit }));
       return true;
+    }
+
+    if (path === '/exports/remove') {
+      if (req.method !== 'POST') return send(res, 405, { ok: false, error: '请用 POST' });
+      const body = await readBody(req).catch(() => ({}));
+      const result = removeExport(process.env, body?.name);
+      return send(res, result.ok ? 200 : 400, result);
     }
 
     if (path === '/scan-budget') {

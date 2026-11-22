@@ -1293,3 +1293,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 打包白名单坑（再次踩到）：`tools/export-dir.mjs` 被插件 import，必须同步加进 `electron-builder.yml` 的 `files`，否则打包版 `/exports` 路由 404。
 - 磁盘坑：D: 盘只剩 432 MB 时 portable 压缩失败（`7za.exe process failed 2`），清掉 `release-0*` 旧目录后正常。
 
+### v0.3.41 回归验证（第 97 轮：最近导出支持打开与删除）
+
+- 产物：NSIS `320,038,109 B`（blockmap 332,072）、portable `270,575,774 B`、`app.asar` `566,555,540 B`（32,968 entries）。
+- asar 自检 `.probe/asar-0341-check.mjs`：`missing: []`、0 false（新增 `exportsOpenRemove`：主进程含 `seeu:exports:open-file`/`seeu:exports:remove` 与 `removeExport`、插件含 `/exports/remove`、面板含 `data-export-open`/`data-export-remove`）。
+- 启动：目录版 `7,225 ms`、便携版 `66,114 ms`。
+- 打包态：`m2-ui-check`（作业案件 45,237 条，`SEEU_EXPORT_DIR` 指向探针目录）→ `m2ok:true`、`exportsCard:true`、`exportsRemoveOk:true`、`errors:[]`；`settings-check` → `ok:true`（`aboutVersion:0.3.41`、体检 8 项）。
+- 坑：`src/main.ts` 首次没 import `export-dir.mjs`，IPC 里 `removeExport is not defined` 通过 `errors` 数组暴露（页面提示「Error invoking remote method」）；补 import 后通过。
+

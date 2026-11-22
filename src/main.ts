@@ -21,6 +21,7 @@ import {
 } from './brand.js'
 import { pickStaleAuthCookies } from './auth-cookies.js'
 import { DshHost, type HostState } from './host.js'
+import { removeExport, resolveExportFile } from '../tools/export-dir.mjs'
 import {
   describeLocalModelConfig,
   diagnoseLocalGateway,
@@ -846,6 +847,25 @@ function registerIpc(): void {
   })
   // 面板导出的落盘（CSV 等）：默认存到 <下载>/seeu-exports，SEEU_EXPORT_DIR 可覆盖（e2e 用）。
   ipcMain.handle('seeu:exports:dir', () => ({ dir: appExportDir() }))
+
+  const exportsEnv = () => ({ ...process.env, SEEU_EXPORT_DIR: appExportDir() })
+
+  ipcMain.handle('seeu:exports:open-file', async (_event, name: unknown) => {
+    const hit = resolveExportFile(exportsEnv(), name)
+    if (!hit.ok) return { ok: false, error: hit.error }
+    try {
+      const error = await shell.openPath(hit.path)
+      return error ? { ok: false, path: hit.path, error } : { ok: true, path: hit.path }
+    } catch (error) {
+      return { ok: false, error: errorDetail(error) }
+    }
+  })
+
+  ipcMain.handle('seeu:exports:remove', (_event, name: unknown) => {
+    const result = removeExport(exportsEnv(), name)
+    if (result.ok) logShell(`export removed: ${result.removed}`)
+    return result
+  })
 
   ipcMain.handle('seeu:exports:open', async () => {
     const dir = appExportDir()

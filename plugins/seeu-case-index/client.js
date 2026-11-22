@@ -2142,10 +2142,40 @@ window.__ModuleLoader__.load({
             exportsNote ? h('span', { style: { color: C_ACC, fontSize: 11.5 } }, exportsNote) : null),
           exportsInfo && exportsInfo.count
             ? h('div', { style: { display: 'grid', gap: 2, fontSize: 11.5 } },
-              exportsInfo.files.map((file) => h('div', { style: { display: 'flex', gap: 10 }, key: file.path },
-                h('span', { style: { color: C_FG3, fontFamily: 'ui-monospace,Consolas,monospace' } }, file.name),
+              exportsInfo.files.map((file) => h('div', { style: { display: 'flex', gap: 10, alignItems: 'center' }, key: file.path },
+                h('span', {
+                  style: { color: C_ACC, fontFamily: 'ui-monospace,Consolas,monospace', cursor: 'pointer' },
+                  title: '点击打开这个文件',
+                  'data-export-open': file.name,
+                  onClick: async () => {
+                    if (!(window.seeu && window.seeu.exportsDir && window.seeu.exportsDir.openFile)) {
+                      setExportsNote('网页预览不能直接打开文件，请在桌面版里点击');
+                      return;
+                    }
+                    const result = await window.seeu.exportsDir.openFile(file.name);
+                    setExportsNote(result?.ok ? `已打开 ${file.name}` : `打开失败：${result?.error ?? '未知错误'}`);
+                  },
+                }, file.name),
                 h('span', { style: S.muted }, `${(file.sizeBytes / 1024).toFixed(0)} KB`),
-                h('span', { style: S.muted }, new Date(file.mtime).toLocaleString()))))
+                h('span', { style: S.muted }, new Date(file.mtime).toLocaleString()),
+                h('span', {
+                  style: { color: C_FG3, cursor: 'pointer', padding: '0 4px', fontSize: 13 },
+                  title: '删除这个导出文件（不可恢复）',
+                  'data-export-remove': file.name,
+                  onClick: async () => {
+                    if (!(window.seeu && window.seeu.exportsDir && window.seeu.exportsDir.remove)) {
+                      setExportsNote('网页预览不能删除文件，请在桌面版里操作');
+                      return;
+                    }
+                    const result = await window.seeu.exportsDir.remove(file.name);
+                    if (result?.ok) {
+                      setExportsNote(`已删除 ${file.name}`);
+                      await refreshExports();
+                    } else {
+                      setExportsNote(`删除失败：${result?.error ?? '未知错误'}`);
+                    }
+                  },
+                }, '×'))))
             : h('div', { style: S.muted }, '还没有导出文件：面板导出 CSV 或让模型用 MCP 导出后，这里会列出最近 8 个。')),
         view && view.needsRebuild
           ? h('div', { style: S.noticeWarn }, `索引库 schema v${view.schemaVersion ?? '?'} 与当前工具 v${view.currentSchemaVersion ?? '?'} 不一致：建议点「建库 / 更新」重建，旧库可能缺字段或查不到新类别。`)
