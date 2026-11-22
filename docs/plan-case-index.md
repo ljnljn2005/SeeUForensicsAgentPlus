@@ -3136,3 +3136,16 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 启动 38,099 ms / 便携 61,812 ms；打包态 m2 `m2ok:true`（`exportsCaseFilter.count:1`）、settings `ok:true`（0.3.45 / 8 项）。
 - 坑：改过滤表达式后 asar 自检里的旧字符串断言（`filter((file) => exportsFilter === 'all'`）会误报 —— 打包检查里的命中片段尽量查稳定的短串（`exportsFilter === 'all'`），不要查整行。
 
+
+### 20.182 MCP index_search 短词续扫（v0.3.46）
+
+- `tools/seeu-mcp/server.mjs`：`index_search` inputSchema 增 `scanFromId`/`scanBudgetMs`；调用时 `qs.set('scanFromId', …)`（>0）与 `qs.set('scanBudgetMs', clamp 300–30000)`；结果末尾若 `data.scanNextId > 0` 追加「还有更多：可带 scanFromId=N 继续扫（每轮约 X ms 预算）」。
+- 插件侧无需改动：`/search` 早已转发 `scanFromId`（第 86 轮加的），`query.mjs` 返回 `scanFromId/scanNextId`。
+- 测试：新增 `tests/mcp-search-scan.test.mjs`（假索引服务记录请求 URL；断言 `scanFromId=5000`、`scanBudgetMs=1200` 已转发，且响应文本含 `scanFromId=20001`）；`tests/mcp-server-tools.test.mjs` 增加 schema/转发断言。`npm test` 251/251。
+- 价值：模型在 2 字关键词下可以「多轮小预算」扫描，避免单轮长时间等待；配合面板「继续扫描」形成一致的语义。
+
+### 20.183 v0.3.46 打包（MCP 检索短词续扫）
+
+- NSIS 320,047,258 B（blockmap 332,709）、portable 270,593,827 B、asar 566,556,172 B（32,968）；asar 自检 0 false（`mcpSearchScanResume`）。
+- 启动 38,775 ms / 便携 61,944 ms；打包态 m2 `m2ok:true`、settings `ok:true`（0.3.46 / 8 项）。
+

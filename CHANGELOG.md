@@ -104,6 +104,13 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 
 ## 未发布
 
+### MCP 检索支持短词续扫（v0.3.46 待打包）
+
+- 内置 MCP 的 `index_search` 新增可选 `scanFromId` / `scanBudgetMs`：2 字关键词一轮扫不完时，结果末尾会给出「还有更多：可带 scanFromId=N 继续扫」，模型可以自己续扫而不必一次把时间预算拉满。
+- 转发到索引插件 `/search`（该路由此前已支持 `scanFromId`），并把 `scanNextId/scanBudgetMs` 回显到 MCP 文本结果。
+- 测试：新增 `tests/mcp-search-scan.test.mjs`（假索引服务 + stdio JSON-RPC，断言转发 `scanFromId=5000&scanBudgetMs=1200` 且响应含 `scanFromId=20001`）。
+
+
 ### 最近导出支持「只看本案件」（v0.3.45 待打包）
 
 - 「最近导出」卡片新增 `只看本案件` chip：按文件名里的案号过滤（面板导出取案件目录名，MCP 导出取解析后的 caseNumber，两者都含案号子串，因此同一案件的面板/MCP 导出都能筛出来）。
