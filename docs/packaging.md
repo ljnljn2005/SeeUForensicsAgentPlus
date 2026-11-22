@@ -1301,3 +1301,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 打包态：`m2-ui-check`（作业案件 45,237 条，`SEEU_EXPORT_DIR` 指向探针目录）→ `m2ok:true`、`exportsCard:true`、`exportsRemoveOk:true`、`errors:[]`；`settings-check` → `ok:true`（`aboutVersion:0.3.41`、体检 8 项）。
 - 坑：`src/main.ts` 首次没 import `export-dir.mjs`，IPC 里 `removeExport is not defined` 通过 `errors` 数组暴露（页面提示「Error invoking remote method」）；补 import 后通过。
 
+### v0.3.42 回归验证（第 98 轮：导出文件名带案件标签 + 最近导出来源）
+
+- 产物：NSIS `320,038,793 B`（blockmap 332,100）、portable `270,558,161 B`、`app.asar` `566,557,069 B`（32,968 entries）。
+- asar 自检 `.probe/asar-0342-check.mjs`：`missing: []`、0 false（新增 `exportsCaseTag`；`searchCsvButton`/`entityCsvButton` 断言改查 `exportBase('检索导出'` / `exportBase('实体导出'`）。
+- 启动：目录版 `39,418 ms`（首启杀软扫描）、便携版 `60,579 ms`。
+- 打包态：`m2-ui-check` → `m2ok:true`（`exportsSources:{count:2,mcp:1,panel:1}`、`exportsRemoveOk:true`、`errors:[]`）；`settings-check` → `ok:true`（0.3.42 / 体检 8 项）；`export-check` → `ok:true`，文件名 `记录导出-作业_20261118081854I-20261123-051507.csv`（20,000 行）、`表导出-图片 Exif-作业_20261118081854I-…csv`（20,000 行）。
+- 断言维护注意：客户端把文件名改成 `exportBase(...)` 拼接后，asar 自检里查旧字面量（`'检索导出-'`）会误报，需同步改成新写法。
+

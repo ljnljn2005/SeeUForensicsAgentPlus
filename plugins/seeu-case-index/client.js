@@ -381,6 +381,20 @@ window.__ModuleLoader__.load({
     }
 
     // ---------- 视图：记录（分页 + 筛选 + 点行看引用） ----------
+    // 导出文件名统一带「案件目录标签 + 本地时间戳」，避免多案件导出后混在一起。
+    const pad2 = (n) => String(n).padStart(2, '0')
+    const exportStamp = (date = new Date()) =>
+      `${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(date.getDate())}-${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}`
+    const caseTagFromDb = (db) => {
+      const parts = String(db ?? '').split(String.fromCharCode(92)).join('/').split('/').filter(Boolean)
+      const dir = parts.length >= 3 ? parts[parts.length - 3] : ''
+      return dir.replace(/[^\w\u4e00-\u9fa5.-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)
+    }
+    const exportBase = (kind, db) => {
+      const tag = caseTagFromDb(db)
+      return tag ? `${kind}-${tag}-${exportStamp()}` : `${kind}-${exportStamp()}`
+    }
+
     function RecordsView({ db, seed, onCite }) {
       const base = useMemo(() => ({
         eid: seed?.eid != null ? String(seed.eid) : '',
@@ -488,8 +502,8 @@ window.__ModuleLoader__.load({
           const totalOut = Number(res.headers.get('x-seeu-total') ?? rowsOut);
           const now = new Date();
           const pad = (n) => String(n).padStart(2, '0');
-          const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-          const name = '记录导出-' + stamp + '.csv';
+          const stamp = exportStamp();
+          const name = exportBase('记录导出', db) + '.csv';
           const saved = window.seeu && typeof window.seeu.saveExport === 'function'
             ? await window.seeu.saveExport(name, text)
             : null;
@@ -671,7 +685,7 @@ window.__ModuleLoader__.load({
           const rows = Number(resp.headers.get('x-seeu-rows') ?? 0);
           const total = Number(resp.headers.get('x-seeu-total') ?? rows);
           const truncated = resp.headers.get('x-seeu-truncated') === '1';
-          const name = '实体导出-' + new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14) + '.csv';
+          const name = exportBase('实体导出', db) + '.csv';
           await saveCsvText(name, '﻿' + text);
           setNote(`已导出 ${rows} 条实体${truncated ? `（共 ${total} 条，单次最多 20000 条）` : ''}（UTF-8 BOM，Excel 可直接打开）`);
         } catch (e) {
@@ -973,7 +987,7 @@ window.__ModuleLoader__.load({
           const now = new Date();
           const pad = (n) => String(n).padStart(2, '0');
           const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-          const saved = await saveCsvText('表导出-' + (detail.data?.label || name) + '-' + stamp + '.csv', text);
+          const saved = await saveCsvText(exportBase('表导出-' + (detail.data?.label || name), db) + '.csv', text);
           if (saved.ok) {
             setExportNote('已导出 ' + rowsOut + ' 行' + (totalOut > rowsOut ? '（共 ' + totalOut + ' 行，单次最多 20000 行）' : '') + (saved.downloaded ? '：' + saved.path : '到 ' + saved.path));
           } else {
@@ -1887,7 +1901,7 @@ window.__ModuleLoader__.load({
           const partial = res.headers.get('x-seeu-partial') === '1';
           const timedOut = res.headers.get('x-seeu-timed-out') === '1';
           const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
-          const saved = await saveCsvText('检索导出-' + stamp + '.csv', text);
+          const saved = await saveCsvText(exportBase('检索导出', db) + '.csv', text);
           if (saved && saved.ok === false) throw new Error(saved.error || '保存失败');
           const trunc = totalOut > rowsOut ? '（共 ' + totalOut + ' 条，单次最多 20000 行）' : '';
           const tail = timedOut
@@ -2156,7 +2170,12 @@ window.__ModuleLoader__.load({
                     setExportsNote(result?.ok ? `已打开 ${file.name}` : `打开失败：${result?.error ?? '未知错误'}`);
                   },
                 }, file.name),
-                h('span', { style: S.muted }, `${(file.sizeBytes / 1024).toFixed(0)} KB`),
+                h('span', {
+                  style: { ...S.tag, flex: 'none', fontSize: 10, color: file.source === 'mcp' ? '#A78BFA' : C_ACC },
+                  'data-export-source': file.source,
+                  title: file.source === 'mcp' ? '模型通过内置 MCP 导出' : '面板里点「导出 CSV」生成',
+                }, file.source === 'mcp' ? 'MCP' : '面板'),
+                h('span', { style: S.muted }, file.sizeText ?? `${(file.sizeBytes / 1024).toFixed(0)} KB`),
                 h('span', { style: S.muted }, new Date(file.mtime).toLocaleString()),
                 h('span', {
                   style: { color: C_FG3, cursor: 'pointer', padding: '0 4px', fontSize: 13 },

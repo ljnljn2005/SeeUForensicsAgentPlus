@@ -3079,3 +3079,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 启动 7,225 ms / 便携 66,114 ms；打包态 m2 `m2ok:true`（`exportsRemoveOk:true`）、settings `ok:true`（0.3.41 / 8 项）。
 - 记忆点：Electron IPC 里 import 缺失会以 `Error invoking remote method` 形式冒到渲染层，e2e 的 `errors` 数组能第一时间抓到。
 
+
+### 20.174 导出文件名带案件标签 + 最近导出来源标签（v0.3.42）
+
+- 动机：多案件/多次导出后文件名只有时间戳，分不清属于哪个案件；最近导出也看不出是面板还是模型导出的。
+- 实现：客户端新增 `exportStamp()`（本地时间 `yyyymmdd-HHMMSS`）、`caseTagFromDb(db)`（从 `db` 路径倒数第三段取案件目录名，非法字符替换为 `_`，截 40 字）、`exportBase(kind, db)`，四处导出（记录/表/检索/实体）统一使用；`tools/export-dir.mjs` 的 `listExports()` 增加 `source`（`seeu-mcp-` 前缀 → `mcp`，否则 `panel`）与 `sizeText`；面板行内渲染来源 chip（`data-export-source`）与可读大小。
+- 验证：`npm test` 248/248（export-dir 断言 source/sizeText）；dev m2 → `m2ok:true`、`exportsSources:{count:2,mcp:1,panel:1}`、`exportsRemoveOk:true`；`export-check` 文件名 `记录导出-作业_20261118081854I-20261123-044811.csv` 等（20,000 / 20,000 / 588 行）。
+- 坑：m2 里「点删除」会把面板来源探针删掉，来源断言必须放在删除之前（否则 panel 计数为 0）。
+
+### 20.175 v0.3.42 打包（导出文件名案件标签 + 来源标签）
+
+- NSIS 320,038,793 B（blockmap 332,100）、portable 270,558,161 B、asar 566,557,069 B（32,968）；asar 自检 0 false（`exportsCaseTag`）。
+- 启动 39,418 ms（首启杀软）/ 便携 60,579 ms；打包态 m2 `m2ok:true`（来源计数 2/1/1）、settings `ok:true`（0.3.42）、export `ok:true`（案件标签文件名 + 20,000 行）。
+- 坑：改文件名拼接后，asar 断言里的旧字面量要同步；`tools/export-dir.mjs` 在 asar 内是独立文件，检查 sizeText 要 `read('tools/export-dir.mjs')`（不能用打包后的 index.js）。
+
