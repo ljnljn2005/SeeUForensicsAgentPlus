@@ -3122,3 +3122,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 打包版 MCP 启动实测：`electron.exe` 以 `ELECTRON_RUN_AS_NODE=1` 跑 `app.asar.unpacked/tools/seeu-mcp/server.mjs`，`initialize` + `tools/list` 正常，三个导出工具在列。
 - 教训：凡是「被打包内脚本（MCP server / unpacked 工具）相对 import 的模块」，都必须同时出现在 `files` 与 `asarUnpack`；只加 `files` 时开发态正常、打包态 ENOENT。这是同类问题第二次（第一次是 `tools/index-scan-budget.mjs` 少进 `files`）。
 
+
+### 20.180 最近导出「只看本案件」筛选（v0.3.45）
+
+- 客户端：`caseNumberFromDb(db)`（案件目录名最后一段下划线之后，含数字才采用，否则退回目录名）；`exportsCaseOnly` 状态 + `data-export-filter="case"` chip（`db` 为空时不显示）；列表过滤条件叠加 `file.name.includes(caseNumber)`。
+- 「刷新」按钮加 `attrs: {'data-export-refresh': '1'}`，e2e 先点刷新再点 chip。
+- 验证：`npm test` 250/250；dev m2 `m2ok:true`（`exportsCaseFilter.count:1`、行内容 `seeu-mcp-records-20261118081854I-caseprobe.csv`、`exportsCaseOk:true`）。
+- 坑：e2e 探针文件是页面加载后写的，必须先点「刷新」再断言，否则列表里没有新文件（第一次 `count:0` 就是这个原因）。
+
+### 20.181 v0.3.45 打包（最近导出「只看本案件」）
+
+- NSIS 320,047,023 B（blockmap 332,661）、portable 270,587,673 B、asar 566,556,172 B（32,968）；asar 自检 0 false（`exportsCaseFilter`）。
+- 启动 38,099 ms / 便携 61,812 ms；打包态 m2 `m2ok:true`（`exportsCaseFilter.count:1`）、settings `ok:true`（0.3.45 / 8 项）。
+- 坑：改过滤表达式后 asar 自检里的旧字符串断言（`filter((file) => exportsFilter === 'all'`）会误报 —— 打包检查里的命中片段尽量查稳定的短串（`exportsFilter === 'all'`），不要查整行。
+

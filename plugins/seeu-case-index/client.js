@@ -390,6 +390,14 @@ window.__ModuleLoader__.load({
       const dir = parts.length >= 3 ? parts[parts.length - 3] : ''
       return dir.replace(/[^\w\u4e00-\u9fa5.-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)
     }
+    // 案号：案件目录名形如「作业_20261118081854I」，取最后一段下划线之后；没有则退回目录名。
+    const caseNumberFromDb = (db) => {
+      const tag = caseTagFromDb(db)
+      if (!tag) return ''
+      const cut = tag.lastIndexOf('_')
+      const tail = cut >= 0 ? tag.slice(cut + 1) : tag
+      return /[0-9]/.test(tail) ? tail : tag
+    }
     const exportBase = (kind, db) => {
       const tag = caseTagFromDb(db)
       return tag ? `${kind}-${tag}-${exportStamp()}` : `${kind}-${exportStamp()}`
@@ -1546,6 +1554,7 @@ window.__ModuleLoader__.load({
       const [scanBudget, setScanBudget] = useState(null);
       const [exportsInfo, setExportsInfo] = useState(null);
       const [exportsFilter, setExportsFilter] = useState('all');
+      const [exportsCaseOnly, setExportsCaseOnly] = useState(false);
       const [exportsNote, setExportsNote] = useState('');
       const [scanNote, setScanNote] = useState('');
       useEffect(() => {
@@ -2143,11 +2152,24 @@ window.__ModuleLoader__.load({
             briefNote ? h('span', { style: { color: C_ACC } }, briefNote) : null)
           : null,
 
-        h('div', { style: { ...S.card, gap: 6 } },
+        h('div', { 'data-export-card': '1', style: { ...S.card, gap: 6 } },
           h('div', { style: S.row },
             h('span', { style: { ...S.tag, color: C_ACC } }, '最近导出'),
             h('span', { style: { ...S.muted, fontSize: 11 } }, exportsInfo?.dir ?? '（导出目录读取中）'),
-            actionButton('刷新', () => { refreshExports() }, {}),
+            actionButton('刷新', () => { refreshExports() }, { attrs: { 'data-export-refresh': '1' } }),
+            ...(db ? [['case', '只看本案件']] : []).map(([value, label]) =>
+              h('span', {
+                key: 'exp-case-filter',
+                'data-export-filter': value,
+                title: '只看文件名里带当前案号（' + caseNumberFromDb(db) + '）的导出',
+                onClick: () => setExportsCaseOnly((prev) => !prev),
+                style: {
+                  cursor: 'pointer', padding: '1px 8px', borderRadius: 10, fontSize: 10.5,
+                  border: '1px solid ' + (exportsCaseOnly ? C_ACC : C_L2),
+                  color: exportsCaseOnly ? C_ACC : C_FG3,
+                  background: exportsCaseOnly ? C_ACC_SOFT : 'transparent',
+                },
+              }, label)),
             ...[['all', '全部'], ['panel', '面板'], ['mcp', 'MCP']].map(([value, label]) =>
               h('span', {
                 key: 'exp-filter-' + value,
@@ -2170,7 +2192,7 @@ window.__ModuleLoader__.load({
             exportsNote ? h('span', { style: { color: C_ACC, fontSize: 11.5 } }, exportsNote) : null),
           exportsInfo && exportsInfo.count
             ? h('div', { style: { display: 'grid', gap: 2, fontSize: 11.5 } },
-              exportsInfo.files.filter((file) => exportsFilter === 'all' || file.source === exportsFilter).map((file) => h('div', { style: { display: 'flex', gap: 10, alignItems: 'center' }, key: file.path },
+              exportsInfo.files.filter((file) => (exportsFilter === 'all' || file.source === exportsFilter) && (!exportsCaseOnly || String(file.name).includes(caseNumberFromDb(db)))).map((file) => h('div', { style: { display: 'flex', gap: 10, alignItems: 'center' }, key: file.path },
                 h('span', {
                   style: { color: C_ACC, fontFamily: 'ui-monospace,Consolas,monospace', cursor: 'pointer' },
                   title: '点击打开这个文件',
