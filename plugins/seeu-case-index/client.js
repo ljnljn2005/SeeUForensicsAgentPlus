@@ -1545,6 +1545,7 @@ window.__ModuleLoader__.load({
       // 短词（<3 字）检索的逐行扫描预算：大库上越大越完整、越慢。
       const [scanBudget, setScanBudget] = useState(null);
       const [exportsInfo, setExportsInfo] = useState(null);
+      const [exportsFilter, setExportsFilter] = useState('all');
       const [exportsNote, setExportsNote] = useState('');
       const [scanNote, setScanNote] = useState('');
       useEffect(() => {
@@ -2147,6 +2148,19 @@ window.__ModuleLoader__.load({
             h('span', { style: { ...S.tag, color: C_ACC } }, '最近导出'),
             h('span', { style: { ...S.muted, fontSize: 11 } }, exportsInfo?.dir ?? '（导出目录读取中）'),
             actionButton('刷新', () => { refreshExports() }, {}),
+            ...[['all', '全部'], ['panel', '面板'], ['mcp', 'MCP']].map(([value, label]) =>
+              h('span', {
+                key: 'exp-filter-' + value,
+                'data-export-filter': value,
+                title: value === 'all' ? '显示全部导出' : value === 'panel' ? '只看面板导出的文件' : '只看模型通过 MCP 导出的文件',
+                onClick: () => setExportsFilter(value),
+                style: {
+                  cursor: 'pointer', padding: '1px 8px', borderRadius: 10, fontSize: 10.5,
+                  border: '1px solid ' + (exportsFilter === value ? C_ACC : C_L2),
+                  color: exportsFilter === value ? C_ACC : C_FG3,
+                  background: exportsFilter === value ? C_ACC_SOFT : 'transparent',
+                },
+              }, label)),
             window.seeu && window.seeu.exportsDir
               ? actionButton('打开导出目录', async () => {
                 const result = await window.seeu.exportsDir.open();
@@ -2156,7 +2170,7 @@ window.__ModuleLoader__.load({
             exportsNote ? h('span', { style: { color: C_ACC, fontSize: 11.5 } }, exportsNote) : null),
           exportsInfo && exportsInfo.count
             ? h('div', { style: { display: 'grid', gap: 2, fontSize: 11.5 } },
-              exportsInfo.files.map((file) => h('div', { style: { display: 'flex', gap: 10, alignItems: 'center' }, key: file.path },
+              exportsInfo.files.filter((file) => exportsFilter === 'all' || file.source === exportsFilter).map((file) => h('div', { style: { display: 'flex', gap: 10, alignItems: 'center' }, key: file.path },
                 h('span', {
                   style: { color: C_ACC, fontFamily: 'ui-monospace,Consolas,monospace', cursor: 'pointer' },
                   title: '点击打开这个文件',

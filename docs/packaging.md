@@ -1309,3 +1309,11 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 打包态：`m2-ui-check` → `m2ok:true`（`exportsSources:{count:2,mcp:1,panel:1}`、`exportsRemoveOk:true`、`errors:[]`）；`settings-check` → `ok:true`（0.3.42 / 体检 8 项）；`export-check` → `ok:true`，文件名 `记录导出-作业_20261118081854I-20261123-051507.csv`（20,000 行）、`表导出-图片 Exif-作业_20261118081854I-…csv`（20,000 行）。
 - 断言维护注意：客户端把文件名改成 `exportBase(...)` 拼接后，asar 自检里查旧字面量（`'检索导出-'`）会误报，需同步改成新写法。
 
+### v0.3.43 回归验证（第 99 轮：MCP 导出文件名带案号 + 来源筛选）
+
+- 产物：NSIS `320,039,178 B`（blockmap 332,002）、portable `270,590,329 B`、`app.asar` `566,558,028 B`（32,968 entries）。
+- asar 自检 `.probe/asar-0343-check.mjs`：`missing: []`、0 false（新增 `exportsFilter`/`mcpExportCaseTag`；`exportTableTool`/`exportEntitiesTool`/`exportTimelineTool` 断言改为查 `exportBaseName(...)`）。
+- 启动：目录版 `39,426 ms`（首启杀软扫描）、便携版 `59,051 ms`。
+- 打包态：`m2-ui-check` → `m2ok:true`（`exportsFilterSources:{count:1,mcp:1,panel:0}`、`exportsFilterOk:true`、`exportsRemoveOk:true`、`errors:[]`）；`settings-check` → `ok:true`（0.3.43 / 体检 8 项）。
+- 单测：`npm test` 250/250（新增 `tests/mcp-export-name.test.mjs`：假索引服务 + stdio 调 `export_records`，断言文件名 `seeu-mcp-records-20261118081854I-<戳>.csv` 与 BOM）。
+

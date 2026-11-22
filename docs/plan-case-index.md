@@ -3093,3 +3093,17 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 启动 39,418 ms（首启杀软）/ 便携 60,579 ms；打包态 m2 `m2ok:true`（来源计数 2/1/1）、settings `ok:true`（0.3.42）、export `ok:true`（案件标签文件名 + 20,000 行）。
 - 坑：改文件名拼接后，asar 断言里的旧字面量要同步；`tools/export-dir.mjs` 在 asar 内是独立文件，检查 sizeText 要 `read('tools/export-dir.mjs')`（不能用打包后的 index.js）。
 
+
+### 20.176 MCP 导出文件名带案号 + 最近导出按来源筛选（v0.3.43）
+
+- `tools/seeu-mcp/server.mjs`：新增 `caseTag(target)`（取解析后的 `caseNumber`，只留字母数字点下划线连字符，截 40）与 `exportBaseName(kind, target)`；四个导出分支统一为 `seeu-mcp-<kind>[-<案号>]-<戳>.csv`。
+- 面板：`exportsFilter` 状态 + `data-export-filter="all|panel|mcp"` chips，列表按 `file.source` 过滤。
+- 测试：`tests/mcp-export-name.test.mjs`（假索引服务 + stdio 调 `export_records`，断言文件名 `/^seeu-mcp-records-20261118081854I-\d{14}\.csv$/` 与 BOM）→ `npm test` 249/249；dev m2 `m2ok:true`（`exportsFilterSources:{count:1,mcp:1,panel:0}`、`exportsFilterOk:true`）。
+- 坑：面板颜色 token 只有 `C_L2`/`C_ACC_SOFT`，别写 `C_LINE`/`C_ACC_DIM`（`esbuild` 只查语法不查未定义变量，运行时会炸）。
+
+### 20.177 v0.3.43 打包（MCP 导出带案号 + 来源筛选）
+
+- NSIS 320,039,178 B（blockmap 332,002）、portable 270,590,329 B、asar 566,558,028 B（32,968）；asar 自检 0 false（`exportsFilter`/`mcpExportCaseTag`）。
+- 启动 39,426 ms / 便携 59,051 ms；打包态 m2 `m2ok:true`（筛选后只剩 mcp 1 条）、settings `ok:true`（0.3.43 / 8 项）。
+- 坑：asar 自检里旧的文件名断言（`seeu-mcp-table-` 等）在改成 `exportBaseName()` 后会全部误报，需同步改成新写法——这是第二次踩同一类（上次是 `exportBase` 改名）。
+
