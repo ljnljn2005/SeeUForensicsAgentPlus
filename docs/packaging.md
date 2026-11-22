@@ -1317,3 +1317,12 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 打包态：`m2-ui-check` → `m2ok:true`（`exportsFilterSources:{count:1,mcp:1,panel:0}`、`exportsFilterOk:true`、`exportsRemoveOk:true`、`errors:[]`）；`settings-check` → `ok:true`（0.3.43 / 体检 8 项）。
 - 单测：`npm test` 250/250（新增 `tests/mcp-export-name.test.mjs`：假索引服务 + stdio 调 `export_records`，断言文件名 `seeu-mcp-records-20261118081854I-<戳>.csv` 与 BOM）。
 
+### v0.3.44 回归验证（第 100 轮：同名导出自动加序号）
+
+- 产物：NSIS `320,046,722 B`（blockmap 332,656）、portable `270,604,199 B`、`app.asar` `566,554,855 B`（32,968 entries）。
+- asar 自检 `.probe/asar-0344-check.mjs`：`missing: []`、0 false（`uniqueExportNaming` 检查 `mainJs` 含 `uniqueExportPath` 且 `app.asar.unpacked/tools/export-dir.mjs` 存在）。
+- **打包白名单 bug（第二次踩）**：MCP 服务端新增 `import { uniqueExportPath } from '../export-dir.mjs'`，但 `tools/export-dir.mjs` 只在 `files`、没进 `asarUnpack` → 打包版 `app.asar.unpacked/tools/export-dir.mjs` 不存在，MCP 启动即失败；`electron-builder.yml` 的 `files` 里还被我重复写了一行。修法：`files` 去重 + `asarUnpack` 加 `- tools/export-dir.mjs`；重新打包后实测打包版 MCP server（`ELECTRON_RUN_AS_NODE` + 假索引服务）可 `initialize`/`tools/list`，`export_records`/`export_entities`/`export_timeline` 齐全、stderr 为空。
+- 启动：目录版 `38,504 ms`（首启杀软扫描）、便携版 `60,870 ms`。
+- 打包态：`m2-ui-check` → `m2ok:true`（`exportsFilterOk:true`、`exportsRemoveOk:true`、`errors:[]`）；`settings-check` → `ok:true`（0.3.44 / 体检 8 项）。
+- 单测：`npm test` 250/250（`tests/export-dir.test.mjs` 6 例含 `-2`/`-3` 序号；`tests/mcp-export-name.test.mjs` 断言文件名与 BOM）。
+

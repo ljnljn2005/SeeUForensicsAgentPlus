@@ -26,9 +26,9 @@ files:
   - tools/chain-check-run.mjs
   - tools/image-mount.mjs
   - tools/seeu-mcp/**
+  - tools/export-dir.mjs
   - tools/ios-quick.mjs
   - tools/index-scan-budget.mjs
-  - tools/export-dir.mjs
   - scripts/chain-check.mjs
   - scripts/ios-quick.mjs
   - tools/seeu-mcp/**
@@ -62,6 +62,7 @@ asar: true
 # 来源：node_modules 内 *.node 扫描结果 + dsh 运行时依赖清单。
 asarUnpack:
   - tools/seeu-mcp/**
+  - tools/export-dir.mjs
   - tools/lovely-cli/cli.mjs
   - tools/chain-check.mjs
   - tools/ios-quick.mjs

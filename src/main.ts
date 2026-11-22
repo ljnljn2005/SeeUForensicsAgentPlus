@@ -21,7 +21,7 @@ import {
 } from './brand.js'
 import { pickStaleAuthCookies } from './auth-cookies.js'
 import { DshHost, type HostState } from './host.js'
-import { removeExport, resolveExportFile } from '../tools/export-dir.mjs'
+import { removeExport, resolveExportFile, uniqueExportPath } from '../tools/export-dir.mjs'
 import {
   describeLocalModelConfig,
   diagnoseLocalGateway,
@@ -887,7 +887,7 @@ function registerIpc(): void {
     const safeName = rawName.replace(/[\\/:*?"<>|\r\n]+/g, '_').slice(0, 120) || 'seeu-export.csv'
     try {
       mkdirSync(dir, { recursive: true })
-      const target = join(dir, safeName)
+      const target = uniqueExportPath(dir, safeName)
       writeFileSync(target, text, 'utf8')
       return { ok: true, path: target, bytes: Buffer.byteLength(text, 'utf8') }
     } catch (error) {

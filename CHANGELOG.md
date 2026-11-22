@@ -104,6 +104,14 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 
 ## 未发布
 
+### 同名导出自动加序号，不再覆盖旧文件（v0.3.44 待打包）
+
+- 面板导出、MCP 导出都走 `uniqueExportPath()`：同一秒/同一案件重复导出同名文件时，自动变成 `…-2.csv`、`…-3.csv`，不再静默覆盖上一次的结果。
+- `tools/export-dir.mjs` 新增 `uniqueExportPath(dir, name, {max})`；`seeu:file:save-export` IPC 与内置 MCP 的 4 个导出工具全部改用它。
+- 打包注意：MCP 服务端现在 `import` 同目录的 `tools/export-dir.mjs`，该文件必须同时进 `electron-builder.yml` 的 `asarUnpack`（否则打包版 `app.asar.unpacked/tools/seeu-mcp/../export-dir.mjs` 不存在，MCP 启动即失败）。
+- 测试：`tests/export-dir.test.mjs` 增同序号用例（首次原名、第二次 `-2`、第三次 `-3`）。
+
+
 ### MCP 导出文件名带案号 + 最近导出可按来源筛选（v0.3.43 待打包）
 
 - 模型用内置 MCP 导出的 CSV 现在带案件标签：`seeu-mcp-records-20261118081854I-2026112305xxxx.csv`（表导出 `seeu-mcp-table-<表>-<案号>-…`、实体 `seeu-mcp-entities-<案号>-…`、时间线 `seeu-mcp-timeline-<粒度>-<案号>-…`），和面板导出一样能一眼看出属于哪个案件。

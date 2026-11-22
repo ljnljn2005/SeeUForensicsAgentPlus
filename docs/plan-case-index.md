@@ -3107,3 +3107,18 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - 启动 39,426 ms / 便携 59,051 ms；打包态 m2 `m2ok:true`（筛选后只剩 mcp 1 条）、settings `ok:true`（0.3.43 / 8 项）。
 - 坑：asar 自检里旧的文件名断言（`seeu-mcp-table-` 等）在改成 `exportBaseName()` 后会全部误报，需同步改成新写法——这是第二次踩同一类（上次是 `exportBase` 改名）。
 
+
+### 20.178 同名导出自动加序号（v0.3.44）
+
+- 问题：`seeu:file:save-export` 用固定文件名 `writeFileSync`，同一秒内重复导出会静默覆盖；MCP 导出文件名只精确到秒，连续调用同样会覆盖。
+- 实现：`tools/export-dir.mjs` 新增 `uniqueExportPath(dir, name, {max=999})`（单层文件名、存在则 `-2/-3…`，极端情况用时间戳兜底）；`src/main.ts` 的 save-export 与 `tools/seeu-mcp/server.mjs` 的 records/table/entities/timeline 四个导出全部改用。
+- 打包关键：server.mjs 新增 `import { uniqueExportPath } from '../export-dir.mjs'`，因此 `electron-builder.yml` 的 `asarUnpack` 必须加 `- tools/export-dir.mjs`（放到 `files` 不够，unpacked 目录里没有就 import 失败）。
+- 测试：export-dir 单测 6 例（含 `-2`/`-3` 序号）；`tests/mcp-export-name.test.mjs` 仍通过。
+
+### 20.179 v0.3.44 打包（同名导出自动加序号）
+
+- NSIS 320,046,722 B（blockmap 332,656）、portable 270,604,199 B、asar 566,554,855 B（32,968）；asar 自检 0 false（`uniqueExportNaming`）。
+- 启动 38,504 ms / 便携 60,870 ms；打包态 m2 `m2ok:true`、settings `ok:true`（0.3.44 / 8 项）。
+- 打包版 MCP 启动实测：`electron.exe` 以 `ELECTRON_RUN_AS_NODE=1` 跑 `app.asar.unpacked/tools/seeu-mcp/server.mjs`，`initialize` + `tools/list` 正常，三个导出工具在列。
+- 教训：凡是「被打包内脚本（MCP server / unpacked 工具）相对 import 的模块」，都必须同时出现在 `files` 与 `asarUnpack`；只加 `files` 时开发态正常、打包态 ENOENT。这是同类问题第二次（第一次是 `tools/index-scan-budget.mjs` 少进 `files`）。
+
