@@ -2165,26 +2165,30 @@ window.__ModuleLoader__.load({
               : null,
             actionButton('刷新', () => { refreshExports() }, { attrs: { 'data-export-refresh': '1' } }),
             ...(db ? [['case', '只看本案件']] : []).map(([value, label]) =>
-              h('span', {
+              h('button', {
                 key: 'exp-case-filter',
                 'data-export-filter': value,
+                type: 'button',
                 title: '只看文件名里带当前案号（' + caseNumberFromDb(db) + '）的导出',
                 onClick: () => setExportsCaseOnly((prev) => !prev),
                 style: {
                   cursor: 'pointer', padding: '1px 8px', borderRadius: 10, fontSize: 10.5,
+                  appearance: 'none', font: 'inherit', lineHeight: 1.4,
                   border: '1px solid ' + (exportsCaseOnly ? C_ACC : C_L2),
                   color: exportsCaseOnly ? C_ACC : C_FG3,
                   background: exportsCaseOnly ? C_ACC_SOFT : 'transparent',
                 },
               }, label)),
-            ...[['all', '全部'], ['panel', '面板'], ['mcp', 'MCP']].map(([value, label]) =>
-              h('span', {
+            ...[['all', '全部'], ['panel', '面板'], ['mcp', 'MCP'], ['big', '只看大文件']].map(([value, label]) =>
+              h('button', {
                 key: 'exp-filter-' + value,
                 'data-export-filter': value,
-                title: value === 'all' ? '显示全部导出' : value === 'panel' ? '只看面板导出的文件' : '只看模型通过 MCP 导出的文件',
+                type: 'button',
+                title: value === 'all' ? '显示全部导出' : value === 'panel' ? '只看面板导出的文件' : value === 'mcp' ? '只看模型通过 MCP 导出的文件' : '只看 10 MB 以上的导出文件',
                 onClick: () => setExportsFilter(value),
                 style: {
                   cursor: 'pointer', padding: '1px 8px', borderRadius: 10, fontSize: 10.5,
+                  appearance: 'none', font: 'inherit', lineHeight: 1.4,
                   border: '1px solid ' + (exportsFilter === value ? C_ACC : C_L2),
                   color: exportsFilter === value ? C_ACC : C_FG3,
                   background: exportsFilter === value ? C_ACC_SOFT : 'transparent',
@@ -2199,7 +2203,7 @@ window.__ModuleLoader__.load({
             exportsNote ? h('span', { style: { color: C_ACC, fontSize: 11.5 } }, exportsNote) : null),
           exportsInfo && exportsInfo.count
             ? h('div', { style: { display: 'grid', gap: 2, fontSize: 11.5 } },
-              exportsInfo.files.filter((file) => (exportsFilter === 'all' || file.source === exportsFilter) && (!exportsCaseOnly || String(file.name).includes(caseNumberFromDb(db)))).map((file) => h('div', { style: { display: 'flex', gap: 10, alignItems: 'center' }, key: file.path },
+              exportsInfo.files.filter((file) => (exportsFilter === 'all' || exportsFilter === 'big' || file.source === exportsFilter) && (exportsFilter !== 'big' || Number(file.sizeBytes) >= 10 * 1024 * 1024) && (!exportsCaseOnly || String(file.name).includes(caseNumberFromDb(db)))).map((file) => h('div', { style: { display: 'flex', gap: 10, alignItems: 'center' }, key: file.path },
                 h('span', {
                   style: { color: C_ACC, fontFamily: 'ui-monospace,Consolas,monospace', cursor: 'pointer' },
                   title: '点击打开这个文件',

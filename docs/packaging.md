@@ -1350,3 +1350,10 @@ asar 自检（`.probe/asar-026-check.mjs`：`@electron/asar.listPackage` 条目�
 - 打包态：`m2-ui-check` → `m2ok:true`（`exportsTotalText:"共 2 个 · 合计 16 B"`、`exportsTotalOk:true`）；`settings-check` → `ok:true`（0.3.47 / 体检 8 项）。
 - 单测：`npm test` 252/252（export-dir 7 例含合计体积）。
 
+### v0.3.48 回归验证（第 104 轮：最近导出「只看大文件」）
+
+- 产物：NSIS `320,047,581 B`（blockmap 332,554）、portable `270,561,640 B`、`app.asar` `566,557,117 B`（32,968 entries）。
+- asar 自检：`missing: []`、0 false（新增 `exportsBigFilter`）。
+- 启动：目录版 `29,879 ms`、便携版 `50,027 ms`。
+- 打包态：`m2-ui-check` → `m2ok:true`（`exportsBigFilter.count:1`、`exportsBigOk:true`）；`settings-check` → `ok:true`（0.3.48 / 体检 8 项）。
+- 单测：`npm test` 252/252、`check:overlay` OK。

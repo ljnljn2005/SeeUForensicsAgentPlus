@@ -3161,3 +3161,8 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - NSIS 320,047,559 B（blockmap 332,645）、portable 270,620,347 B、asar 566,556,718 B（32,968）；asar 自检 0 false（`exportsTotal`）。
 - 启动 37,182 ms / 便携 58,688 ms；打包态 m2 `m2ok:true`（合计提示 16 B）、settings `ok:true`（0.3.47 / 8 项）。
 
+### 20.186 v0.3.48（最近导出「只看大文件」）
+
+- chip 组加 `big`（≥10 MB）；`span onClick` 在本面板 e2e 中点击不生效（`window.__seeuExportsFilter` 始终 `all`），改用 `h('button')` + e2e `clickText` 后正常（`exportsBigFilter.count:1`）。
+- 同类坑：恢复筛选时再次点同一个 chip 可能不生效，改用点「全部」chip（幂等）。
+- 产物 NSIS 320,047,581 B（blockmap 332,554）、portable 270,561,640 B、asar 566,557,117 B（32,968）；启动 29,879 / 50,027 ms；打包态 m2 `m2ok:true`、settings `ok:true`（0.3.48）。
