@@ -104,6 +104,12 @@ SeeUForensicsAgentPlus 的版本更新记录（新 → 旧）。每个版本的�
 
 ## 未发布
 
+### 「最近导出」显示合计体积，过大时提示清理（v0.3.47 待打包）
+
+- 卡片头部新增 `共 N 个 · 合计 X MB`（按整个导出目录统计，不受列表 50 条上限影响）；合计 ≥ 200 MB 时文字变琥珀色并追加「（可删除旧文件释放空间）」。
+- `tools/export-dir.mjs` 的 `listExports()` 增加 `totalBytes`/`totalText`/`big`；面板用 `data-export-total` 暴露给 e2e。
+
+
 ### MCP 检索支持短词续扫（v0.3.46 待打包）
 
 - 内置 MCP 的 `index_search` 新增可选 `scanFromId` / `scanBudgetMs`：2 字关键词一轮扫不完时，结果末尾会给出「还有更多：可带 scanFromId=N 继续扫」，模型可以自己续扫而不必一次把时间预算拉满。

@@ -2156,6 +2156,13 @@ window.__ModuleLoader__.load({
           h('div', { style: S.row },
             h('span', { style: { ...S.tag, color: C_ACC } }, '最近导出'),
             h('span', { style: { ...S.muted, fontSize: 11 } }, exportsInfo?.dir ?? '（导出目录读取中）'),
+            exportsInfo && exportsInfo.count
+              ? h('span', {
+                  'data-export-total': exportsInfo.count + ':' + (exportsInfo.totalBytes ?? 0),
+                  title: '导出目录里所有 CSV/JSON/MD/TXT 的合计体积（含未列出的）',
+                  style: { ...S.muted, fontSize: 11, color: exportsInfo.big ? C_WARN : C_FG3 },
+                }, `共 ${exportsInfo.count} 个 · 合计 ${exportsInfo.totalText ?? ''}${exportsInfo.big ? '（可删除旧文件释放空间）' : ''}`)
+              : null,
             actionButton('刷新', () => { refreshExports() }, { attrs: { 'data-export-refresh': '1' } }),
             ...(db ? [['case', '只看本案件']] : []).map(([value, label]) =>
               h('span', {

@@ -3149,3 +3149,15 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - NSIS 320,047,258 B（blockmap 332,709）、portable 270,593,827 B、asar 566,556,172 B（32,968）；asar 自检 0 false（`mcpSearchScanResume`）。
 - 启动 38,775 ms / 便携 61,944 ms；打包态 m2 `m2ok:true`、settings `ok:true`（0.3.46 / 8 项）。
 
+
+### 20.184 「最近导出」合计体积提示（v0.3.47）
+
+- `listExports()` 返回 `totalBytes/totalText/big`（全目录合计，不受 limit 截断）；面板卡片显示「共 N 个 · 合计 X」，≥200 MB 时琥珀色 + 清理提示，`data-export-total` 供 e2e。
+- 测试：`tests/export-dir.test.mjs` 增至 7 例（合计 3072 B → `3 KB`、limit=1 时 count 仍为 2）；dev m2 `m2ok:true`（`exportsTotalOk:true`、文本「共 2 个 · 合计 16 B」）。
+- 坑：用 `node -e` 双引号里写正则时 `d` 会被吃掉变成 `d`（`--check` 不报错但断言永假）——改完必须看生成代码或改用 `String.fromCharCode(92)`。
+
+### 20.185 v0.3.47 打包（「最近导出」合计体积）
+
+- NSIS 320,047,559 B（blockmap 332,645）、portable 270,620,347 B、asar 566,556,718 B（32,968）；asar 自检 0 false（`exportsTotal`）。
+- 启动 37,182 ms / 便携 58,688 ms；打包态 m2 `m2ok:true`（合计提示 16 B）、settings `ok:true`（0.3.47 / 8 项）。
+
