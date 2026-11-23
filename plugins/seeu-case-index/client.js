@@ -1554,6 +1554,7 @@ window.__ModuleLoader__.load({
       const [scanBudget, setScanBudget] = useState(null);
       const [exportsInfo, setExportsInfo] = useState(null);
       const [exportsFilter, setExportsFilter] = useState('all');
+      const [exportsSort, setExportsSort] = useState('time');
       const [exportsCaseOnly, setExportsCaseOnly] = useState(false);
       const [exportsNote, setExportsNote] = useState('');
       const [scanNote, setScanNote] = useState('');
@@ -2194,6 +2195,20 @@ window.__ModuleLoader__.load({
                   background: exportsFilter === value ? C_ACC_SOFT : 'transparent',
                 },
               }, label)),
+            h('button', {
+              key: 'exp-sort',
+              type: 'button',
+              'data-export-sort': exportsSort,
+              title: exportsSort === 'time' ? '当前按时间倒序；点一下改为按体积从大到小' : '当前按体积从大到小；点一下改回按时间倒序',
+              onClick: () => setExportsSort((prev) => (prev === 'time' ? 'size' : 'time')),
+              style: {
+                cursor: 'pointer', padding: '1px 8px', borderRadius: 10, fontSize: 10.5,
+                appearance: 'none', font: 'inherit', lineHeight: 1.4,
+                border: '1px solid ' + (exportsSort === 'size' ? C_ACC : C_L2),
+                color: exportsSort === 'size' ? C_ACC : C_FG3,
+                background: exportsSort === 'size' ? C_ACC_SOFT : 'transparent',
+              },
+            }, exportsSort === 'size' ? '按体积 ↓' : '按时间 ↓'),
             window.seeu && window.seeu.exportsDir
               ? actionButton('打开导出目录', async () => {
                 const result = await window.seeu.exportsDir.open();
@@ -2203,7 +2218,11 @@ window.__ModuleLoader__.load({
             exportsNote ? h('span', { style: { color: C_ACC, fontSize: 11.5 } }, exportsNote) : null),
           exportsInfo && exportsInfo.count
             ? h('div', { style: { display: 'grid', gap: 2, fontSize: 11.5 } },
-              exportsInfo.files.filter((file) => (exportsFilter === 'all' || exportsFilter === 'big' || file.source === exportsFilter) && (exportsFilter !== 'big' || Number(file.sizeBytes) >= 10 * 1024 * 1024) && (!exportsCaseOnly || String(file.name).includes(caseNumberFromDb(db)))).map((file) => h('div', { style: { display: 'flex', gap: 10, alignItems: 'center' }, key: file.path },
+              exportsInfo.files
+                .filter((file) => (exportsFilter === 'all' || exportsFilter === 'big' || file.source === exportsFilter) && (exportsFilter !== 'big' || Number(file.sizeBytes) >= 10 * 1024 * 1024) && (!exportsCaseOnly || String(file.name).includes(caseNumberFromDb(db))))
+                .slice()
+                .sort((a, b) => (exportsSort === 'size' ? Number(b.sizeBytes) - Number(a.sizeBytes) : 0))
+                .map((file) => h('div', { style: { display: 'flex', gap: 10, alignItems: 'center' }, key: file.path },
                 h('span', {
                   style: { color: C_ACC, fontFamily: 'ui-monospace,Consolas,monospace', cursor: 'pointer' },
                   title: '点击打开这个文件',

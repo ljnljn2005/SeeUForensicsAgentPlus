@@ -3166,3 +3166,8 @@ REPORT {"ok":true,"clicked":true,"hasSteps":true,"hasStep1":true,"hasStep3":true
 - chip 组加 `big`（≥10 MB）；`span onClick` 在本面板 e2e 中点击不生效（`window.__seeuExportsFilter` 始终 `all`），改用 `h('button')` + e2e `clickText` 后正常（`exportsBigFilter.count:1`）。
 - 同类坑：恢复筛选时再次点同一个 chip 可能不生效，改用点「全部」chip（幂等）。
 - 产物 NSIS 320,047,581 B（blockmap 332,554）、portable 270,561,640 B、asar 566,557,117 B（32,968）；启动 29,879 / 50,027 ms；打包态 m2 `m2ok:true`、settings `ok:true`（0.3.48）。
+
+### 20.187 v0.3.49（最近导出按体积排序）
+
+- `exportsSort`（time/size）状态 + `data-export-sort` 按钮；列表先过滤再 `sort`（体积模式按 `sizeBytes` 降序）。
+- 产物 NSIS 320,047,725 B（blockmap 332,716）、portable 270,614,284 B、asar 566,558,244 B（32,968）；启动 34,270 / 103,933 ms；打包态 `m2ok:true`（`exportsSortOk`）、settings `ok:true`（0.3.49）。
